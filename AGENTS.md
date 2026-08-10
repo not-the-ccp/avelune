@@ -33,6 +33,26 @@ without a reason.
 5. Run the relevant narrow tests, then `./scripts/dev-check.sh` for repository-wide changes.
 6. Update docs/changelog when public behavior, syntax, API, or workflow changed.
 
+## Branch and review policy
+
+All normal changes use a feature branch and pull request:
+
+1. Update local `main`, then create a focused feature branch.
+2. Make small, coherent commits at meaningful milestones; do not wait until the entire task is
+   finished to commit. Validate each milestone when practical.
+3. Push only the feature branch and open a pull request targeting `main`.
+4. Wait for CI and automated review. Resolve every CodeRabbit comment or piece of feedback, either by
+   changing the code or by explaining why the suggestion does not apply.
+5. Stop and wait for review after opening the pull request. Do not merge the pull request, push to
+   `main`, force-push `main`, or bypass the review process unless the maintainer explicitly directs
+   that action.
+
+CI plus automated review is the normal gate for ordinary changes. CodeRabbit is the intended
+automated reviewer, but it is not currently enabled; until it is enabled, request human review for
+every pull request. Once enabled, still request explicit human review for large, security-sensitive,
+architectural, release, or spec/format changes. Small typo-like fixes follow the same pull-request
+workflow because the repository policy does not permit direct pushes to `main`.
+
 If implementation evidence disproves a format assumption, record the evidence and revisit the codec
 or container design. Do not patch the spec merely to match an implementation accident.
 
