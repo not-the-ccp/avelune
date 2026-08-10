@@ -118,8 +118,8 @@ struct MediaEncodeArgs {
     /// Video quantizer step. This is experimental and is not a CRF/bitrate target.
     #[arg(long, default_value_t = 96)]
     video_q: u16,
-    /// Audio quantizer step. Use 1 for mathematically lossless ALA1 audio.
-    #[arg(long, default_value_t = 256)]
+    /// Audio quantizer step. Defaults to mathematically lossless q=1; lossy ALA1 is experimental and not perceptually tuned.
+    #[arg(long, default_value_t = 1)]
     audio_q: u16,
     /// Maximum epoch length in video frames. Scene cuts may start an epoch earlier.
     #[arg(long)]
@@ -147,8 +147,8 @@ struct RawVideoEncodeArgs {
 struct RawAudioEncodeArgs {
     input: String,
     output: String,
-    /// Audio quantizer step; 1 is mathematically lossless.
-    #[arg(short = 'q', long, default_value_t = 256)]
+    /// Audio quantizer step; defaults to mathematically lossless q=1. Lossy ALA1 is experimental and not perceptually tuned.
+    #[arg(short = 'q', long, default_value_t = 1)]
     q: u16,
     /// Encode only the first N seconds.
     #[arg(long)]
@@ -700,7 +700,7 @@ fn encode_media_cmd(a: &[String]) -> Result<(), String> {
             .collect();
     }
     let qv = arg_u16(a, "--video-q", 96)?;
-    let qa = arg_u16(a, "--audio-q", 256)?;
+    let qa = arg_u16(a, "--audio-q", 1)?;
     let ep = arg_usize(
         a,
         "--epoch",
@@ -749,7 +749,7 @@ fn encode_audio_cmd(a: &[String]) -> Result<(), String> {
         .chunks_exact(2)
         .map(|x| i16::from_le_bytes([x[0], x[1]]))
         .collect();
-    let q = arg_u16(a, "--q", 256)?;
+    let q = arg_u16(a, "--q", 1)?;
     let epoch_s = arg_usize(a, "--epoch-seconds", 2)?.max(1);
     let rate = 48_000u32;
     let ch = 2u8;

@@ -30,7 +30,7 @@ Not in Baseline V1: 4:2:2, 4:4:4, 10/12-bit, alpha, spatial scalability, HDR-spe
 
 ## Container
 
-- finalized front-indexed Avelune V1 container;
+- front-indexed Avelune Draft Generation 1 container;
 - microsecond timescale for reference muxer streams;
 - independently fetchable epochs suitable for HTTP Range streaming;
 - CRC-32C protected header, front index, packet headers, and payloads.

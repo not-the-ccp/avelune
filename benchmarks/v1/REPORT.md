@@ -1,6 +1,6 @@
 # Draft Generation 1 reference-implementation benchmark report
 
-Date: 2026-08-10. These measurements characterize the implementation shipped with V1; they are not normative codec requirements.
+Date: 2026-08-10. These measurements characterize the current Draft Generation 1 reference implementation; they are not normative codec requirements.
 
 ## Executed real-media video corpus
 
@@ -33,7 +33,7 @@ The encoder's byte size is not perfectly monotonic in q because mode decisions a
 
 `real-audio.csv` contains four-second excerpts from packaged saxophone, music, and two speech assets compared with libopus at 32/64/96/128 kb/s. `sample_snr_db` is a simple time-domain sample SNR, not a perceptual listening metric.
 
-Representative sax result: ALA1 q128 is 210,552 B at 36.70 dB sample SNR; Opus 128 kb/s is 58,206 B at 35.75 dB by the same metric. ALA1 q1 is mathematically exact. The conclusion is straightforward: V1 audio establishes a custom, lossless-capable codec and streaming implementation; its lossy compression is not competitive with Opus.
+Representative sax result: ALA1 q128 is 210,552 B at 36.70 dB sample SNR; Opus 128 kb/s is 58,206 B at 35.75 dB by the same metric. ALA1 q1 is mathematically exact. The conclusion is straightforward: Draft Generation 1 audio establishes a custom, lossless-capable codec and streaming implementation; its lossy mode is neither competitive with Opus nor perceptually tuned.
 
 ## Decoder throughput fixture
 

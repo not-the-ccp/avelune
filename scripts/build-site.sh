@@ -69,7 +69,7 @@ while IFS= read -r f; do
 done < <(find spec -type f -name '*.md' | sort)
 
 # Rust API reference.
-cargo doc --workspace --no-deps
+cargo doc --workspace --no-deps --locked
 DOCROOT=${CARGO_TARGET_DIR:-target}/doc
 cp -a "$DOCROOT" "$OUT/api"
 cat > "$OUT/api/index.md" <<'API'
