@@ -6,8 +6,8 @@ BIN="$CARGO_TARGET_DIR/release/avelune"
 cd "$ROOT"
 
 cargo fmt --all -- --check
-cargo test --workspace
-cargo build --release --workspace
+cargo test --workspace --locked
+cargo build --release --workspace --locked
 ./scripts/build-wasm.sh
 
 rm -rf dist/conformance
@@ -25,7 +25,7 @@ ffmpeg -y -loglevel error -f lavfi -i 'testsrc2=size=320x180:rate=30' \
   -f lavfi -i 'sine=frequency=997:sample_rate=48000' -t 2 -pix_fmt yuv420p \
   -c:v libx264 -preset ultrafast -c:a aac -ac 2 "$TMP/source.mp4"
 "$BIN" encode "$TMP/source.mp4" web/player/demo.avl --seconds 2 --size 320x180 \
-  --video-q 128 --audio-q 256 --epoch 30 --preset balanced
+  --video-q 128 --audio-q 1 --epoch 30 --preset balanced
 "$BIN" verify web/player/demo.avl
 node scripts/http-wasm-range-smoke.mjs web/player/demo.avl web/player/avelune.wasm | tee dist/http-range-smoke.json
 "$BIN" reindex web/player/demo.avl "$TMP/reindexed.avl"

@@ -1,4 +1,4 @@
-# ALA1 audio bitstream — version 1.0
+# ALA1 audio bitstream — Draft Generation 1
 
 > **Draft status:** experimental, unfrozen, and subject to incompatible change while the software is `0.x`. `V1`/`ALV1`/`ALA1` refer to Draft Generation 1, not a stable 1.0 compatibility promise.
 

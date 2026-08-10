@@ -486,7 +486,7 @@ pub fn parse_file_prefix(b: &[u8]) -> Result<(FileHeader, Front, usize), Contain
     Ok((h, f, end))
 }
 
-/// Build a finalized, front-indexed file from already packetized epochs.
+/// Build a front-indexed Draft Generation 1 file from already packetized epochs.
 /// Builds a complete file from stream descriptors and pre-encoded epoch byte ranges.
 pub fn build_file(streams: Vec<StreamDesc>, epochs: Vec<(u32, u64, u32, Vec<u8>)>) -> Vec<u8> {
     let dummy: Vec<EpochIndex> = epochs

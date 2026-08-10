@@ -5,7 +5,7 @@
 
 Status: **normative draft for Draft Generation 1**. It defines the current container contract, but compatibility is not frozen.
 
-The finalized V1 container is front-indexed for HTTP byte-range access. All fixed-width integers are little-endian. CRC is CRC-32C (Castagnoli), initialized and finalized by bitwise complement; polynomial in reflected form `0x82f63b78`.
+The Draft Generation 1 container is front-indexed for HTTP byte-range access. All fixed-width integers are little-endian. CRC is CRC-32C (Castagnoli), initialized and finalized by bitwise complement; polynomial in reflected form `0x82f63b78`.
 
 ## Fixed file header — 32 bytes
 
@@ -21,7 +21,7 @@ The finalized V1 container is front-indexed for HTTP byte-range access. All fixe
 28..31  CRC32C(bytes 0..27)
 ```
 
-V1 finalized files produced by `build_file` set flag bit 0. Other flag bits are reserved and SHOULD be zero.
+Draft Generation 1 files produced by `build_file` set flag bit 0. Other flag bits are reserved and SHOULD be zero.
 
 ## Front index
 

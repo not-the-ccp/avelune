@@ -75,4 +75,4 @@ A conforming demuxer MUST be able to accept arbitrary non-empty byte fragments. 
 
 ## Future index contract
 
-The frozen format will provide an index mapping presentation-time intervals to byte offsets of independently decodable epochs. Finalized files should carry a front index; live streams may omit it. The index representation is intentionally not frozen in Candidate 0.0.
+A future format may provide an index mapping presentation-time intervals to byte offsets of independently decodable epochs. Front-indexed files should carry that index; live streams may omit it. The index representation is intentionally not frozen in Candidate 0.0.

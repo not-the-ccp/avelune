@@ -42,7 +42,7 @@ The first executable experiment intentionally uses a much smaller subset to test
 - a quantizer step of one is mathematically lossless;
 - no spatial transform, motion search, filtering, chroma tools or entropy model is implied by this experiment.
 
-A decoder implementing Experiment 0 is **not** evidence that the above mechanism belongs in version 1.0. It exists to validate exact arithmetic, explicit reference dependencies, packetization and independent epochs.
+A decoder implementing Experiment 0 is **not** evidence that the above mechanism belongs in Draft Generation 1. It exists to validate exact arithmetic, explicit reference dependencies, packetization and independent epochs.
 
 ## Exact experiment reconstruction
 

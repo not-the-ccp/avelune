@@ -54,7 +54,7 @@ dependencies = [
 
 [[package]]
 name = "avelune"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "avelune-audio-v1",
  "avelune-bitstream",
@@ -65,18 +65,18 @@ dependencies = [
 
 [[package]]
 name = "avelune-audio-v1"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "avelune-bitstream",
 ]
 
 [[package]]
 name = "avelune-bitstream"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "avelune-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "avelune-audio-v1",
  "avelune-container-v1",
@@ -88,15 +88,15 @@ dependencies = [
 
 [[package]]
 name = "avelune-container-v1"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "avelune-prod-stub"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "avelune-video-ref-v1"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "avelune-bitstream",
  "avelune-video-v1",
@@ -104,14 +104,14 @@ dependencies = [
 
 [[package]]
 name = "avelune-video-v1"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "avelune-bitstream",
 ]
 
 [[package]]
 name = "avelune-wasm-v1"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "avelune-audio-v1",
  "avelune-video-v1",
