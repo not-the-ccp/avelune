@@ -1,0 +1,16 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { loadRootDocuments } from "../../lib/markdown.mjs";
+export function getStaticPaths() {
+  return loadRootDocuments().map((document) => ({ params: { slug: document.slug }, props: { document } }));
+}
+const { document } = Astro.props;
+const sourceUrl = `https://github.com/not-the-ccp/avelune/blob/main/${document.sourcePath}`;
+---
+<BaseLayout title={document.title} description={document.summary} current="project">
+  <article class="root-document publication">
+    <header class="document-header"><div class="document-meta"><span>PROJECT DOCUMENT</span><span>REPOSITORY-NATIVE MARKDOWN</span></div><h1>{document.title}</h1><p class="lede">{document.summary}</p><a class="source-link" href={sourceUrl}>View authoritative source</a></header>
+    <div class="asciidoc"><Fragment set:html={document.html} /></div>
+  </article>
+</BaseLayout>
+<style>.root-document{width:min(calc(100% - 2rem),var(--measure));margin-inline:auto;padding-top:clamp(3rem,6vw,5.5rem)}</style>

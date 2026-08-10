@@ -1,5 +1,7 @@
 /target/
 /dist/
+/node_modules/
+/.astro/
 /.cargo/
 **/__pycache__/
 *.pyc
