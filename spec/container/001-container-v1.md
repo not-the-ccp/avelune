@@ -1,0 +1,113 @@
+# Avelune container — Draft Generation 1 (header generation 1, minor 0)
+
+> **Draft status:** experimental, unfrozen, and subject to incompatible change while the software is `0.x`. `V1`/`ALV1`/`ALA1` refer to Draft Generation 1, not a stable 1.0 compatibility promise.
+
+
+Status: **normative draft for Draft Generation 1**. It defines the current container contract, but compatibility is not frozen.
+
+The finalized V1 container is front-indexed for HTTP byte-range access. All fixed-width integers are little-endian. CRC is CRC-32C (Castagnoli), initialized and finalized by bitwise complement; polynomial in reflected form `0x82f63b78`.
+
+## Fixed file header — 32 bytes
+
+```
+0..7    "AVELUNE\0"
+8..9    major u16 = 1
+10..11  minor u16 = 0
+12..15  flags u32
+16..19  header_len u32 = 32
+20..21  stream_count u16
+22..23  reserved u16 = 0
+24..27  front_len u32
+28..31  CRC32C(bytes 0..27)
+```
+
+V1 finalized files produced by `build_file` set flag bit 0. Other flag bits are reserved and SHOULD be zero.
+
+## Front index
+
+The front section length is exactly `front_len`.
+
+```
+0..3    "AVFR"
+4..5    front_version u16 = 1
+6..7    stream_count u16
+8..11   epoch_count u32
+then stream_count stream descriptors, 24 bytes each
+then epoch_count epoch entries, 32 bytes each
+then CRC32C of all preceding front bytes
+```
+
+### Stream descriptor — 24 bytes
+
+```
+u16 id
+u8  kind            // 1 video, 2 audio
+u8  codec           // 1 = ALV1 for video / ALA1 for audio
+u32 timescale
+u32 param0
+u32 param1
+u32 flags
+u32 meta0
+```
+
+For V1 Baseline video: `timescale=1,000,000`, `param0=width`, `param1=height`. The reference CLI stores frame-rate numerator in stream flags bits 16..31 and denominator in bits 0..15; this is a V1 container convention for codec 1 video.
+
+For V1 Baseline audio: `timescale=1,000,000`, `param0=sample_rate`, `param1=channels`, flags and `meta0` are zero.
+
+### Video `meta0`
+
+```
+bits 0..3    matrix: 0 unspecified, 1 BT.601, 2 BT.709, 3 BT.2020 non-constant
+bits 4..7    transfer: 0 unspecified, 1 BT.709, 2 sRGB, 3 PQ, 4 HLG
+bits 8..11   primaries: 0 unspecified, 1 BT.601, 2 BT.709, 3 BT.2020
+bit 12       full-range flag
+bits 13..15  chroma location: 0 unspecified, 1 left, 2 center
+bits 16..31  reserved and MUST be zero
+```
+
+Unknown enumerated values are invalid in V1.
+
+### Epoch entry — 32 bytes
+
+```
+u32 id
+u32 duration
+u64 pts
+u64 offset
+u64 len
+```
+
+`offset` is an absolute byte offset in the file. `[offset, offset+len)` is sufficient to obtain the complete packet sequence for that epoch when combined with the fixed header/front index already fetched.
+
+## Packet
+
+Each packet is:
+
+```
+0..3    "AVPK"
+4       kind
+5       flags
+6..7    stream_id u16
+8..15   pts u64
+16..19  duration u32
+20..23  payload_len u32
+24..27  CRC32C(bytes 0..23)
+28..    payload[payload_len]
+then    CRC32C(payload) u32
+```
+
+Kinds: 1 EpochStart, 2 VideoFrame, 3 AudioFrame, 4 Metadata. A V1 decoder MUST bound packet allocation before reading payload; the reference implementation default maximum is 128 MiB.
+
+## Epoch semantics
+
+An indexed epoch MUST start with an EpochStart packet. The reference muxer uses a four-byte little-endian epoch ID payload. Decoder reference state is reset at EpochStart. V1 Baseline ALV1 dependencies MUST not reference frames before the current epoch. ALA1 packets are independently decodable and have no cross-packet predictor state.
+
+Packets may be interleaved by timestamp. Seeking consists of fetching the prefix/front index and then the selected epoch byte range; downloading preceding epochs is not required.
+
+## Incremental parsing
+
+A conforming parser must not assume packet or front boundaries align with transport fragments. The reference parser is tested with one-byte input fragments.
+
+## Reserved-field handling
+
+V1 decoders MUST reject a nonzero fixed-header minor version, nonzero fixed-header reserved field, unknown fixed-header flag bits, or nonzero packet flags. This avoids silently assigning semantics to draft-generation reserved fields.

@@ -1,0 +1,111 @@
+# ALA1 audio bitstream — version 1.0
+
+> **Draft status:** experimental, unfrozen, and subject to incompatible change while the software is `0.x`. `V1`/`ALV1`/`ALA1` refer to Draft Generation 1, not a stable 1.0 compatibility promise.
+
+
+Status: **normative draft for Draft Generation 1**. It defines the current reference-decoder contract, but compatibility is not frozen.
+
+ALA1 is a reversible-lifting transform audio codec with scalar quantization. `qstep=1` is mathematically lossless. V1 Baseline interoperability requires 48 kHz mono or stereo; the packet syntax itself permits 1–8 channels and sample rates from 8 kHz through 384 kHz.
+
+## Packet
+
+```
+bytes 0..3    ASCII "ALA1"
+byte  4       channels, 1..8
+byte  5       flags
+bytes 6..7    qstep u16, >=1
+bytes 8..11   sample_rate u32
+bytes 12..13  sample_frames u16, 1..4096
+bytes 14..15  reserved, MUST be zero
+bytes 16..19  entropy_len u32
+bytes 20..    entropy block
+```
+
+Flag bit 0 is reversible mid/side coupling and is legal only for two channels. All other flag bits MUST be zero. The entropy block is defined by the common V1 entropy specification.
+
+No priming or pre-skip is required by ALA1.
+
+## Channel preparation
+
+Input is signed 16-bit PCM represented as mathematical integers.
+
+If stereo mid/side is enabled, for every sample pair `(L,R)` compute:
+
+```
+side = R - L
+mid  = L + (side >> 1)
+plane0 = mid
+plane1 = side
+```
+
+`>> 1` is arithmetic right shift, equivalent to floor division by 2 for signed two's-complement integers.
+
+## Blocking and token stream
+
+Block length is 64 samples per channel. The final block is zero-padded to 64 before transform; only the declared `sample_frames` are returned after decoding.
+
+The decompressed entropy token stream begins with canonical unsigned varint `block_count`, which MUST equal `ceil(sample_frames/64)`.
+
+Then, channel-major and block-major, each transformed block is sparse-coded:
+
+```
+uvarint nonzero_count          // 0..64
+repeat nonzero_count times:
+    uvarint coefficient_index  // 0..63, strictly increasing
+    svarint quantized_value
+```
+
+A coefficient value MUST have absolute value <=2,000,000.
+
+## Reversible lifting Haar transform
+
+For a 64-value vector, repeatedly transform the current prefix length `len`, initially 64 and halved until 1. For each pair `(a,b)`:
+
+```
+d = b - a
+s = a + (d >> 1)
+```
+
+Store all `s` values in the first half of the current prefix and all `d` values in the second half.
+
+The inverse begins at prefix length 2 and doubles through 64. For each `(s,d)`:
+
+```
+a = s - (d >> 1)
+b = d + a
+```
+
+and interleave `(a,b)`.
+
+This lifting transform is exactly reversible over integers absent arithmetic overflow.
+
+## Quantization
+
+Let base quantizer `q = qstep`.
+
+For coefficient index `i`:
+
+- if `q == 1`, divisor is 1 for every coefficient;
+- otherwise, divisor is `q` for `i < 4`, `2q` for `4 <= i < 16`, and `3q` for `i >= 16`.
+
+Encoder quantization rounds to nearest with halves away from zero:
+
+- nonnegative: `(v + d/2)/d`;
+- negative: `-((-v + d/2)/d)`.
+
+Decoder dequantization is exact multiplication by the divisor. Consequently `qstep=1` has no quantization and is lossless.
+
+## Stereo inverse
+
+If mid/side was enabled:
+
+```
+L = mid - (side >> 1)
+R = side + L
+```
+
+Every reconstructed channel sample MUST fit signed 16-bit PCM; otherwise the packet is invalid.
+
+## Arithmetic validity
+
+All lifting and stereo inverse additions/subtractions are mathematically exact operations but a V1 decoder MUST reject a packet if an intermediate cannot be represented in signed 32-bit arithmetic or if a final PCM sample cannot be represented in signed 16-bit arithmetic.

@@ -1,0 +1,13 @@
+/target/
+/dist/
+/.cargo/
+**/__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.tmp
+*.log
+# Generated browser binary. Build with scripts/build-wasm.sh.
+/web/player/avelune.wasm
+# Local benchmark media is intentionally not redistributed.
+/tests/corpus/

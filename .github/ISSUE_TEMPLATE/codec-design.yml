@@ -1,0 +1,31 @@
+name: Codec/spec design proposal
+description: Evidence-backed proposal to change the draft format or normative semantics
+title: "[design] "
+labels: [design]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What limitation or failure mode are you trying to fix?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Measurements, corpus, prior art, failed alternatives, or conformance implications.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed format change
+      description: Keep encoder heuristics separate from normative decoding rules.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility impact
+      description: Draft incompatibility is allowed; state exactly what would break.

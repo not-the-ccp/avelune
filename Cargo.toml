@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+members = [
+  "impl/rust/crates/avelune",
+  "impl/rust/crates/avelune-bitstream",
+  "impl/rust/crates/avelune-container-v1",
+  "impl/rust/crates/avelune-video-v1",
+  "impl/rust/crates/avelune-video-ref-v1",
+  "impl/rust/crates/avelune-audio-v1",
+  "impl/rust/crates/avelune-wasm-v1",
+  "impl/rust/tools/avelune-v1",
+  "prod/rust",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.97"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "deny"

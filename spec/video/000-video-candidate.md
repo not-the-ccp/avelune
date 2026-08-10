@@ -1,0 +1,57 @@
+> HISTORICAL / NON-NORMATIVE: superseded by the Draft Generation 1 `001-*` specification.
+
+# Avelune Video Candidate 0.0
+
+Status: **EXPERIMENTAL / NOT FROZEN**
+
+This document separates architectural requirements that are already intentional from disposable coding experiments.
+
+## Architectural invariants under evaluation
+
+1. Frames have immutable frame IDs.
+2. Every inter frame explicitly identifies its dependency frame IDs; no mutable semantic reference-slot array exists.
+3. Dependencies never cross epoch boundaries.
+4. Decoder resource requirements are bounded from syntax before large allocations.
+5. Entropy state is restartable at independently decodable spatial regions.
+6. Encoder search strategy is never part of the decoder contract.
+7. Lossless coding must be a first-class valid mode, not a separately wrapped format.
+
+## Intended source representations
+
+Candidate profiles are expected to cover integer 8/10/12-bit planes, monochrome, 4:2:0, 4:2:2, 4:4:4, RGB/GBR and optional alpha. Exact profile signaling is not frozen.
+
+## Candidate coding pipeline
+
+The serious candidate architecture is:
+
+```
+partition -> prediction -> residual transform -> quantization -> entropy coding
+          -> inverse operations -> one reconstruction-filter stage
+```
+
+Planned tools are described in `docs/architecture/codec-direction.md`; they are not normative until experiments justify them.
+
+## Experiment 0 syntax
+
+The first executable experiment intentionally uses a much smaller subset to test state and container assumptions:
+
+- 8-bit planar YUV 4:2:0;
+- intra frames are linearly predicted sample-by-sample and encode prediction errors;
+- inter frames predict from the same-position sample in one explicitly named reference frame;
+- residuals are signed integers zig-zag mapped to unsigned values and encoded with bounded LEB128;
+- a quantizer step of one is mathematically lossless;
+- no spatial transform, motion search, filtering, chroma tools or entropy model is implied by this experiment.
+
+A decoder implementing Experiment 0 is **not** evidence that the above mechanism belongs in version 1.0. It exists to validate exact arithmetic, explicit reference dependencies, packetization and independent epochs.
+
+## Exact experiment reconstruction
+
+For every sample:
+
+```
+prediction = intra_predictor(...) OR reference_sample
+error = source - prediction
+reconstructed = clamp(prediction + dequantized_error, 0, 255)
+```
+
+For lossless Experiment 0, `dequantized_error == error` and clipping MUST therefore recover the original sample exactly.
