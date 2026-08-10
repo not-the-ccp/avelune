@@ -1,0 +1,43 @@
+name: Feature or tooling proposal
+description: Propose a useful change to Avelune's implementation, tooling, docs, or demo
+title: "[feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What limitation, workflow, or user need would this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Describe the behavior or capability you would like to see.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Codec/spec correctness
+        - Reference encoder/decoder
+        - Container/streaming
+        - CLI/tooling
+        - WASM/browser demo
+        - WebGPU experiment
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence or alternatives
+      description: Include measurements, examples, prior art, or alternatives considered when available.
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and scope
+      description: Note possible spec, API, bitstream, performance, or documentation impact.

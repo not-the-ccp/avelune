@@ -1,0 +1,23 @@
+name: Question
+description: Ask for clarification about using, understanding, or contributing to Avelune
+title: "[question] "
+labels: [question]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What are you trying to do, and which documentation or commands have you already tried?
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include relevant OS, Rust, FFmpeg, Node.js, browser, or Avelune version details.
