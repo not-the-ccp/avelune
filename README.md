@@ -74,6 +74,31 @@ avelune raw encode-y4m input.y4m output.avl
 avelune raw decode-y4m output.avl decoded.y4m
 ```
 
+## Rust facade API
+
+The Rust API is deliberately thin, experimental, and unfrozen while Avelune is `0.x`. Consume the
+facade directly from this repository when experimenting:
+
+```toml
+[dependencies]
+avelune = { git = "https://github.com/not-the-ccp/avelune", tag = "v0.1.1" }
+```
+
+```rust
+use avelune::audio::{encode, AudioError, EncodeOptions};
+
+fn encode_lossless() -> Result<Vec<u8>, AudioError> {
+    encode(&[0_i16, 1000, -1000, 0], EncodeOptions {
+        sample_rate: 48_000,
+        channels: 1,
+        qstep: 1,
+        mid_side: false,
+    })
+}
+```
+
+The component crates remain available for low-level format, decoder, and conformance work.
+
 Generate shell completions with:
 
 ```sh
@@ -137,6 +162,8 @@ See [`docs/development/VERSIONING.md`](docs/development/VERSIONING.md).
 ## Limitations
 
 ALV1 and especially lossy ALA1 remain behind mature production codecs in compression efficiency.
+Lossy ALA1 is experimental and not perceptually tuned; ordinary audio encoding defaults to lossless
+`q=1`.
 The draft baseline omits several higher-fidelity profiles. WebGPU compute is experimental. The code
 has not received a professional security or patent audit. See [`STATUS.md`](STATUS.md), benchmark
 reports, and [`docs/IPR-NOTES.md`](docs/IPR-NOTES.md).

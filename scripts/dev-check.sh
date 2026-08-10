@@ -7,14 +7,14 @@ echo '[1/9] rustfmt'
 cargo fmt --all -- --check
 
 echo '[2/9] clippy'
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --locked -- -D warnings
 
 echo '[3/9] tests + doctests'
-cargo test --workspace
-cargo test --workspace --doc
+cargo test --workspace --locked
+cargo test --workspace --doc --locked
 
 echo '[4/9] rustdoc'
-RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps
+RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked
 
 echo '[5/9] script syntax'
 node --check web/player/player.js
@@ -23,7 +23,7 @@ python3 -m py_compile scripts/benchmark-real.py scripts/benchmark-real-audio.py 
 bash -n scripts/build-wasm.sh scripts/build-site.sh scripts/fetch-xiph-corpus.sh scripts/validate-draft.sh
 
 echo '[6/9] cli smoke + completions'
-cargo build -p avelune-cli
+cargo build -p avelune-cli --locked
 BIN=${CARGO_TARGET_DIR:-target}/debug/avelune
 "$BIN" --version
 "$BIN" --help >/dev/null

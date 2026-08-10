@@ -23,13 +23,17 @@ Useful encode options:
 --seconds N       encode a prefix of the source
 --size WxH        resize before reference encoding
 --video-q N       experimental ALV1 quantizer step
---audio-q N       experimental ALA1 quantizer step; 1 is mathematically lossless
+--audio-q N       ALA1 quantizer step; defaults to 1 (mathematically lossless)
 --epoch N         maximum epoch length in video frames
 --preset NAME     fast | balanced | quality reference search preset
 ```
 
 `--video-q` and `--audio-q` are codec experiment knobs, **not** CRF values or bitrate targets. Do not
 assume a number has comparable meaning to x264/x265/AV1/Opus settings.
+
+Ordinary `encode` and `raw encode-audio` default to lossless ALA1 (`q=1`). Lossy ALA1 values remain
+available when explicitly selected, but are experimental and not perceptually tuned; the benchmark
+report shows that they can have very poor sample-SNR on some music and speech.
 
 ### Playback
 
