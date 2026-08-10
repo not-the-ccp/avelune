@@ -33,8 +33,8 @@ changes:
    automated feedback is handled. Large, security-sensitive, architectural, release, or
    spec/format changes also require explicit human review.
 
-CodeRabbit is the intended automated reviewer, but it is not currently enabled for this repository.
-Until it is enabled, treat a human review as the fallback for every pull request.
+CodeRabbit is the repository's automated reviewer. If CodeRabbit does not run or is unavailable,
+treat a human review as the fallback for the pull request.
 
 Never push directly to `main`, force-push it, or bypass the pull-request workflow. The repository's
 GitHub ruleset enforces pull requests and required CI for `main`; there is no documented typo

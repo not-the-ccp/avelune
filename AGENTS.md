@@ -47,11 +47,10 @@ All normal changes use a feature branch and pull request:
    `main`, force-push `main`, or bypass the review process unless the maintainer explicitly directs
    that action.
 
-CI plus automated review is the normal gate for ordinary changes. CodeRabbit is the intended
-automated reviewer, but it is not currently enabled; until it is enabled, request human review for
-every pull request. Once enabled, still request explicit human review for large, security-sensitive,
-architectural, release, or spec/format changes. Small typo-like fixes follow the same pull-request
-workflow because the repository policy does not permit direct pushes to `main`.
+CI plus CodeRabbit review is the normal gate for ordinary changes. If CodeRabbit does not run or is
+unavailable, request human review as the fallback. Still request explicit human review for large,
+security-sensitive, architectural, release, or spec/format changes. Small typo-like fixes follow the
+same pull-request workflow because the repository policy does not permit direct pushes to `main`.
 
 If implementation evidence disproves a format assumption, record the evidence and revisit the codec
 or container design. Do not patch the spec merely to match an implementation accident.
