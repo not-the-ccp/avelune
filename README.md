@@ -129,6 +129,10 @@ The repository includes GitHub Actions workflows for CI and GitHub Pages deploym
 
 ## Development and validation
 
+Contributions use a feature-branch and pull-request workflow. Never push directly to `main`; see
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for the branch, validation, automated-review, and human-review
+rules.
+
 ```sh
 ./scripts/dev-check.sh
 ```
