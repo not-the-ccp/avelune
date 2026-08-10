@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+# Reuse the exact benchmark methodology used by benchmark-real.py on externally fetched Xiph Y4M.
+import csv, pathlib, re, subprocess, sys, time, os
+ROOT=pathlib.Path(__file__).resolve().parents[1]
+BIN=pathlib.Path(os.environ.get('AVELUNE_BIN', ROOT/'target/release/avelune'))
+CORP=ROOT/'tests/corpus/xiph'; OUT=ROOT/'benchmarks/v1/xiph-runs'; OUT.mkdir(parents=True,exist_ok=True)
+sources=[CORP/'bus_qcif_15fps.y4m',CORP/'foreman_qcif.y4m']
+for s in sources:
+    if not s.exists(): raise SystemExit(f'missing {s}; run scripts/fetch-xiph-corpus.sh')
+def run(cmd):
+    t=time.perf_counter(); p=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True); dt=time.perf_counter()-t
+    if p.returncode: print(p.stdout,p.stderr,file=sys.stderr); raise SystemExit('failed '+repr(cmd))
+    return dt
+def psnr(ref,test):
+    p=subprocess.run(['ffmpeg','-hide_banner','-i',str(ref),'-i',str(test),'-lavfi','[0:v][1:v]psnr','-f','null','-'],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+    m=re.findall(r'average:([0-9.]+|inf)',p.stderr); return float('inf') if m[-1]=='inf' else float(m[-1])
+rows=[]
+for src in sources:
+  name=src.stem
+  for q in (64,96,128,192,256,384,512,768):
+    avl=OUT/f'{name}-avelune-q{q}.avl'; dec=OUT/f'{name}-avelune-q{q}.y4m'; dt=run([str(BIN),'raw','encode-y4m',str(src),str(avl),'--q',str(q),'--epoch','60','--preset','balanced']);run([str(BIN),'raw','decode-y4m',str(avl),str(dec)]);rows.append([name,'avelune',f'q{q}',avl.stat().st_size,dt,psnr(src,dec)])
+  for label,enc,crfs,extra in [('x264','libx264',[20,28],['-preset','medium']),('x265','libx265',[20,28],['-preset','medium','-x265-params','log-level=error']),('vp9','libvpx-vp9',[30,40],['-deadline','good','-cpu-used','2','-b:v','0']),('av1','libaom-av1',[30,40],['-cpu-used','6','-b:v','0'])]:
+    for crf in crfs:
+      f=OUT/f'{name}-{label}-crf{crf}.mkv';dt=run(['ffmpeg','-y','-loglevel','error','-i',str(src),'-c:v',enc,'-crf',str(crf),*extra,'-an',str(f)]);rows.append([name,label,f'crf{crf}',f.stat().st_size,dt,psnr(src,f)])
+out=ROOT/'benchmarks/v1/xiph-video.csv'
+with out.open('w',newline='') as f: w=csv.writer(f);w.writerow(['source','codec','setting','bytes','encode_seconds','psnr_db']);w.writerows(rows)
+print(out.read_text())

@@ -1,0 +1,160 @@
+# ALV1 video bitstream — version 1.0
+
+> **Draft status:** experimental, unfrozen, and subject to incompatible change while the software is `0.x`. `V1`/`ALV1`/`ALA1` refer to Draft Generation 1, not a stable 1.0 compatibility promise.
+
+
+Status: **normative draft for Draft Generation 1**. It defines the current reference-decoder contract, but compatibility is not frozen.
+
+ALV1 V1 is an 8-bit planar 4:2:0 codec. Width and height MUST be nonzero, even, no greater than 8192 each, and `width*height <= 8192^2`. Chroma dimensions are exactly `width/2` by `height/2`.
+
+The specification defines reconstruction only. Motion search, rate control, scene-cut detection, palette selection thresholds, reference search depth, presets, and entropy-layout choice are encoder policy.
+
+## Frame packet
+
+```
+bytes 0..3    ASCII "ALV1"
+bytes 4..11   frame_id: u64
+bytes 12..13  width: u16
+bytes 14..15  height: u16
+bytes 16..17  qstep: u16, >=1
+byte  18      dependency_count, 0..4
+byte  19      V1 flags, MUST equal 1
+then dependency_count * u64 dependency frame IDs
+then Y plane coding
+then U plane coding
+then V plane coding
+```
+
+Dependency IDs are immutable frame IDs. Every dependency used by any inter block MUST appear exactly once in the frame header. An encoder SHOULD omit dependencies that are unused. A decoder MUST reject a missing dependency or a dependency frame whose dimensions differ.
+
+Dependencies MUST NOT cross an Avelune container epoch boundary in the V1 Baseline profile.
+
+## Plane envelope
+
+Each plane independently chooses one of two entropy layouts.
+
+### Layout 0 — mixed
+
+```
+u8  layout = 0
+u32 entropy_len
+u8  entropy_block[entropy_len]
+```
+
+The decompressed byte sequence is the block token stream described below.
+
+### Layout 1 — split control/data
+
+```
+u8  layout = 1
+u32 control_entropy_len
+u8  control_entropy_block[control_entropy_len]
+u32 data_entropy_len
+u8  data_entropy_block[data_entropy_len]
+```
+
+The decompressed control stream contains exactly one mode byte per raster-order block. The decompressed data stream contains every field following the mode byte in the mixed syntax. Both streams MUST be consumed exactly.
+
+## Block order and partial blocks
+
+Each plane is partitioned into fixed 8x8 blocks in raster order, including partial blocks at the right and bottom edges. Only in-picture samples participate in prediction, palette counts, and reconstruction. Transform coefficients still have 64 positions; samples outside the picture are encoded as zero residual.
+
+## Block modes
+
+Modes 0–4 are defined. Other values are invalid.
+
+### Mode 0 — DC intra
+
+Prediction is constant over the block. Gather reconstructed samples immediately above the valid block width if an above row exists, and reconstructed samples immediately left of the valid block height if a left column exists. Let `sum` and `n` be their total and count. Prediction is 128 if `n=0`, otherwise integer `(sum + floor(n/2))/n`.
+
+A residual block follows.
+
+### Mode 1 — left intra
+
+For sample `(x,y)` inside a block, prediction is the already reconstructed sample immediately left of that row. If no left column exists, prediction is 128.
+
+A residual block follows.
+
+### Mode 2 — top intra
+
+For sample `(x,y)`, prediction is the already reconstructed sample immediately above that column. If no above row exists, prediction is 128.
+
+A residual block follows.
+
+### Mode 3 — inter
+
+Data fields before the residual:
+
+```
+u8      dependency_index
+svarint  dx2
+svarint  dy2
+```
+
+`dependency_index` indexes the frame-header dependency list and MUST be in range. `dx2` and `dy2` are signed half-sample motion displacements **in the coordinate system of the current plane** and each MUST be in `[-64,64]`.
+
+For output sample coordinate `(X,Y)`, form `x2 = 2*X + dx2`, `y2 = 2*Y + dy2`. Let:
+
+- `x0 = floor(x2/2)` using mathematical floor;
+- `y0 = floor(y2/2)`;
+- `fx = x2 mod 2` in `{0,1}`;
+- `fy = y2 mod 2` in `{0,1}`.
+
+Reference sample access clamps integer coordinates independently to frame edges. With `a=P(x0,y0)`, `b=P(x0+1,y0)`, `c=P(x0,y0+1)`, `d=P(x0+1,y0+1)`, prediction is:
+
+`(a*(2-fx)*(2-fy) + b*fx*(2-fy) + c*(2-fx)*fy + d*fx*fy + 2) / 4`
+
+using integer division.
+
+A residual block follows.
+
+### Mode 4 — exact palette
+
+No transform residual follows.
+
+```
+u8 colors_count              // 1..4
+u8 colors[colors_count]
+u8 sample_count               // exact count of valid block samples
+u8 packed_indices[ceil(sample_count/4)]
+```
+
+Samples are enumerated row-major over only valid in-picture positions. Each index occupies two bits; sample `k` uses bits `2*(k mod 4)` through `+1` of byte `floor(k/4)`. Every index MUST be less than `colors_count`. `sample_count` MUST exactly equal the number of valid samples in the partial/full block.
+
+## Residual block syntax
+
+For modes 0–3:
+
+```
+uvarint nonzero_count          // 0..64
+repeat nonzero_count times:
+    uvarint coefficient_index  // 0..63, strictly increasing
+    svarint quantized_value
+```
+
+Quantized values MUST have absolute value no greater than 1,000,000. Unlisted coefficients are zero.
+
+Dequantize each coefficient as `qcoeff[i] * qstep` with checked signed arithmetic.
+
+## 8x8 Walsh-Hadamard transform
+
+The inverse transform is normative. Define the 1-D 8-point transform by iterative butterflies. Starting with `h=1`, while `h<8`, for each contiguous `2h` group and each `j` in its first half, replace pair `(a,b)` with `(a+b,a-b)`, then double `h`.
+
+For the 2-D transform, apply that 1-D operation to every row, then every column. Let the result be `T`.
+
+The inverse residual sample is signed round-to-nearest division by 64:
+
+- if `T>=0`: `(T+32)/64`;
+- otherwise: `-((-T+32)/64)`.
+
+Reconstructed sample = clamp to `[0,255]` of `prediction + residual`.
+
+Because the Hadamard transform is self-inverse up to the factor 64, `qstep=1` permits mathematically exact reconstruction for legal source samples when the encoder emits exact transformed residual coefficients.
+
+## Decoder state
+
+A decoder may retain at most four reconstructed pictures within an epoch. Reference lookup is by immutable `frame_id`, never by mutable slot semantics. The V1 container reset at every epoch permits bounded independent seeking.
+
+## Arithmetic validity bound
+
+Before the inverse WHT, every dequantized coefficient MUST have absolute value at most 33,554,431 (`floor((2^31-1)/64)`). This guarantees that every 8x8 Hadamard butterfly intermediate remains representable in signed 32-bit arithmetic. Duplicate dependency IDs and a dependency equal to the current `frame_id` are invalid.

@@ -1,0 +1,17 @@
+[package]
+name = "avelune-video-ref-v1"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Source-separated scalar reference decoder for experimental ALV1 video"
+publish = false
+
+[dependencies]
+avelune-bitstream = { path = "../avelune-bitstream" }
+
+[dev-dependencies]
+avelune-video-v1 = { path = "../avelune-video-v1" }
+
+[lints]
+workspace = true
