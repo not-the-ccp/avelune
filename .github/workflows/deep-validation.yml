@@ -16,6 +16,8 @@ jobs:
         run: |
           rustup toolchain install 1.97.1 --profile minimal --component rustfmt --target wasm32-unknown-unknown
           rustup default 1.97.1
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Check FFmpeg and Node
         run: ffmpeg -version | head -1 && node --version
       - name: Deep Draft Generation 1 validation
