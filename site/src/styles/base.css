@@ -1,0 +1,25 @@
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-padding-top: calc(var(--header-height) + 1rem); }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 400 16px/1.66 var(--font-sans);
+    text-rendering: optimizeLegibility;
+  }
+  a { color: var(--cool); text-underline-offset: .18em; text-decoration-thickness: 1px; }
+  a:hover { text-decoration-thickness: 2px; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+  ::selection { background: color-mix(in srgb, var(--cool) 32%, transparent); }
+  h1, h2, h3, h4 { line-height: 1.15; text-wrap: balance; }
+  h1 { font-size: clamp(2.35rem, 5vw, 4.5rem); letter-spacing: -.035em; }
+  h2 { font-size: clamp(1.65rem, 3vw, 1.9rem); letter-spacing: -.02em; }
+  h3 { font-size: 1.25rem; }
+  code, pre, kbd, samp { font-family: var(--font-mono); }
+  img, svg, video, canvas { display: block; max-width: 100%; }
+  button, input { font: inherit; }
+  .skip-link { position: fixed; z-index: 100; top: .5rem; left: .5rem; transform: translateY(-180%); padding: .55rem .8rem; background: var(--ink); color: var(--paper); }
+  .skip-link:focus { transform: none; }
+  .eyebrow { margin: 0; color: var(--muted); font: .72rem/1.4 var(--font-mono); letter-spacing: .1em; }
+}

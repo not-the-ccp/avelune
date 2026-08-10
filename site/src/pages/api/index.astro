@@ -1,0 +1,10 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+---
+<BaseLayout title="Rust API reference" current="api">
+  <div class="index-shell">
+    <header class="index-header"><p class="eyebrow">REFERENCE IMPLEMENTATION · RUST</p><h1>Native API documentation</h1><p>Rustdoc remains the authoritative deep API reference. Start with the thin <code>avelune</code> facade; component crates expose the experimental codec, container, and WASM surfaces.</p></header>
+    <p><a class="button-link" href={`${base}/api/rust/avelune/`}>Open avelune rustdoc</a></p>
+  </div>
+</BaseLayout>

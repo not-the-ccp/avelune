@@ -1,0 +1,48 @@
+@layer tokens {
+  :root {
+    color-scheme: light dark;
+    --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+    --paper: #f3f1ea;
+    --surface: #f8f7f2;
+    --surface-2: #eae8e1;
+    --ink: #181918;
+    --muted: #626762;
+    --rule: #c8c7c0;
+    --cool: #426d78;
+    --warm: #874f45;
+    --luma: #6c6a60;
+    --focus: #2c7488;
+    --measure: 74ch;
+    --shell: 1220px;
+    --header-height: 56px;
+  }
+
+  .mode-grid {
+    --paper: #111211;
+    --surface: #171918;
+    --surface-2: #1d201e;
+    --ink: #eeeeea;
+    --muted: #a4a7a1;
+    --rule: #383c38;
+    --cool: #79b8c8;
+    --warm: #c07869;
+    --luma: #d9d7cb;
+    --focus: #8bc9d8;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .mode-publication {
+      --paper: #141513;
+      --surface: #1a1c19;
+      --surface-2: #222521;
+      --ink: #e8e7e0;
+      --muted: #a4a69e;
+      --rule: #3b3e38;
+      --cool: #86bac6;
+      --warm: #c47b6d;
+      --luma: #d3d0c3;
+      --focus: #91c8d4;
+    }
+  }
+}

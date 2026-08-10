@@ -1,0 +1,49 @@
+---
+import BaseLayout from "./BaseLayout.astro";
+
+interface TocItem { depth: number; id: string; text: string }
+interface NavItem { title: string; route: string; type?: string }
+interface Props {
+  title: string;
+  summary?: string;
+  status?: string;
+  type?: string;
+  sourcePath: string;
+  toc?: TocItem[];
+  nav?: NavItem[];
+  current: "docs" | "spec";
+}
+const { title, summary, status, type = "guide", sourcePath, toc = [], nav = [], current } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const sourceUrl = `https://github.com/not-the-ccp/avelune/blob/main/${sourcePath}`;
+---
+
+<BaseLayout title={title} description={summary} mode="publication" current={current}>
+  <div class="publication-shell">
+    <aside class="section-nav" aria-label={`${current === "spec" ? "Specification" : "Documentation"} navigation`}>
+      <p class="eyebrow">{current === "spec" ? "SPECIFICATION" : "DOCUMENTATION"}</p>
+      <a class="section-index" href={`${base}/${current}/`}>Overview</a>
+      <ol>
+        {nav.map((item) => <li><a href={`${base}${item.route}`} aria-current={item.title === title ? "page" : undefined}>{item.title}</a></li>)}
+      </ol>
+    </aside>
+    <article class:list={["publication", `publication-${type}`]}>
+      <header class="document-header">
+        <div class="document-meta">
+          <span>{type.replaceAll("-", " ")}</span>
+          {status && <span class="document-status">{status}</span>}
+        </div>
+        <h1>{title}</h1>
+        {summary && <p class="lede">{summary}</p>}
+        <a class="source-link" href={sourceUrl}>View authoritative source</a>
+      </header>
+      <div class="asciidoc"><slot /></div>
+    </article>
+    <aside class="page-toc" aria-label="On this page">
+      <p class="eyebrow">ON THIS PAGE</p>
+      <ol>
+        {toc.filter((item) => item.depth <= 2).map((item) => <li class:list={[`depth-${item.depth}`]}><a href={`#${item.id}`}>{item.text}</a></li>)}
+      </ol>
+    </aside>
+  </div>
+</BaseLayout>
