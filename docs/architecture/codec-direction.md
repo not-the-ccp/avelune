@@ -1,0 +1,32 @@
+# Codec direction (non-normative)
+
+This file records the active design direction and may change without changing a candidate bitstream.
+
+## Video
+
+Research targets:
+
+- constrained recursive partitions rather than maximal combinatorial partition grammars;
+- explicit frame dependency graphs;
+- approximately 2 s encoder-default independent epochs, to be measured against 1/4/8 s;
+- conventional block motion plus an experimental coarse motion lattice with local corrections;
+- non-overlapping integer transforms first; lapped transforms are not the default because their neighbor/partition coupling has historically made intra coding and variable block structure harder;
+- scalar inverse quantization with most perceptual intelligence pushed into the encoder;
+- independently restartable, interleaved rANS entropy states with table selection/deltas rather than per-symbol probability mutation;
+- palette, transform-skip and intra block-copy as first-class screen-content candidates;
+- patch dictionary only if it materially wins over simpler screen tools;
+- exactly one normative reconstruction-filter stage if experiments show sufficient gain.
+
+## Audio
+
+Research targets:
+
+- one common transform/energy/residual path for general audio;
+- transient-dependent time resolution;
+- per-band stereo coupling;
+- optional LPC/pitch whitening, retained only if speech gains do not compromise general audio simplicity/performance;
+- rANS-family entropy coding if the video experiments validate its decoder tradeoffs.
+
+## Browser
+
+Required correctness baseline: ordinary single-threaded wasm32. Primary optimization target: WebAssembly SIMD. Threads are optional acceleration rather than a correctness dependency.

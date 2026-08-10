@@ -1,0 +1,43 @@
+name: Bug report
+description: Reproducible problem in the reference implementation, tooling, docs, or demo
+title: "[bug] "
+labels: [bug]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Include exact commands and a minimal redistributable sample when possible.
+      placeholder: |
+        avelune --version
+        ffprobe ...
+        avelune encode ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, CPU/GPU, browser if relevant, FFmpeg version, Rust version if building.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Codec/spec correctness
+        - Reference encoder/decoder
+        - Container/streaming
+        - CLI/tooling
+        - WASM/browser demo
+        - WebGPU experiment
+        - Documentation
+    validations:
+      required: true

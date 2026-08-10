@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+*.avl binary
+*.wasm binary
+*.y4m binary
+*.s16le binary
+*.pcm binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.tar binary
+*.xz binary

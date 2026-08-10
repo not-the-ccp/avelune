@@ -1,0 +1,31 @@
+<!doctype html><meta charset="utf-8"><title>Avelune WebGPU compute smoke</title><pre id="out">starting</pre>
+<script type="module">
+const out=document.querySelector('#out');
+function failInfo(info){const e=info.messages.filter(m=>m.type==='error');if(e.length)throw Error(e.map(m=>m.message).join('\n'))}
+try{
+ if(!navigator.gpu)throw Error('navigator.gpu unavailable');
+ const adapter=await navigator.gpu.requestAdapter();if(!adapter)throw Error('no adapter');
+ const device=await adapter.requestDevice();
+ // Encoder-side motion-cost kernel.
+ const sadCode=await (await fetch('motion_sad.wgsl')).text();
+ const sadMod=device.createShaderModule({code:sadCode});failInfo(await sadMod.getCompilationInfo());
+ const src=new Uint32Array(64),ref=new Uint32Array(64);for(let i=0;i<64;i++){src[i]=i;ref[i]=i}
+ const usage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST;
+ const sb=device.createBuffer({size:src.byteLength,usage});const rb=device.createBuffer({size:ref.byteLength,usage});device.queue.writeBuffer(sb,0,src);device.queue.writeBuffer(rb,0,ref);
+ const radius=1,cw=3,count=9;const cb=device.createBuffer({size:count*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
+ const params=new ArrayBuffer(24),dv=new DataView(params);dv.setUint32(0,8,true);dv.setUint32(4,8,true);dv.setUint32(8,0,true);dv.setUint32(12,0,true);dv.setInt32(16,radius,true);dv.setUint32(20,cw,true);
+ const pb=device.createBuffer({size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});device.queue.writeBuffer(pb,0,params);
+ const sadPipe=device.createComputePipeline({layout:'auto',compute:{module:sadMod,entryPoint:'main'}});const sadBg=device.createBindGroup({layout:sadPipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:sb}},{binding:1,resource:{buffer:rb}},{binding:2,resource:{buffer:cb}},{binding:3,resource:{buffer:pb}}]});
+ const read=device.createBuffer({size:count*4,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});let ce=device.createCommandEncoder(),pass=ce.beginComputePass();pass.setPipeline(sadPipe);pass.setBindGroup(0,sadBg);pass.dispatchWorkgroups(count);pass.end();ce.copyBufferToBuffer(cb,0,read,0,count*4);device.queue.submit([ce.finish()]);await read.mapAsync(GPUMapMode.READ);const costs=[...new Uint32Array(read.getMappedRange().slice(0))];read.unmap();if(costs[4]!==0)throw Error('bad zero-motion SAD '+costs[4]);
+
+ // Decoder-side exact inverse-WHT/reconstruction kernel. Zero coefficients must
+ // reproduce prediction exactly; a DC coefficient 640 must add 10 to every pixel.
+ const recCode=await (await fetch('reconstruct_wht.wgsl')).text();const recMod=device.createShaderModule({code:recCode});failInfo(await recMod.getCompilationInfo());
+ const coeff=new Int32Array(64);coeff[0]=640;const pred=new Uint32Array(64);pred.fill(100);
+ const qbuf=device.createBuffer({size:256,usage});const prbuf=device.createBuffer({size:256,usage});const obuf=device.createBuffer({size:256,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});device.queue.writeBuffer(qbuf,0,coeff);device.queue.writeBuffer(prbuf,0,pred);
+ const rp=device.createBuffer({size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});device.queue.writeBuffer(rp,0,new Uint32Array([1]));
+ const recPipe=device.createComputePipeline({layout:'auto',compute:{module:recMod,entryPoint:'main'}});const recBg=device.createBindGroup({layout:recPipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:qbuf}},{binding:1,resource:{buffer:prbuf}},{binding:2,resource:{buffer:obuf}},{binding:3,resource:{buffer:rp}}]});
+ const oread=device.createBuffer({size:256,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});ce=device.createCommandEncoder();pass=ce.beginComputePass();pass.setPipeline(recPipe);pass.setBindGroup(0,recBg);pass.dispatchWorkgroups(1);pass.end();ce.copyBufferToBuffer(obuf,0,oread,0,256);device.queue.submit([ce.finish()]);await oread.mapAsync(GPUMapMode.READ);const px=[...new Uint32Array(oread.getMappedRange().slice(0))];oread.unmap();if(px.some(v=>v!==110))throw Error('bad inverse-WHT reconstruction '+JSON.stringify(px.slice(0,8)));
+ out.textContent='PASS WebGPU encoder SAD + decoder inverse-WHT';document.title='PASS';
+}catch(e){out.textContent='SKIP/FAIL '+e.message;document.title='SKIP/FAIL'}
+</script>
