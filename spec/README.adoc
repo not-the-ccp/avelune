@@ -1,0 +1,30 @@
+= Avelune specification drafts
+:page-type: supporting
+:page-status: current
+:summary: Index of Avelune Draft Generation 1 specification documents, historical experiments, and change discipline.
+:nav-order: 10
+
+*Status:* *experimental and unfrozen.*
+
+The normative draft documents in this directory define current decoded behavior. They are the source of truth when they disagree with the reference implementation. The project is still `0.x`, so syntax, identifiers, constraints, and decoded semantics may change incompatibly when evidence supports a better design.
+
+`ALV1` and `ALA1` mean *Draft Generation 1*. They do not mean the format has reached stable 1.0.
+
+[#spec-current-normative-draft]
+== Current normative draft
+
+* xref:001-v1-baseline-profile.adoc#baseline-video[001-v1-baseline-profile.adoc] — common baseline/profile boundaries;
+* xref:common/001-entropy-v1.adoc#entropy-canonical-unsigned-varint[common/001-entropy-v1.adoc] — canonical varints and static rANS;
+* xref:container/001-container-v1.adoc#avl-fixed-file-header[container/001-container-v1.adoc] — file/front-index/packet syntax;
+* xref:video/001-video-v1.adoc#alv1-frame-packet[video/001-video-v1.adoc] — ALV1 decoded semantics;
+* xref:audio/001-audio-v1.adoc#ala1-packet[audio/001-audio-v1.adoc] — ALA1 decoded semantics;
+* xref:conformance/001-v1.adoc#conformance-general[conformance/001-v1.adoc] — decoder/conformance expectations.
+
+Files prefixed `000-` are historical experiments and are non-normative.
+
+[#spec-change-discipline]
+== Change discipline
+
+A format change is complete only when the normative draft, affected implementations, conformance vectors/tests, public docs, and `spec/CHANGELOG.adoc` agree. During the unstable phase, do not retain an inferior design solely to decode an earlier development artifact.
+
+See xref:../docs/development/VERSIONING.adoc[../docs/development/VERSIONING.adoc].

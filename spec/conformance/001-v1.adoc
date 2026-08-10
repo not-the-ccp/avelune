@@ -1,38 +1,50 @@
-# Avelune Draft Generation 1 conformance requirements
+= Avelune Draft Generation 1 conformance requirements
+:page-type: normative
+:page-status: current normative draft · unfrozen
+:summary: Normative Draft Generation 1 decoder behavior, conformance vectors, and container range requirements.
+:nav-order: 70
+:sectnums:
 
-> **Draft status:** experimental, unfrozen, and subject to incompatible change while the software is `0.x`. `V1`/`ALV1`/`ALA1` refer to Draft Generation 1, not a stable 1.0 compatibility promise.
+[WARNING]
+====
+*Draft status:* experimental, unfrozen, and subject to incompatible change while the software is `0.x`. `V1`/`ALV1`/`ALA1` refer to Draft Generation 1, not a stable 1.0 compatibility promise.
+====
 
-
-Status: **normative**.
+Status: *normative*. 
 
 A V1 decoder is conforming when it implements the normative container, common entropy, ALV1, and/or ALA1 specifications for the profiles it claims and satisfies the corresponding vectors.
 
-## General
+[#conformance-general]
+== General
 
 A decoder MUST:
 
-- reject malformed length arithmetic before out-of-bounds access/allocation;
-- reject non-canonical varints where required;
-- reject invalid entropy models and trailing entropy bytes;
-- validate container header/front/packet CRC-32C;
-- reject unsupported dimensions, reference IDs, modes, palette indices, and coefficient fields;
-- be deterministic and independent of host floating-point behavior (V1 normative reconstruction is integer-only);
-- never require WebGPU, threads, SIMD, or the reference Rust implementation for correctness.
+* reject malformed length arithmetic before out-of-bounds access/allocation;
+* reject non-canonical varints where required;
+* reject invalid entropy models and trailing entropy bytes;
+* validate container header/front/packet CRC-32C;
+* reject unsupported dimensions, reference IDs, modes, palette indices, and coefficient fields;
+* be deterministic and independent of host floating-point behavior (V1 normative reconstruction is integer-only);
+* never require WebGPU, threads, SIMD, or the reference Rust implementation for correctness.
 
-## ALV1
+[#conformance-alv1]
+== ALV1
 
 For every conforming video vector, reconstructed Y/U/V bytes MUST exactly equal the expected decoded Y4M planes. In lossless vectors (`qstep=1`) expected output equals source pixels exactly.
 
 A decoder must reset references on every EpochStart and must reject an inter frame if any declared dependency is unavailable.
 
-## ALA1
+[#conformance-ala1]
+== ALA1
 
 For lossless `qstep=1` vectors, decoded signed 16-bit PCM MUST match expected samples bit-for-bit. Lossy conformance vectors, when supplied, are judged by exact decoded PCM from the bitstream, not by an encoder quality target.
 
-## Container/range behavior
+[#conformance-container-range-behavior]
+== Container/range behavior
 
 The conformance package includes a deliberately CRC-corrupted file which MUST be rejected. The streaming smoke test fetches only the fixed/front prefix plus indexed epoch ranges and must reconstruct the same media as whole-file parsing.
 
-## Reference implementations
+[#conformance-reference-implementations]
+== Reference implementations
 
 The optimized Rust decoder and the separate scalar `avelune-video-ref-v1` decoder are informative implementations. Neither source tree is normative. The conformance generator checks production-encoder ALV1 output through both reconstruction implementations before publishing vectors.

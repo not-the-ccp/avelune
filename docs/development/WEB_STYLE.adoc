@@ -1,0 +1,78 @@
+= Avelune web style
+:page-type: development-guide
+:page-status: current
+:summary: The implemented visual language and QA rules for Avelune’s public website, technical publication pages, and browser demo.
+:nav-order: 90
+
+[#style-system]
+== One system, two modes
+
+The site uses a dark technical-grid mode for the landing page and browser instrument, and a calm technical-publication mode for documentation and specifications. Both share the same header, IBM Plex typography, spacing, thin rules, square geometry, focus behavior, and restrained Y′/Cb/Cr-inspired accents.
+
+The visual identity comes from technical structure: alignment, format boundaries, media planes, byte ranges, and factual metadata. It does not use decorative imagery, glass, glow, shadow, ambient gradients, or generic card grids.
+
+[#style-color]
+== Palette and semantic color
+
+Dark pages begin with near-black `#111211`; publication pages use paper `#f3f1ea`. Text is near-neutral rather than pure black or white. Cool cyan-blue is reserved for links, focus, selection, addressing, and data paths. Restrained warm red is used for unfrozen/draft state and secondary technical distinctions. A light luma neutral represents Y′ where media-plane meaning is useful.
+
+Color reinforces labels, rules, type, and shape. It never carries state alone. Add separate error, warning, or success treatment only when the interface actually needs those meanings.
+
+[#style-type]
+== Typography
+
+IBM Plex Sans serves prose, headings, navigation, and controls. IBM Plex Mono serves identifiers, byte/stream details, timings, dimensions, compact status labels, and code. Fonts are bundled by Astro and do not depend on a CDN.
+
+Prose is 16px with a generous line height and a maximum reading measure of roughly 74 characters. Publication titles are about 38–42px; the responsive homepage title tops out at 72px. Do not turn ordinary technical prose into monospace.
+
+[#style-layout]
+== Spacing, header, and layout
+
+The main landing shell is at most 1220px. The 56px opaque header aligns its wordmark, generation state, and navigation to that shell. Current navigation uses type color and a thin rule, never a pill or filled tab.
+
+Publication pages use a left section navigation, centered reading column, and right on-page outline. The right outline disappears first; on narrow screens, the left navigation becomes a compact overview link above the document. Sticky regions leave anchor and focus targets unobscured.
+
+Spacing should reveal hierarchy without wrapping every group in a surface. A bordered rectangle represents a real technical object such as a plane map, byte structure, source listing, video viewport, control, or inspector group.
+
+[#style-landing]
+== Landing page technical grid
+
+The first viewport uses a seven/five-column relationship: factual project identity and primary paths on the left, real format metadata and a proportional Y′/Cb/Cr plane map on the right. The registry is one structural row for ALV1, ALA1, and AVL, not three promotional cards. The architecture diagram uses lines, boundaries, and labels to explain indexed playback.
+
+The homepage must remain purpose-built. It is not generated from `README.md`, and it must not acquire a slogan, decorative hero art, fake terminal, unsupported performance claims, or maturity percentages.
+
+[#style-publication]
+== Documentation and specification
+
+Publication headings, metadata, source provenance, code, tables, admonitions, and navigation use the shared rules in `content.css`. Normative pages identify their draft status in text. Historical pages use an explicit historical/non-normative label and a double warm rule so the distinction survives without color.
+
+Tables scroll horizontally rather than breaking the viewport. Code listings use a nearly square ruled surface. Admonitions use horizontal rules and a textual type label rather than a rounded callout card. Specification print output removes site navigation and preserves readable source content.
+
+[#style-demo]
+== Browser instrument
+
+The demo uses the dark mode. Its sequence is viewport, controls, then a compact inspector grouped by format, container, and fetch/playback state. Only show facts the player actually knows. Controls have visible labels and keyboard focus; load and error state remain textual as well as colored. Presentation must not change codec, range-fetch, or rendering semantics.
+
+[#style-responsive]
+== Responsive behavior and motion
+
+Layouts should become simpler, not merely smaller. The landing hero stacks, registry boundaries become horizontal, publication sidebars collapse in priority order, code and tables scroll, and the demo places its viewport before controls and inspection. Long identifiers must wrap or scroll without widening the page.
+
+There is no ambient motion. Functional transitions, if added, are subtle and disabled or reduced under `prefers-reduced-motion`.
+
+[#style-accessibility]
+== Accessibility
+
+Target WCAG 2.2 AA. Preserve semantic landmarks and heading order, a skip link, keyboard operation, strong visible focus, non-obscured anchors, text and non-text contrast,  reflow at narrow widths and zoom, and adequate control targets. Use accessible names and descriptions for diagrams. Never communicate status by hue alone.
+
+[#style-components]
+== Representative components
+
+Primary links may use a thin rectangular outline and arrow. Secondary paths remain ordinary underlined text. Document indexes are ruled rows with title, factual summary, and type/status metadata. Technical profile and inspector groups may use borders because they represent actual data structures.
+
+Before adding a local component variant, check whether the shared token, layout, content, or component primitive is missing. Fix the shared system when the same problem appears in multiple places.
+
+[#style-qa]
+== Visual QA checklist
+
+At wide desktop, laptop, and narrow/mobile widths, inspect the first viewport, grid alignment, typography, header density, accent restraint, reading measure, side navigation, outline collapse, long headings and identifiers, code and table overflow, anchors, keyboard focus, historical/normative distinction, provenance links, demo controls and states, and `/avelune` base paths. Check system-light and system-dark publication rendering and specification print output. Fix repeated defects in shared CSS before adding local overrides.

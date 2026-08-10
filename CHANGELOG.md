@@ -3,6 +3,16 @@
 All notable public-tree changes are recorded here. The project is pre-stable; format and API changes
 may be incompatible until a stable major line is explicitly declared.
 
+## Unreleased
+
+### Changed
+
+- Replaced the Pandoc Pages pipeline with a custom static Astro site, native AsciiDoc documentation
+  and specification publishing, integrated rustdoc, and a redesigned browser reference instrument.
+- Added retained metadata, ID, xref, asset, authoring-profile, generated-link, and fragment validation.
+- Added durable document-authoring and web-style guides; migrated all `docs/` and `spec/` sources to
+  the restricted AsciiDoc profile without changing specification semantics.
+
 ## 0.1.1 - 2026-08-10
 
 ### Changed
