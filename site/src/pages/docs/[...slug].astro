@@ -1,0 +1,14 @@
+---
+import PublicationLayout from "../../layouts/PublicationLayout.astro";
+import { loadDocuments } from "../../lib/content.mjs";
+
+const docs = await loadDocuments("docs");
+export async function getStaticPaths() {
+  return (await loadDocuments("docs")).map((document) => ({ params: { slug: document.slug }, props: { document } }));
+}
+const { document } = Astro.props;
+---
+
+<PublicationLayout {...document} nav={docs} current="docs">
+  <Fragment set:html={document.html} />
+</PublicationLayout>

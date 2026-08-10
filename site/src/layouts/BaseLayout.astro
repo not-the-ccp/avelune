@@ -1,0 +1,58 @@
+---
+import "@fontsource/ibm-plex-sans/400.css";
+import "@fontsource/ibm-plex-sans/500.css";
+import "@fontsource/ibm-plex-sans/600.css";
+import "@fontsource/ibm-plex-mono/400.css";
+import "../styles/main.css";
+
+interface Props {
+  title?: string;
+  description?: string;
+  mode?: "grid" | "publication";
+  current?: "home" | "docs" | "spec" | "api" | "demo" | "project";
+}
+
+const {
+  title,
+  description = "Avelune experimental audiovisual codec family and indexed streaming container.",
+  mode = "publication",
+  current,
+} = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const pageTitle = title ? `${title} · Avelune` : "Avelune";
+const links = [
+  ["Docs", `${base}/docs/`, "docs"],
+  ["Spec", `${base}/spec/`, "spec"],
+  ["API", `${base}/api/`, "api"],
+  ["Demo", `${base}/demo/`, "demo"],
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content={mode === "grid" ? "#111211" : "#f3f1ea"} />
+    <title>{pageTitle}</title>
+  </head>
+  <body class:list={[`mode-${mode}`, { "is-home": current === "home" }] }>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header">
+      <div class="header-grid">
+        <a class="wordmark" href={`${base}/`} aria-label="Avelune home">AVELUNE</a>
+        <span class="generation"><span aria-hidden="true">◇</span> GEN 1 / UNFROZEN</span>
+        <nav class="site-nav" aria-label="Primary navigation">
+          {links.map(([label, href, key]) => <a href={href} aria-current={current === key ? "page" : undefined}>{label}</a>)}
+          <a href="https://github.com/not-the-ccp/avelune">GitHub</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main-content"><slot /></main>
+    <footer class="site-footer">
+      <span>Avelune is experimental. Draft Generation 1 is unfrozen.</span>
+      <a href="https://github.com/not-the-ccp/avelune">Authoritative repository sources</a>
+    </footer>
+  </body>
+</html>

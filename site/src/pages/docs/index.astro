@@ -1,0 +1,12 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { loadDocuments } from "../../lib/content.mjs";
+const docs = await loadDocuments("docs");
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+---
+<BaseLayout title="Documentation" current="docs">
+  <div class="index-shell">
+    <header class="index-header"><p class="eyebrow">DOCUMENTATION</p><h1>Build, inspect, and understand Avelune.</h1><p>Guides for using the reference implementation and understanding the system around the normative format.</p></header>
+    <ol class="document-list">{docs.map((doc) => <li><a href={`${base}${doc.route}`}>{doc.title}</a><p>{doc.summary}</p><span>{doc.type}</span></li>)}</ol>
+  </div>
+</BaseLayout>

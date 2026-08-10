@@ -1,0 +1,30 @@
+@layer content {
+  .document-header { padding-bottom: 2rem; border-bottom: 1px solid var(--rule); }
+  .document-header h1 { max-width: 18ch; margin: .65rem 0 1rem; font-size: clamp(2.4rem, 5vw, 2.65rem); }
+  .document-meta { display: flex; flex-wrap: wrap; gap: .5rem 1rem; color: var(--muted); font: .7rem/1.5 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+  .document-status { color: var(--warm); }
+  .lede { max-width: 62ch; color: var(--muted); font-size: 1.08rem; }
+  .source-link { font: .75rem/1.4 var(--font-mono); }
+  .asciidoc { padding-bottom: 4rem; }
+  .asciidoc h2 { margin: 2.8rem 0 1rem; padding-top: .25rem; border-top: 1px solid var(--rule); }
+  .asciidoc h3 { margin-top: 2.1rem; }
+  .asciidoc p, .asciidoc li { max-width: var(--measure); }
+  .asciidoc pre { overflow: auto; margin: 1.5rem 0; padding: 1rem 1.1rem; border: 1px solid var(--rule); border-radius: 1px; background: var(--surface); font-size: .84rem; line-height: 1.55; }
+  .asciidoc :not(pre) > code { padding: .08em .25em; background: var(--surface-2); font-size: .9em; }
+  .asciidoc table { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; font-size: .9rem; }
+  .asciidoc th, .asciidoc td { padding: .55rem .7rem; border: 1px solid var(--rule); text-align: left; vertical-align: top; }
+  .asciidoc th { background: var(--surface); font-weight: 500; }
+  .admonitionblock { margin: 1.6rem 0; border-block: 1px solid var(--rule); padding: .8rem 0; }
+  .admonitionblock > table { display: table; }
+  .admonitionblock td { border: 0; }
+  .admonitionblock .icon { width: 7rem; color: var(--warm); font: .7rem/1.5 var(--font-mono); text-transform: uppercase; }
+  .admonitionblock .icon i::before { content: attr(title); font-style: normal; }
+  .publication-historical .document-header { border-top: 3px double var(--warm); }
+  .publication-historical .document-status { font-weight: 600; }
+  @media print {
+    .site-header, .site-footer, .section-nav, .page-toc, .source-link { display: none; }
+    .publication-shell { display: block; width: auto; }
+    .publication { padding: 0; }
+    .asciidoc a { color: inherit; }
+  }
+}
