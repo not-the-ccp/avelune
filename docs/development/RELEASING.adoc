@@ -1,0 +1,23 @@
+= Release checklist
+:page-type: development-guide
+:page-status: current
+:summary: The pre-release checklist for documentation, validation, browser playback, generated artifacts, and draft-format review.
+:nav-order: 90
+
+[#avl-release-checklist]
+== Development release checklist
+
+Before publishing a development release:
+
+. update `CHANGELOG.md`, `STATUS.md`, and any affected normative draft;
+. run `./scripts/dev-check.sh`;
+. run `./scripts/build-site.sh` and inspect the generated site;
+. regenerate conformance vectors when decoded semantics or syntax changed;
+. verify the browser demo over HTTP Range requests;
+. ensure no generated toolchain, target directory, secrets, or large private benchmark media are tracked;
+. tag only after the source archive rebuilds from a clean directory.
+
+[#avl-stable-format-releases]
+== Stable format releases
+
+Stable format releases require a separate freeze review and are intentionally out of scope while the project remains `0.x`.

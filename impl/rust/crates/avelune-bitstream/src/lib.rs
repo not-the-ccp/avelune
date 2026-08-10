@@ -1,7 +1,7 @@
 //! Canonical integer and static-rANS primitives shared by Avelune Draft Generation 1.
 //!
 //! This crate is intentionally small. The normative representation is described in
-//! `spec/common/001-entropy-v1.md`; this implementation is not the specification.
+//! `spec/common/001-entropy-v1.adoc`; this implementation is not the specification.
 
 #![forbid(unsafe_code)]
 

@@ -1,0 +1,21 @@
+= Production backend direction
+:page-type: development-guide
+:page-status: current
+:summary: The intentionally separate production-backend plan and its current CPU/WASM, SIMD, and optional WebGPU boundaries.
+:nav-order: 60
+
+Production implementations are intentionally separate from the reference implementation.
+
+[#avl-production-backend-architecture]
+== Current target architecture
+
+The current target architecture is hybrid rather than “everything on the GPU”:
+
+* CPU/WASM: parsing, control flow, entropy coding/decoding, dependency management;
+* native SIMD / WASM SIMD: prediction, transform/reconstruction, color conversion, bulk pixel work;
+* optional WebGPU: large regular batches such as motion-cost evaluation, transforms/reconstruction, color conversion, scaling/compositing, and editor-oriented GPU-resident pipelines.
+
+[#avl-production-backend-status]
+== Current status
+
+`prod/rust/` is a compiling placeholder only. No optimized backend is currently claimed.

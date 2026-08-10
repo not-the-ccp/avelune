@@ -42,5 +42,5 @@ measurement and experimentation.
 - mutation smoke testing is not a substitute for a sustained coverage-guided fuzz campaign;
 - no claim of patent freedom or legal clearance is made.
 
-See [`docs/development/VERSIONING.md`](docs/development/VERSIONING.md) and
-[`docs/development/REFERENCE_IMPLEMENTATION.md`](docs/development/REFERENCE_IMPLEMENTATION.md).
+See [`docs/development/VERSIONING.adoc`](docs/development/VERSIONING.adoc) and
+[`docs/development/REFERENCE_IMPLEMENTATION.adoc`](docs/development/REFERENCE_IMPLEMENTATION.adoc).
