@@ -1,0 +1,98 @@
+= WebGPU and browser acceleration — Draft Generation 1
+:page-type: architecture
+:page-status: current
+:summary: The optional WebGPU presentation and experimental codec-compute direction, including its hybrid CPU/WASM boundary and validation limits.
+:nav-order: 50
+
+[#avl-webgpu-decision]
+== Decision
+
+WebGPU is a *supported optional presentation backend* and an *experimental codec-compute backend*. It is not a conformance dependency. Every V1 stream remains fully decodable and encodable by Rust/WASM without WebGPU.
+
+Primary references used for this decision:
+
+* https://www.w3.org/TR/webgpu/ — W3C WebGPU
+* https://gpuweb.github.io/gpuweb/ — GPUWeb specification/explainer
+* https://www.w3.org/TR/webcodecs/ — W3C WebCodecs
+
+WebGPU exposes compute shaders, storage resources, and explicit command submission. Those are a good match for regular data-parallel image operations, but not for making the whole codec a GPU state machine.
+
+[#avl-webgpu-support-matrix]
+== V1 support matrix
+
+|===
+| Backend | Decode | Encode | V1 status
+
+| scalar native Rust
+| complete
+| complete
+| required project baseline
+
+| scalar WASM
+| complete
+| complete codec libraries; browser CLI glue is native-oriented
+| required browser decode baseline
+
+| WebGPU presentation
+| YUV upload/conversion/render
+| n/a
+| supported in player, Canvas2D fallback
+
+| WebGPU compute
+| inverse-WHT/reconstruction prototype
+| integer motion-SAD prototype
+| experimental
+
+| WebCodecs
+| foreign-format ingest/export bridge only
+| foreign-format ingest/export bridge only
+| integration aid, not ALV1/ALA1 implementation
+|===
+
+[#avl-webgpu-hybrid-architecture]
+== Hybrid architecture
+
+Bitstream parsing, canonical varints, rANS decoding, immutable-reference bookkeeping, mode decisions, and container assembly stay in Rust/WASM. Their control flow is serial/irregular and moving it to the GPU would create synchronization and staging costs.
+
+Candidate GPU work is deliberately coarse and batchable:
+
+* encoder motion-search SAD/SSE grids;
+* transforms and inverse transforms;
+* distortion metrics for RDO;
+* block reconstruction and future local filtering;
+* scale/composite/color conversion for editing;
+* keeping decoded or source frames GPU-resident through an editor pipeline.
+
+For browser editing, the intended topology is:
+
+[source,text]
+----
+WebCodecs / canvas / camera / uploaded frames
+                   |
+                   v
+        WebGPU editor + analysis graph
+          |                    |
+          | bulk costs/blocks  | GPU-resident preview
+          v                    v
+       Rust/WASM control -> ALV1/ALA1/container
+----
+
+WebCodecs is useful where the browser already has a codec implementation. Its specification does not cause a custom codec to become available automatically through `VideoDecoder` or `VideoEncoder`; Avelune therefore continues to use its own WASM decoder.
+
+[#avl-webgpu-compute-prototypes]
+== Shipped compute prototypes
+
+`web/webgpu/motion_sad.wgsl` evaluates the full integer-pixel candidate grid for one 8x8 source block, one workgroup per motion candidate.
+
+`web/webgpu/reconstruct_wht.wgsl` receives entropy-decoded/dequantized coefficients and prediction samples and performs the normative integer inverse WHT plus clipped reconstruction, one workgroup per 8x8 block.
+
+`web/webgpu/smoke.html` compiles and runs both kernels, checks zero-motion SAD and checks a known inverse-WHT reconstruction.
+
+These prototypes intentionally keep rANS and syntax on the CPU side. A production GPU codec backend should batch many blocks per submission and avoid CPU readback in the inner loop.
+
+[#avl-webgpu-validation-limit]
+== Validation limitation in this release environment
+
+Chromium is installed, but its headless GPU process cannot initialize the required EGL/XCB graphics environment in this container, including with software/SwiftShader flags. Therefore the WebGPU runtime smoke is shipped but marked *not executed in this release environment*. The regular browser player remains correct through its Canvas2D fallback and the ALV1/ALA1 WASM path is tested independently.
+
+Before calling WebGPU compute a production backend, run the smoke and CPU/GPU differential reconstruction tests on real WebGPU hardware across at least Chromium-family and another independent implementation where available. Any GPU reconstruction backend must be bit-exact with the V1 integer specification.

@@ -47,10 +47,10 @@ maintainer explicitly asks you to do so.
 ## Start here
 
 - [`STATUS.md`](STATUS.md) — what exists and what is not stable;
-- [`spec/README.md`](spec/README.md) — normative-draft hierarchy;
-- [`docs/development/REFERENCE_IMPLEMENTATION.md`](docs/development/REFERENCE_IMPLEMENTATION.md) —
+- [`spec/README.adoc`](spec/README.adoc) — normative-draft hierarchy;
+- [`docs/development/REFERENCE_IMPLEMENTATION.adoc`](docs/development/REFERENCE_IMPLEMENTATION.adoc) —
   what the Rust implementation is for;
-- [`docs/development/VERSIONING.md`](docs/development/VERSIONING.md) — compatibility policy;
+- [`docs/development/VERSIONING.adoc`](docs/development/VERSIONING.adoc) — compatibility policy;
 - [`AGENTS.md`](AGENTS.md) — concise repository workflow for coding agents and humans.
 
 ## Development

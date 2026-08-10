@@ -41,7 +41,7 @@ The current Rust codec code prioritizes specification clarity, safety, and diffe
 not intended to be the fastest possible encoder/player. In particular, the convenience `play` path and
 high-resolution browser reference playback should not be treated as production-performance targets.
 
-See [`docs/development/REFERENCE_IMPLEMENTATION.md`](docs/development/REFERENCE_IMPLEMENTATION.md)
+See [`docs/development/REFERENCE_IMPLEMENTATION.adoc`](docs/development/REFERENCE_IMPLEMENTATION.adoc)
 and the [`prod/`](prod/) stub.
 
 ## Quick start
@@ -50,7 +50,7 @@ Requirements:
 
 - Rust 1.97.1 or newer compatible toolchain;
 - FFmpeg/ffprobe for `encode`, `decode`, and `play` with ordinary media files;
-- Node.js for the automated browser/WASM range smoke test.
+- Node.js 22.12 or newer with npm for the website build and automated browser/WASM range smoke test.
 
 ```sh
 cargo build --release --workspace
@@ -107,13 +107,14 @@ avelune completions zsh  > _avelune
 avelune completions fish > avelune.fish
 ```
 
-See the full [CLI guide](docs/user/CLI.md).
+See the full [CLI guide](docs/user/CLI.adoc).
 
 ## Browser demo and documentation site
 
 Build the WASM module and Pages-ready site:
 
 ```sh
+npm ci
 ./scripts/build-wasm.sh
 ./scripts/build-site.sh
 ```
@@ -161,7 +162,7 @@ scripts/     validation, site, WASM, benchmark and corpus tooling
 While the project is `0.x`, backwards-incompatible API and bitstream changes are allowed when they
 improve the design. Once a stable major line is deliberately declared, the intended rule is:
 **major = incompatible API/codec/container change; minor/patch remain compatible within that major**.
-See [`docs/development/VERSIONING.md`](docs/development/VERSIONING.md).
+See [`docs/development/VERSIONING.adoc`](docs/development/VERSIONING.adoc).
 
 ## Limitations
 
@@ -170,7 +171,7 @@ Lossy ALA1 is experimental and not perceptually tuned; ordinary audio encoding d
 `q=1`.
 The draft baseline omits several higher-fidelity profiles. WebGPU compute is experimental. The code
 has not received a professional security or patent audit. See [`STATUS.md`](STATUS.md), benchmark
-reports, and [`docs/IPR-NOTES.md`](docs/IPR-NOTES.md).
+reports, and [`docs/IPR-NOTES.adoc`](docs/IPR-NOTES.adoc).
 
 ## License
 

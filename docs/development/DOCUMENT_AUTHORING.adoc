@@ -1,0 +1,101 @@
+= Avelune document authoring profile
+:page-type: development-guide
+:page-status: current
+:summary: The restricted AsciiDoc profile, metadata contract, stable-ID rules, and validation expectations for Avelune documentation and specifications.
+:nav-order: 80
+
+[#authoring-purpose]
+== Purpose
+
+Files under `docs/` and `spec/` are authored in AsciiDoc and rendered by the custom Astro publication system. Checked-in source remains authoritative; generated HTML is a presentation artifact. This profile deliberately keeps the language small enough that a contributor can understand a document by opening one file.
+
+`docs/user/CLI.adoc` is the canonical ordinary documentation example. `spec/video/001-video-v1.adoc` is the canonical normative example.
+
+[#authoring-header]
+== Document header and metadata
+
+Every document begins with one level-zero title followed by these attributes:
+
+[source,asciidoc]
+----
+= Descriptive title
+:page-type: guide
+:page-status: current
+:summary: One factual sentence used by indexes and metadata.
+:nav-order: 30
+----
+
+Allowed `page-type` values are `guide`, `architecture`, `development-guide`, `normative`, `supporting`, and `historical`. Normative documents use `page-status: current normative draft · unfrozen`. Historical specification material uses `page-type: historical` and `page-status: historical · non-normative`. `nav-order` is an integer used only for navigation order.
+
+Specification documents may add `:sectnums:`. Do not add presentation attributes that change normative meaning.
+
+[#authoring-profile]
+== Allowed constructs
+
+Use sections, paragraphs, ordered and unordered lists, description lists, emphasis, strong text, monospace, source and literal blocks, tables, block titles, local images, standard admonitions, explicit anchors, and xrefs. Prefer unsurprising syntax.
+
+Source blocks declare a language:
+
+[source,asciidoc]
+----
+[source,rust]
+----
+fn example() {}
+----
+----
+
+Use admonitions for information whose role is genuinely a note, warning, caution, tip, or important constraint. They are not decorative callouts.
+
+[#authoring-normative-restrictions]
+== Normative-source restrictions
+
+Normative content MUST NOT depend on:
+
+* `include::`, including remote includes;
+* `ifdef`, `ifndef`, or conditional normative text;
+* raw or passthrough HTML;
+* custom Asciidoctor extensions;
+* presentation-specific roles or CSS classes;
+* generated or environment-dependent source;
+* attribute substitution that hides or materially changes normative text.
+
+The site invokes Asciidoctor in safe mode. Tooling rejects the forbidden constructs even when Asciidoctor would otherwise accept them.
+
+[#authoring-identifiers]
+== Stable identifiers
+
+Every normative section has an explicit semantic ID immediately before its heading. IDs are lowercase ASCII with hyphens and a domain prefix such as `alv1-`, `ala1-`, `avl-`, `entropy-`, `baseline-`, or `conformance-`. The ID is the persistent identity; a displayed section number is not.
+
+[source,asciidoc]
+----
+[#alv1-frame-packet]
+== Frame packet
+----
+
+Ordinary documentation also uses explicit IDs for headings likely to receive inbound links. IDs must be unique across normative material.
+
+[#authoring-xrefs]
+== Cross-references
+
+Use AsciiDoc xrefs between source documents and specify a stable fragment when referring to a formal definition:
+
+[source,asciidoc]
+----
+xref:../../spec/video/001-video-v1.adoc#alv1-frame-packet[ALV1 frame packet]
+----
+
+Link formal definitions, normative dependencies, related structures, and implementation explanations where the relationship helps the reader. Do not hyperlink every repeated technical noun. Do not hardcode generated-site URLs into source documents.
+
+Repository-native root Markdown keeps normal Markdown links to source files because it must remain useful on GitHub.
+
+[#authoring-assets]
+== Local assets
+
+Store durable documentation assets beside the owning content area or in a clearly named shared asset directory. Use repository-relative local paths. Every referenced local asset must exist. Diagrams that are part of the website presentation may be Astro components or accessible inline SVG; diagrams carrying authoritative technical meaning belong in source-controlled documentation assets.
+
+[#authoring-validation]
+== Validation and review
+
+Run `npm run check:content` while authoring and `./scripts/build-site.sh --skip-wasm` before review. Validation checks metadata, IDs, xrefs, local assets, stale Markdown destinations, normative restrictions, and historical classification. Generated-site validation checks both files and fragments.
+
+For specification conversions, compare normalized source text so that changes are limited to markup, metadata, identifiers, xref syntax, and presentation numbering. Do not alter normative wording, numbers, identifiers, layouts, algorithms, decoded behavior, or requirement strength as part of a publishing migration.
