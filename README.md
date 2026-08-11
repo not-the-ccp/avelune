@@ -14,7 +14,7 @@ The goal is to explore a cleaner modern media stack while keeping three things s
 
 1. **normative format design** under [`spec/`](spec/);
 2. **readable reference/research implementations** under [`impl/`](impl/);
-3. **future optimized production backends** under [`prod/`](prod/).
+3. **optimized production backends** under [`prod/`](prod/).
 
 If an implementation experiment disproves a codec assumption, the project revisits the codec design
 instead of quietly defining the format by whatever the Rust code happened to do.
@@ -31,18 +31,23 @@ instead of quietly defining the format by whatever the Rust code happened to do.
 - **Rust API** — component crates plus the `avelune` facade crate.
 - **CLI** — encode/decode, inspect/verify, container maintenance, conformance, benchmark and fuzz-smoke
   utilities; FFmpeg is used for foreign media formats rather than reimplementing existing codecs.
-- **Web** — scalar WASM decoder and static browser demo, WebGPU YUV presentation, and experimental
-  WebGPU compute-kernel prototypes.
+- **Web** — production scalar/SIMD128 WASM streaming decoder and Range loader, reference WASM for
+  conformance, WebGPU YUV presentation, and experimental WebGPU compute-kernel prototypes.
 - **Conformance** — a source-separated scalar ALV1 decoder and generated expected-output vectors.
 
-## Reference implementation, not production backend
+## Reference and production implementations
 
-The current Rust codec code prioritizes specification clarity, safety, and differential testing. It is
-not intended to be the fastest possible encoder/player. In particular, the convenience `play` path and
-high-resolution browser reference playback should not be treated as production-performance targets.
+The readable crates under `impl/rust/crates/avelune-*-v1` remain the specification-facing
+reference/research implementations and conformance oracles. The optimized stateful backend under
+[`prod/`](prod/) owns its own Draft Generation 1 container/entropy/video/audio implementation, isolates
+low-level intrinsics in a small kernel crate, and supplies native and browser/WASM integration.
+
+The CLI exposes `--backend auto|prod|reference`; `auto` currently selects production for codec work,
+while the reference path remains available for diagnostics and cross-checking. This does not make
+production code normative, and it does not imply that the Draft Generation 1 codec design is mature.
 
 See [`docs/development/REFERENCE_IMPLEMENTATION.adoc`](docs/development/REFERENCE_IMPLEMENTATION.adoc)
-and the [`prod/`](prod/) stub.
+and [`prod/README.md`](prod/README.md).
 
 ## Quick start
 
@@ -149,7 +154,7 @@ historical name, it validates the current Draft Generation 1 POC rather than a f
 ```text
 spec/        normative draft codec/container/conformance documents
 impl/rust/   safe Rust facade, reference codecs, reference decoder, CLI, WASM ABI
-prod/        placeholder for future optimized implementations
+prod/        safe production engine, audited SIMD kernels, WASM wrapper and benchmark lab
 docs/        user, architecture, browser, development, history, IPR notes
 web/         static browser player and experimental WebGPU kernels
 research/    prior-art notes, experiment results, rejected ideas

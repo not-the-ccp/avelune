@@ -31,15 +31,97 @@ impl PresetArg {
     }
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
+enum BackendArg {
+    Auto,
+    Prod,
+    Reference,
+}
+impl BackendArg {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Prod => "prod",
+            Self::Reference => "reference",
+        }
+    }
+    const fn use_prod(self) -> bool {
+        matches!(self, Self::Auto | Self::Prod)
+    }
+}
+
+fn encode_packet_for_backend(
+    packet: Packet,
+    out: &mut Vec<u8>,
+    backend: BackendArg,
+) -> Result<(), String> {
+    if backend.use_prod() {
+        let kind = match packet.kind {
+            PacketKind::EpochStart => avelune_prod::container::v1::PacketKind::EpochStart,
+            PacketKind::VideoFrame => avelune_prod::container::v1::PacketKind::VideoFrame,
+            PacketKind::AudioFrame => avelune_prod::container::v1::PacketKind::AudioFrame,
+            PacketKind::Metadata => avelune_prod::container::v1::PacketKind::Metadata,
+        };
+        avelune_prod::container::v1::encode_packet_checked(
+            &avelune_prod::container::v1::Packet {
+                kind,
+                flags: packet.flags,
+                stream_id: packet.stream_id,
+                pts: packet.pts,
+                duration: packet.duration,
+                payload: packet.payload,
+            },
+            out,
+        )
+        .map_err(|e| format!("production packet encode: {e:?}"))?;
+    } else {
+        encode_packet(&packet, out);
+    }
+    Ok(())
+}
+
+fn build_file_for_backend(
+    streams: Vec<StreamDesc>,
+    epochs: Vec<(u32, u64, u32, Vec<u8>)>,
+    backend: BackendArg,
+) -> Result<Vec<u8>, String> {
+    if backend.use_prod() {
+        let streams = streams
+            .into_iter()
+            .map(|s| avelune_prod::container::v1::StreamDesc {
+                id: s.id,
+                kind: match s.kind {
+                    StreamKind::Video => avelune_prod::container::v1::StreamKind::Video,
+                    StreamKind::Audio => avelune_prod::container::v1::StreamKind::Audio,
+                },
+                codec: s.codec,
+                timescale: s.timescale,
+                param0: s.param0,
+                param1: s.param1,
+                flags: s.flags,
+                meta0: s.meta0,
+            })
+            .collect();
+        avelune_prod::container::v1::build_file_checked(streams, epochs)
+            .map_err(|e| format!("production container build: {e}"))
+    } else {
+        avelune_container_v1::build_file_checked(streams, epochs)
+            .map_err(|e| format!("reference container build: {e:?}"))
+    }
+}
+
 #[derive(Debug, Parser)]
 #[command(
     name = "avelune",
     version,
-    about = "Reference tools for the experimental Avelune audiovisual codec family",
-    long_about = "Encode, decode, inspect, validate, and experiment with Draft Generation 1 Avelune media.\n\nThe current Rust implementation is a reference/research implementation, not a production-speed backend.",
+    about = "Tools for the experimental Avelune audiovisual codec family",
+    long_about = "Encode, decode, inspect, validate, and experiment with Draft Generation 1 Avelune media.\n\nProduction and reference backends remain separately selectable for conformance and diagnostics.",
     arg_required_else_help = true
 )]
 struct Cli {
+    /// Codec backend for commands that encode/decode media. `auto` currently selects production.
+    #[arg(long, value_enum, default_value_t = BackendArg::Auto, global = true)]
+    backend: BackendArg,
     #[command(subcommand)]
     command: Command,
 }
@@ -50,7 +132,7 @@ enum Command {
     Encode(MediaEncodeArgs),
     /// Decode an Avelune container through FFmpeg into an ordinary media file.
     Decode(FilePairArgs),
-    /// Reference convenience playback path. Not a low-latency production player.
+    /// Convenience playback path. Not a low-latency native player.
     Play(FileInputArgs),
     /// Show container, stream, and epoch metadata.
     Inspect(FileInputArgs),
@@ -58,7 +140,7 @@ enum Command {
     Verify(FileInputArgs),
     /// Print one concise line per coded video frame.
     Frames(FileInputArgs),
-    /// Measure scalar reference video decode throughput.
+    /// Measure selected-backend video decode throughput.
     Benchmark(FileInputArgs),
     /// Rebuild the front index from valid packets.
     Reindex(FilePairArgs),
@@ -70,7 +152,7 @@ enum Command {
     FuzzSmoke(FuzzArgs),
     /// Generate shell completion scripts to stdout.
     Completions(CompletionsArgs),
-    /// Raw/reference workflows that avoid the ordinary-media FFmpeg bridge.
+    /// Raw workflows that avoid the ordinary-media FFmpeg bridge.
     Raw {
         #[command(subcommand)]
         command: RawCommand,
@@ -124,7 +206,7 @@ struct MediaEncodeArgs {
     /// Maximum epoch length in video frames. Scene cuts may start an epoch earlier.
     #[arg(long)]
     epoch: Option<usize>,
-    /// Reference encoder search preset; not a production speed/quality promise.
+    /// Encoder search preset; production and reference backends may use different policies.
     #[arg(long, value_enum, default_value_t = PresetArg::Balanced)]
     preset: PresetArg,
 }
@@ -230,6 +312,18 @@ fn arg_usize(a: &[String], name: &str, default: usize) -> Result<usize, String> 
         s.parse().map_err(|_| format!("bad {name}"))
     })
 }
+fn arg_backend(a: &[String]) -> Result<BackendArg, String> {
+    match arg_value(a, "--backend").as_deref().unwrap_or("auto") {
+        "auto" => Ok(BackendArg::Auto),
+        "prod" => Ok(BackendArg::Prod),
+        "reference" => Ok(BackendArg::Reference),
+        _ => Err("bad --backend".into()),
+    }
+}
+fn add_backend(a: &mut Vec<String>, backend: BackendArg) {
+    a.push("--backend".into());
+    a.push(backend.as_str().into());
+}
 
 #[derive(Clone)]
 struct Y4m {
@@ -239,6 +333,16 @@ struct Y4m {
     fps_d: u32,
     meta0: u32,
     frames: Vec<Frame420>,
+}
+fn to_prod_frame(f: &Frame420) -> Result<avelune_prod::video::v1::Frame420, String> {
+    avelune_prod::video::v1::Frame420::from_planes(
+        f.width,
+        f.height,
+        f.y.clone(),
+        f.u.clone(),
+        f.v.clone(),
+    )
+    .map_err(|e| format!("production frame conversion: {e:?}"))
 }
 fn parse_y4m(b: &[u8]) -> Result<Y4m, String> {
     let nl = b
@@ -365,6 +469,30 @@ fn preset(name: &str, q: u16) -> VOptions {
         },
     }
 }
+fn prod_voptions(v: VOptions) -> avelune_prod::video::v1::EncodeOptions {
+    avelune_prod::video::v1::EncodeOptions {
+        qstep: v.qstep,
+        motion_radius: v.motion_radius,
+        max_refs: v.max_refs,
+        preset: if v.max_refs >= 4 || v.motion_radius >= 5 {
+            avelune_prod::video::v1::EncoderPreset::Quality
+        } else if v.motion_radius <= 2 {
+            avelune_prod::video::v1::EncoderPreset::Fast
+        } else {
+            avelune_prod::video::v1::EncoderPreset::Balanced
+        },
+        allow_palette: v.allow_palette,
+    }
+}
+fn prod_aoptions(v: AOptions) -> avelune_prod::audio::v1::EncodeOptions {
+    avelune_prod::audio::v1::EncodeOptions {
+        sample_rate: v.sample_rate,
+        channels: v.channels,
+        qstep: v.qstep,
+        mid_side: v.mid_side,
+    }
+}
+
 fn scene_cut(a: &Frame420, b: &Frame420) -> bool {
     let step = (a.y.len() / 4096).max(1);
     let mut s = 0u64;
@@ -380,14 +508,15 @@ fn encode_av(
     y: &Y4m,
     audio: Option<(&[i16], u8, u32)>,
     outp: &str,
-    qv: u16,
-    qa: u16,
+    quantizers: (u16, u16),
     epoch_frames: usize,
     preset_name: &str,
+    backend: BackendArg,
 ) -> Result<(), String> {
     if epoch_frames == 0 {
         return Err("epoch length must be >0".into());
     }
+    let (qv, qa) = quantizers;
     let vopt = preset(preset_name, qv);
     let frame_us = (1_000_000u64 * u64::from(y.fps_d)) / u64::from(y.fps_n.max(1));
     let mut epoch_starts = vec![0usize];
@@ -418,28 +547,45 @@ fn encode_av(
             duration: (end_pts - pts) as u32,
             payload: (ei as u32).to_le_bytes().to_vec(),
         });
-        let mut hist: VecDeque<(u64, Frame420)> = VecDeque::new();
-        for i in s..e {
-            let refs: Vec<(u64, &Frame420)> = hist
-                .iter()
-                .rev()
-                .take(vopt.max_refs as usize)
-                .map(|(id, f)| (*id, f))
-                .collect();
-            let enc = avelune_video_v1::encode(i as u64, &y.frames[i], &refs, vopt)
-                .map_err(|x| format!("video encode frame {i}: {x:?}"))?;
-            let p = i as u64 * frame_us;
-            packets.push(Packet {
-                kind: PacketKind::VideoFrame,
-                flags: 0,
-                stream_id: 1,
-                pts: p,
-                duration: frame_us as u32,
-                payload: enc.packet,
-            });
-            hist.push_back((i as u64, enc.reconstructed));
-            while hist.len() > 4 {
-                hist.pop_front();
+        if backend.use_prod() {
+            let mut encoder = avelune_prod::video::v1::VideoEncoder::new(prod_voptions(vopt));
+            for i in s..e {
+                let source = to_prod_frame(&y.frames[i])?;
+                let enc = encoder
+                    .encode_shared(i as u64, &source)
+                    .map_err(|x| format!("production video encode frame {i}: {x:?}"))?;
+                packets.push(Packet {
+                    kind: PacketKind::VideoFrame,
+                    flags: 0,
+                    stream_id: 1,
+                    pts: i as u64 * frame_us,
+                    duration: frame_us as u32,
+                    payload: enc.packet,
+                });
+            }
+        } else {
+            let mut hist: VecDeque<(u64, Frame420)> = VecDeque::new();
+            for i in s..e {
+                let refs: Vec<(u64, &Frame420)> = hist
+                    .iter()
+                    .rev()
+                    .take(vopt.max_refs as usize)
+                    .map(|(id, f)| (*id, f))
+                    .collect();
+                let enc = avelune_video_v1::encode(i as u64, &y.frames[i], &refs, vopt)
+                    .map_err(|x| format!("reference video encode frame {i}: {x:?}"))?;
+                packets.push(Packet {
+                    kind: PacketKind::VideoFrame,
+                    flags: 0,
+                    stream_id: 1,
+                    pts: i as u64 * frame_us,
+                    duration: frame_us as u32,
+                    payload: enc.packet,
+                });
+                hist.push_back((i as u64, enc.reconstructed));
+                while hist.len() > 4 {
+                    hist.pop_front();
+                }
             }
         }
         if let Some((samples, ch, rate)) = audio {
@@ -452,16 +598,19 @@ fn encode_av(
             while af < end_af {
                 let n = (end_af - af).min(960);
                 let slice = &samples[af * chn..(af + n) * chn];
-                let coded = avelune_audio_v1::encode(
-                    slice,
-                    AOptions {
-                        sample_rate: rate,
-                        channels: ch,
-                        qstep: qa,
-                        mid_side: true,
-                    },
-                )
-                .map_err(|x| format!("audio encode: {x:?}"))?;
+                let aopts = AOptions {
+                    sample_rate: rate,
+                    channels: ch,
+                    qstep: qa,
+                    mid_side: true,
+                };
+                let coded = if backend.use_prod() {
+                    avelune_prod::audio::v1::encode(slice, prod_aoptions(aopts))
+                        .map_err(|x| format!("production audio encode: {x:?}"))?
+                } else {
+                    avelune_audio_v1::encode(slice, aopts)
+                        .map_err(|x| format!("reference audio encode: {x:?}"))?
+                };
                 let ap = (af as u64 * 1_000_000) / u64::from(rate);
                 let dur = (n as u64 * 1_000_000 / u64::from(rate)) as u32;
                 packets.push(Packet {
@@ -475,20 +624,29 @@ fn encode_av(
                 af += n;
             }
         }
+        // EpochStart is a structural boundary, not merely another timestamped packet.
+        // Audio sample timestamps can quantize a few microseconds below a video-derived
+        // epoch PTS, so timestamp-only sorting can otherwise move audio before EpochStart
+        // and make the front-indexed byte range non-conforming.
         packets.sort_by_key(|p| {
             (
+                if p.kind == PacketKind::EpochStart {
+                    0u8
+                } else {
+                    1u8
+                },
                 p.pts,
                 match p.kind {
+                    PacketKind::VideoFrame => 0,
+                    PacketKind::AudioFrame => 1,
+                    PacketKind::Metadata => 2,
                     PacketKind::EpochStart => 0,
-                    PacketKind::VideoFrame => 1,
-                    PacketKind::AudioFrame => 2,
-                    _ => 3,
                 },
             )
         });
         let mut bytes = Vec::new();
         for p in packets {
-            encode_packet(&p, &mut bytes)
+            encode_packet_for_backend(p, &mut bytes, backend)?;
         }
         epochs.push((ei as u32, pts, (end_pts - pts) as u32, bytes));
     }
@@ -514,17 +672,22 @@ fn encode_av(
             meta0: 0,
         })
     }
-    let file = build_file(streams, epochs);
+    let file = build_file_for_backend(streams, epochs, backend)?;
     write_all(outp, &file)?;
     eprintln!(
-        "encoded {} frames -> {} bytes in {:.3}s ({} epochs, qv={}, qa={}, preset={})",
+        "encoded {} frames -> {} bytes in {:.3}s ({} epochs, qv={}, qa={}, preset={}, backend={})",
         y.frames.len(),
         file.len(),
         start_time.elapsed().as_secs_f64(),
         epoch_starts.len() - 1,
         qv,
         qa,
-        preset_name
+        preset_name,
+        if backend.use_prod() {
+            "prod"
+        } else {
+            "reference"
+        }
     );
     Ok(())
 }
@@ -540,7 +703,7 @@ fn encode_y4m_cmd(a: &[String]) -> Result<(), String> {
         ((y.fps_n / y.fps_d.max(1)) * 2).max(1) as usize,
     )?;
     let pre = arg_value(a, "--preset").unwrap_or_else(|| "balanced".into());
-    encode_av(&y, None, out, q, 1, ep, &pre)
+    encode_av(&y, None, out, (q, 1), ep, &pre, arg_backend(a)?)
 }
 fn temp(name: &str) -> PathBuf {
     env::temp_dir().join(format!(
@@ -711,10 +874,10 @@ fn encode_media_cmd(a: &[String]) -> Result<(), String> {
         &y,
         audio_present.then_some((audio_buf.as_slice(), 2, 48_000)),
         out,
-        qv,
-        qa,
+        (qv, qa),
         ep,
         &pre,
+        arg_backend(a)?,
     );
     let _ = fs::remove_file(ypath);
     let _ = fs::remove_file(apath);
@@ -751,6 +914,7 @@ fn encode_audio_cmd(a: &[String]) -> Result<(), String> {
         .collect();
     let q = arg_u16(a, "--q", 1)?;
     let epoch_s = arg_usize(a, "--epoch-seconds", 2)?.max(1);
+    let backend = arg_backend(a)?;
     let rate = 48_000u32;
     let ch = 2u8;
     let total = samples.len() / 2;
@@ -763,8 +927,8 @@ fn encode_audio_cmd(a: &[String]) -> Result<(), String> {
         let pts = start as u64 * 1_000_000 / u64::from(rate);
         let end_pts = end as u64 * 1_000_000 / u64::from(rate);
         let mut bytes = Vec::new();
-        encode_packet(
-            &Packet {
+        encode_packet_for_backend(
+            Packet {
                 kind: PacketKind::EpochStart,
                 flags: 0,
                 stream_id: 0,
@@ -773,24 +937,28 @@ fn encode_audio_cmd(a: &[String]) -> Result<(), String> {
                 payload: eid.to_le_bytes().to_vec(),
             },
             &mut bytes,
-        );
+            backend,
+        )?;
         let mut f = start;
         while f < end {
             let n = (end - f).min(960);
-            let coded = avelune_audio_v1::encode(
-                &samples[f * 2..(f + n) * 2],
-                AOptions {
-                    sample_rate: rate,
-                    channels: ch,
-                    qstep: q,
-                    mid_side: true,
-                },
-            )
-            .map_err(|e| format!("audio encode: {e:?}"))?;
+            let aopts = AOptions {
+                sample_rate: rate,
+                channels: ch,
+                qstep: q,
+                mid_side: true,
+            };
+            let coded = if backend.use_prod() {
+                avelune_prod::audio::v1::encode(&samples[f * 2..(f + n) * 2], prod_aoptions(aopts))
+                    .map_err(|e| format!("production audio encode: {e:?}"))?
+            } else {
+                avelune_audio_v1::encode(&samples[f * 2..(f + n) * 2], aopts)
+                    .map_err(|e| format!("reference audio encode: {e:?}"))?
+            };
             let p = f as u64 * 1_000_000 / u64::from(rate);
             let dur = (n as u64 * 1_000_000 / u64::from(rate)) as u32;
-            encode_packet(
-                &Packet {
+            encode_packet_for_backend(
+                Packet {
                     kind: PacketKind::AudioFrame,
                     flags: 0,
                     stream_id: 2,
@@ -799,7 +967,8 @@ fn encode_audio_cmd(a: &[String]) -> Result<(), String> {
                     payload: coded,
                 },
                 &mut bytes,
-            );
+                backend,
+            )?;
             f += n;
         }
         epochs.push((eid, pts, (end_pts - pts) as u32, bytes));
@@ -816,7 +985,7 @@ fn encode_audio_cmd(a: &[String]) -> Result<(), String> {
         flags: 0,
         meta0: 0,
     }];
-    let file = build_file(streams, epochs);
+    let file = build_file_for_backend(streams, epochs, backend)?;
     write_all(out, &file)?;
     eprintln!(
         "encoded audio sample_frames={} q={} -> {} bytes",
@@ -839,7 +1008,57 @@ fn all_packets(b: &[u8]) -> Result<(Front, Vec<Packet>, usize), String> {
     }
     Ok((front, v, n))
 }
-fn decode_video_frames(b: &[u8]) -> Result<(Y4m, f64), String> {
+fn decode_video_frames(b: &[u8], backend: BackendArg) -> Result<(Y4m, f64), String> {
+    if backend.use_prod() {
+        let (_, front, prefix) = avelune_prod::container::v1::parse_file_prefix(b)
+            .map_err(|e| format!("production container prefix: {e:?}"))?;
+        let sd = front
+            .streams
+            .iter()
+            .find(|s| s.kind == avelune_prod::container::v1::StreamKind::Video)
+            .ok_or("no video")?;
+        let (n, d) = fps_from_flags(sd.flags);
+        let mut decoder = avelune_prod::video::v1::VideoDecoder::new();
+        let parser = avelune_prod::container::v1::SliceParser::default();
+        let mut frames = Vec::new();
+        let mut pos = prefix;
+        let t = Instant::now();
+        while pos < b.len() {
+            let (pkt, used) = parser
+                .packet(&b[pos..])
+                .map_err(|e| format!("production packet at {pos}: {e:?}"))?;
+            match pkt.kind {
+                avelune_prod::container::v1::PacketKind::EpochStart => decoder.reset_epoch(),
+                avelune_prod::container::v1::PacketKind::VideoFrame => {
+                    let (_, f, _) = decoder
+                        .decode_shared(pkt.payload)
+                        .map_err(|e| format!("production video decode: {e:?}"))?;
+                    frames.push(Frame420 {
+                        width: f.width,
+                        height: f.height,
+                        y: f.y().to_vec(),
+                        u: f.u().to_vec(),
+                        v: f.v().to_vec(),
+                    });
+                }
+                _ => {}
+            }
+            pos += used;
+        }
+        let secs = t.elapsed().as_secs_f64();
+        return Ok((
+            Y4m {
+                w: sd.param0,
+                h: sd.param1,
+                fps_n: n,
+                fps_d: d,
+                meta0: sd.meta0,
+                frames,
+            },
+            secs,
+        ));
+    }
+
     let (front, pkts, _) = all_packets(b)?;
     let sd = front
         .streams
@@ -856,12 +1075,12 @@ fn decode_video_frames(b: &[u8]) -> Result<(Y4m, f64), String> {
             PacketKind::VideoFrame => {
                 let refs: Vec<(u64, &Frame420)> = hist.iter().map(|(id, f)| (*id, f)).collect();
                 let (id, f, _) = avelune_video_v1::decode(&p.payload, &refs)
-                    .map_err(|e| format!("video decode: {e:?}"))?;
+                    .map_err(|e| format!("reference video decode: {e:?}"))?;
                 hist.push_back((id, f.clone()));
                 while hist.len() > 4 {
                     hist.pop_front();
                 }
-                frames.push(f)
+                frames.push(f);
             }
             _ => {}
         }
@@ -879,7 +1098,47 @@ fn decode_video_frames(b: &[u8]) -> Result<(Y4m, f64), String> {
         secs,
     ))
 }
-fn decode_audio_samples(b: &[u8]) -> Result<Option<(u32, u8, Vec<i16>)>, String> {
+fn decode_audio_samples(
+    b: &[u8],
+    backend: BackendArg,
+) -> Result<Option<(u32, u8, Vec<i16>)>, String> {
+    if backend.use_prod() {
+        let (_, front, prefix) = avelune_prod::container::v1::parse_file_prefix(b)
+            .map_err(|e| format!("production container prefix: {e:?}"))?;
+        if !front
+            .streams
+            .iter()
+            .any(|s| s.kind == avelune_prod::container::v1::StreamKind::Audio)
+        {
+            return Ok(None);
+        }
+        let parser = avelune_prod::container::v1::SliceParser::default();
+        let mut decoder = avelune_prod::audio::v1::AudioDecoder::new();
+        let mut out = Vec::new();
+        let mut rate = 0;
+        let mut ch = 0;
+        let mut pos = prefix;
+        while pos < b.len() {
+            let (pkt, used) = parser
+                .packet(&b[pos..])
+                .map_err(|e| format!("production packet at {pos}: {e:?}"))?;
+            if pkt.kind == avelune_prod::container::v1::PacketKind::AudioFrame {
+                let (r, c, samples) = decoder
+                    .decode(pkt.payload)
+                    .map_err(|e| format!("production audio decode: {e:?}"))?;
+                if rate == 0 {
+                    rate = r;
+                    ch = c;
+                } else if rate != r || ch != c {
+                    return Err("audio format changed mid-stream".into());
+                }
+                out.extend(samples);
+            }
+            pos += used;
+        }
+        return Ok(Some((rate, ch, out)));
+    }
+
     let (front, pkts, _) = all_packets(b)?;
     if !front.streams.iter().any(|s| s.kind == StreamKind::Audio) {
         return Ok(None);
@@ -889,39 +1148,39 @@ fn decode_audio_samples(b: &[u8]) -> Result<Option<(u32, u8, Vec<i16>)>, String>
     let mut ch = 0;
     for p in pkts {
         if p.kind == PacketKind::AudioFrame {
-            let (r, c, s) =
-                avelune_audio_v1::decode(&p.payload).map_err(|e| format!("audio decode: {e:?}"))?;
+            let (r, c, samples) = avelune_audio_v1::decode(&p.payload)
+                .map_err(|e| format!("reference audio decode: {e:?}"))?;
             if rate == 0 {
                 rate = r;
-                ch = c
+                ch = c;
             } else if rate != r || ch != c {
                 return Err("audio format changed mid-stream".into());
             }
-            out.extend(s)
+            out.extend(samples);
         }
     }
     Ok(Some((rate, ch, out)))
 }
 fn decode_y4m_cmd(a: &[String]) -> Result<(), String> {
     let b = read_all(a.get(2).ok_or("missing input")?)?;
-    let (y, _) = decode_video_frames(&b)?;
+    let (y, _) = decode_video_frames(&b, arg_backend(a)?)?;
     write_all(a.get(3).ok_or("missing output")?, &emit_y4m(&y))
 }
 fn decode_audio_cmd(a: &[String]) -> Result<(), String> {
     let b = read_all(a.get(2).ok_or("missing input")?)?;
-    let (_, _, s) = decode_audio_samples(&b)?.ok_or("no audio")?;
+    let (_, _, s) = decode_audio_samples(&b, arg_backend(a)?)?.ok_or("no audio")?;
     let mut o = Vec::with_capacity(s.len() * 2);
     for x in s {
         o.extend(x.to_le_bytes())
     }
     write_all(a.get(3).ok_or("missing output")?, &o)
 }
-fn decode_media_to(inp: &str, out: &str) -> Result<(), String> {
+fn decode_media_to(inp: &str, out: &str, backend: BackendArg) -> Result<(), String> {
     let b = read_all(inp)?;
-    let (y, _) = decode_video_frames(&b)?;
+    let (y, _) = decode_video_frames(&b, backend)?;
     let yp = temp("decode.y4m");
     fs::write(&yp, emit_y4m(&y)).map_err(|e| e.to_string())?;
-    let aud = decode_audio_samples(&b)?;
+    let aud = decode_audio_samples(&b, backend)?;
     let ap = temp("decode.s16");
     if let Some((_, _, ref s)) = aud {
         let mut raw = Vec::with_capacity(s.len() * 2);
@@ -956,12 +1215,13 @@ fn decode_media_cmd(a: &[String]) -> Result<(), String> {
     decode_media_to(
         a.get(2).ok_or("missing input")?,
         a.get(3).ok_or("missing output")?,
+        arg_backend(a)?,
     )
 }
 fn play_cmd(a: &[String]) -> Result<(), String> {
     let inp = a.get(2).ok_or("missing input")?;
     let tmp = temp("play.mkv");
-    decode_media_to(inp, tmp.to_str().unwrap())?;
+    decode_media_to(inp, tmp.to_str().unwrap(), arg_backend(a)?)?;
     let r = run_checked({
         let mut c = ProcessCommand::new("ffplay");
         c.args(["-autoexit", "-loglevel", "warning", tmp.to_str().unwrap()]);
@@ -998,14 +1258,14 @@ fn inspect_cmd(a: &[String], deep: bool) -> Result<(), String> {
     }
     if deep {
         if f.streams.iter().any(|s| s.kind == StreamKind::Video) {
-            let (y, secs) = decode_video_frames(&b)?;
+            let (y, secs) = decode_video_frames(&b, arg_backend(a)?)?;
             println!(
                 "verified video frames={} decode={:.3}s",
                 y.frames.len(),
                 secs
             );
         }
-        if let Some((r, c, s)) = decode_audio_samples(&b)? {
+        if let Some((r, c, s)) = decode_audio_samples(&b, arg_backend(a)?)? {
             println!(
                 "verified audio rate={} channels={} sample_frames={}",
                 r,
@@ -1050,7 +1310,7 @@ fn frames_cmd(a: &[String]) -> Result<(), String> {
 fn benchmark_cmd(a: &[String]) -> Result<(), String> {
     let b = read_all(a.get(2).ok_or("missing input")?)?;
     let t = Instant::now();
-    let (y, _) = decode_video_frames(&b)?;
+    let (y, _) = decode_video_frames(&b, arg_backend(a)?)?;
     let dt = t.elapsed().as_secs_f64();
     let fps = y.frames.len() as f64 / dt.max(1e-9);
     println!(
@@ -1205,20 +1465,36 @@ fn conformance_cmd(a: &[String]) -> Result<(), String> {
         frames: vec![f.clone(), shifted, f.clone(), palette],
     };
     let avl = dir.join("video-lossless.avl");
-    encode_av(&y, None, avl.to_str().unwrap(), 1, 1, 60, "quality")?;
+    encode_av(
+        &y,
+        None,
+        avl.to_str().unwrap(),
+        (1, 1),
+        60,
+        "quality",
+        BackendArg::Prod,
+    )?;
     let avl_bytes = fs::read(&avl).map_err(|e| e.to_string())?;
     verify_video_with_reference_decoder(&avl_bytes)?;
-    let (decoded, _) = decode_video_frames(&avl_bytes)?;
+    let (decoded, _) = decode_video_frames(&avl_bytes, BackendArg::Prod)?;
     if decoded.frames != y.frames {
         return Err("lossless video conformance mismatch".into());
     }
     fs::write(dir.join("video-lossless-expected.y4m"), emit_y4m(&y)).map_err(|e| e.to_string())?;
 
     let lossy = dir.join("video-lossy.avl");
-    encode_av(&y, None, lossy.to_str().unwrap(), 128, 1, 60, "quality")?;
+    encode_av(
+        &y,
+        None,
+        lossy.to_str().unwrap(),
+        (128, 1),
+        60,
+        "quality",
+        BackendArg::Prod,
+    )?;
     let lossy_bytes = fs::read(&lossy).map_err(|e| e.to_string())?;
     verify_video_with_reference_decoder(&lossy_bytes)?;
-    let (lossy_dec, _) = decode_video_frames(&lossy_bytes)?;
+    let (lossy_dec, _) = decode_video_frames(&lossy_bytes, BackendArg::Prod)?;
     fs::write(dir.join("video-lossy-expected.y4m"), emit_y4m(&lossy_dec))
         .map_err(|e| e.to_string())?;
 
@@ -1322,6 +1598,7 @@ fn fuzz_cmd(a: &[String]) -> Result<(), String> {
         "--iterations",
         a.get(3).and_then(|s| s.parse().ok()).unwrap_or(1000),
     )?;
+    let backend = arg_backend(a)?;
     let mut x = 0x9e3779b97f4a7c15u64;
     let mut structurally_valid = 0usize;
     for _ in 0..it {
@@ -1334,8 +1611,8 @@ fn fuzz_cmd(a: &[String]) -> Result<(), String> {
             m[p] ^= 1 << ((x >> 32) & 7);
             let r = std::panic::catch_unwind(|| {
                 if all_packets(&m).is_ok() {
-                    let _ = decode_video_frames(&m);
-                    let _ = decode_audio_samples(&m);
+                    let _ = decode_video_frames(&m, backend);
+                    let _ = decode_audio_samples(&m, backend);
                     true
                 } else {
                     false
@@ -1396,9 +1673,10 @@ fn fuzz_cmd(a: &[String]) -> Result<(), String> {
 
 fn run() -> Result<(), String> {
     let cli = Cli::parse();
+    let backend = cli.backend;
     match cli.command {
         Command::Encode(a) => {
-            let v = argv(
+            let mut v = argv(
                 "encode-media",
                 &[&a.input, &a.output],
                 &[
@@ -1410,17 +1688,20 @@ fn run() -> Result<(), String> {
                     ("--preset", Some(a.preset.as_str().to_owned())),
                 ],
             );
+            add_backend(&mut v, backend);
             encode_media_cmd(&v)
         }
         Command::Decode(a) => {
-            let v = argv("decode-media", &[&a.input, &a.output], &[]);
+            let mut v = argv("decode-media", &[&a.input, &a.output], &[]);
+            add_backend(&mut v, backend);
             decode_media_cmd(&v)
         }
         Command::Play(a) => {
             eprintln!(
-                "note: `avelune play` is a reference convenience path and may transcode/buffer; it is not the production player backend"
+                "note: `avelune play` is a convenience path that transcodes/buffers through FFmpeg; browser/native low-latency presentation is a separate integration concern"
             );
-            let v = argv("play", &[&a.input], &[]);
+            let mut v = argv("play", &[&a.input], &[]);
+            add_backend(&mut v, backend);
             play_cmd(&v)
         }
         Command::Inspect(a) => {
@@ -1428,7 +1709,8 @@ fn run() -> Result<(), String> {
             inspect_cmd(&v, false)
         }
         Command::Verify(a) => {
-            let v = argv("verify", &[&a.input], &[]);
+            let mut v = argv("verify", &[&a.input], &[]);
+            add_backend(&mut v, backend);
             inspect_cmd(&v, true)
         }
         Command::Frames(a) => {
@@ -1436,7 +1718,8 @@ fn run() -> Result<(), String> {
             frames_cmd(&v)
         }
         Command::Benchmark(a) => {
-            let v = argv("benchmark", &[&a.input], &[]);
+            let mut v = argv("benchmark", &[&a.input], &[]);
+            add_backend(&mut v, backend);
             benchmark_cmd(&v)
         }
         Command::Reindex(a) => {
@@ -1453,7 +1736,8 @@ fn run() -> Result<(), String> {
         }
         Command::FuzzSmoke(a) => {
             let it = a.iterations.to_string();
-            let v = argv("fuzz-smoke", &[&a.input, &it], &[]);
+            let mut v = argv("fuzz-smoke", &[&a.input, &it], &[]);
+            add_backend(&mut v, backend);
             fuzz_cmd(&v)
         }
         Command::Completions(a) => {
@@ -1463,7 +1747,7 @@ fn run() -> Result<(), String> {
         }
         Command::Raw { command } => match command {
             RawCommand::EncodeY4m(a) => {
-                let v = argv(
+                let mut v = argv(
                     "encode-y4m",
                     &[&a.input, &a.output],
                     &[
@@ -1472,14 +1756,16 @@ fn run() -> Result<(), String> {
                         ("--preset", Some(a.preset.as_str().to_owned())),
                     ],
                 );
+                add_backend(&mut v, backend);
                 encode_y4m_cmd(&v)
             }
             RawCommand::DecodeY4m(a) => {
-                let v = argv("decode-y4m", &[&a.input, &a.output], &[]);
+                let mut v = argv("decode-y4m", &[&a.input, &a.output], &[]);
+                add_backend(&mut v, backend);
                 decode_y4m_cmd(&v)
             }
             RawCommand::EncodeAudio(a) => {
-                let v = argv(
+                let mut v = argv(
                     "encode-audio",
                     &[&a.input, &a.output],
                     &[
@@ -1488,10 +1774,12 @@ fn run() -> Result<(), String> {
                         ("--epoch-seconds", Some(a.epoch_seconds.to_string())),
                     ],
                 );
+                add_backend(&mut v, backend);
                 encode_audio_cmd(&v)
             }
             RawCommand::DecodeAudio(a) => {
-                let v = argv("decode-audio", &[&a.input, &a.output], &[]);
+                let mut v = argv("decode-audio", &[&a.input, &a.output], &[]);
+                add_backend(&mut v, backend);
                 decode_audio_cmd(&v)
             }
         },

@@ -4,7 +4,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 ---
 <BaseLayout title="Browser demo" mode="grid" current="demo">
   <div class="demo-shell">
-    <header class="demo-header"><p class="eyebrow">BROWSER REFERENCE INSTRUMENT</p><h1>Range-fetch and decode Avelune.</h1><p>Custom Draft Generation 1 <code>ALV1</code> video and <code>ALA1</code> audio decoded in WebAssembly. This is a reference/demo player, not a production-performance backend.</p></header>
+    <header class="demo-header"><p class="eyebrow">BROWSER PRODUCTION INSTRUMENT</p><h1>Range-fetch and decode Avelune.</h1><p>Custom Draft Generation 1 <code>ALV1</code> video and <code>ALA1</code> audio decoded in WebAssembly by the production Rust container/codec backend, selecting SIMD128 when available; JavaScript only schedules HTTP ranges and presentation.</p></header>
     <div class="instrument">
       <section class="viewport" aria-label="Video viewport"><canvas id="c" width="640" height="360">Decoded Avelune video appears here.</canvas></section>
       <section class="transport" aria-label="Player controls">
