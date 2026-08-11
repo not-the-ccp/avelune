@@ -10,6 +10,9 @@ members = [
   "impl/rust/crates/avelune-wasm-v1",
   "impl/rust/tools/avelune-v1",
   "prod/rust",
+  "prod/rust/kernels",
+  "prod/rust/wasm",
+  "prod/rust/lab",
 ]
 
 [workspace.package]

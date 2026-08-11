@@ -1,11 +1,17 @@
-//! Placeholder for future optimized Avelune production implementations.
+//! Avelune production backend.
 //!
-//! This crate deliberately contains no codec implementation yet. Production backends
-//! must conform to the normative specification and conformance vectors rather than
-//! defining format behavior through optimized code.
-
+//! Normative decoded semantics remain under `spec/`; this crate is an optimized,
+//! stateful implementation and does not define the format.
 #![forbid(unsafe_code)]
-#![warn(missing_docs)]
 
-/// Current state of the production-backend placeholder.
-pub const STATUS: &str = "stub: no production backend is implemented";
+pub mod audio;
+pub mod bitstream;
+pub mod buffer;
+pub mod config;
+pub mod container;
+pub mod limits;
+pub mod scheduler;
+pub mod video;
+
+/// Kernel dispatch and validated low-level primitives.
+pub use avelune_prod_kernels as kernels;
