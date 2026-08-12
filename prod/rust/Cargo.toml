@@ -18,6 +18,7 @@ avelune-video-v1 = { path = "../../impl/rust/crates/avelune-video-v1" }
 avelune-video-ref-v1 = { path = "../../impl/rust/crates/avelune-video-ref-v1" }
 avelune-audio-v1 = { path = "../../impl/rust/crates/avelune-audio-v1" }
 avelune-container-v1 = { path = "../../impl/rust/crates/avelune-container-v1" }
+proptest = "1.11.0"
 
 [lints]
 workspace = true

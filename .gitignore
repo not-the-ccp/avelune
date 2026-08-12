@@ -16,3 +16,7 @@
 # Generated production browser artifacts. Build with scripts/build-prod-wasm.sh.
 /web/player/avelune-prod-scalar.wasm
 /web/player/avelune-prod-simd128.wasm
+/fuzz/artifacts/
+/fuzz/target/
+/fuzz/corpus/*/.generated-*
+/results/ci-media/

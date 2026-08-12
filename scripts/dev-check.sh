@@ -24,8 +24,9 @@ node --check scripts/validate-content.mjs
 node --check scripts/prod-wasm-smoke.mjs
 node --check scripts/prod-browser-smoke.mjs
 node --check scripts/prod-browser-loader-smoke.mjs
-python3 -m py_compile scripts/benchmark-real.py scripts/benchmark-real-audio.py scripts/benchmark-xiph.py scripts/check-site-links.py scripts/prod-format-experiments.py scripts/prod-encoder-curves.py
-bash -n scripts/build-wasm.sh scripts/build-prod-wasm.sh scripts/build-site.sh scripts/fetch-xiph-corpus.sh scripts/validate-draft.sh scripts/audit-prod-unsafe.sh scripts/prod-disassembly-check.sh scripts/validate-prod.sh
+python3 -m py_compile scripts/benchmark-real.py scripts/benchmark-real-audio.py scripts/benchmark-xiph.py scripts/check-site-links.py scripts/prod-format-experiments.py scripts/prod-encoder-curves.py scripts/ci-media-regression.py scripts/compare-ci-media.py scripts/test-ci-regression-tools.py
+python3 scripts/test-ci-regression-tools.py
+bash -n scripts/build-wasm.sh scripts/build-prod-wasm.sh scripts/build-site.sh scripts/fetch-xiph-corpus.sh scripts/validate-draft.sh scripts/audit-prod-unsafe.sh scripts/prod-disassembly-check.sh scripts/validate-prod.sh scripts/ci-media-base-head.sh
 
 echo '[6/11] production safety audit'
 ./scripts/audit-prod-unsafe.sh
@@ -36,6 +37,8 @@ BIN=${CARGO_TARGET_DIR:-target}/debug/avelune
 "$BIN" --version
 "$BIN" --help >/dev/null
 for sh in bash zsh fish powershell elvish; do "$BIN" completions "$sh" >/dev/null; done
+"$BIN" --backend prod verify web/player/demo.avl >/dev/null
+"$BIN" --backend reference verify web/player/demo.avl >/dev/null
 
 echo '[8/11] wasm (when target installed)'
 WASM_LIBDIR=$(rustc --print target-libdir --target wasm32-unknown-unknown 2>/dev/null || true)
