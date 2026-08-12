@@ -54,6 +54,13 @@ pub mod reference_video {
     pub use avelune_video_ref_v1::*;
 }
 
+/// Stateful production backend. This surface owns reusable codec/container state, bounded
+/// scheduling, resource limits, and audited CPU-kernel dispatch while retaining Draft
+/// Generation 1 reference crates as separate conformance oracles.
+pub mod production {
+    pub use avelune_prod::*;
+}
+
 /// Current software package version.
 pub const SOFTWARE_VERSION: &str = env!("CARGO_PKG_VERSION");
 

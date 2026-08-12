@@ -1,0 +1,16 @@
+[package]
+name = "avelune-prod-lab"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+avelune-prod = { path = ".." }
+avelune-video-v1 = { path = "../../../impl/rust/crates/avelune-video-v1" }
+avelune-video-ref-v1 = { path = "../../../impl/rust/crates/avelune-video-ref-v1" }
+avelune-audio-v1 = { path = "../../../impl/rust/crates/avelune-audio-v1" }
+
+[lints]
+workspace = true

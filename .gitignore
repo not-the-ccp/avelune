@@ -13,3 +13,12 @@
 /web/player/avelune.wasm
 # Local benchmark media is intentionally not redistributed.
 /tests/corpus/
+# Generated production browser artifacts. Build with scripts/build-prod-wasm.sh.
+/web/player/avelune-prod-scalar.wasm
+/web/player/avelune-prod-simd128.wasm
+/fuzz/artifacts/
+/fuzz/target/
+/fuzz/corpus/*/.generated-*
+/results/ci-media/
+# Local production-validation evidence. Rebuild with scripts/validate-prod.sh.
+/results/

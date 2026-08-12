@@ -17,6 +17,7 @@ avelune-container-v1 = { path = "../../crates/avelune-container-v1" }
 avelune-video-v1 = { path = "../../crates/avelune-video-v1" }
 avelune-audio-v1 = { path = "../../crates/avelune-audio-v1" }
 avelune-video-ref-v1 = { path = "../../crates/avelune-video-ref-v1" }
+avelune-prod = { path = "../../../../prod/rust" }
 clap = { version = "4.6.6", features = ["derive", "color", "help", "usage", "error-context", "suggestions"] }
 clap_complete = "4.6.9"
 

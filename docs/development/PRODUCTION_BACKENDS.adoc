@@ -1,21 +1,53 @@
-= Production backend direction
+= Production backends
 :page-type: development-guide
 :page-status: current
-:summary: The intentionally separate production-backend plan and its current CPU/WASM, SIMD, and optional WebGPU boundaries.
+:summary: The separate production-backend architecture: safe stateful engine, audited kernel crate, incremental WASM ABI, and validation gates.
 :nav-order: 60
 
-Production implementations are intentionally separate from the reference implementation.
+Production implementations are intentionally separate from the simple/reference implementation.
+The reference codecs remain conformance and debugging oracles; optimized code does not become
+normative by being faster.
 
 [#avl-production-backend-architecture]
-== Current target architecture
+== Current architecture
 
-The current target architecture is hybrid rather than “everything on the GPU”:
+`prod/rust/` contains the safe stateful `avelune-prod` engine. The engine forbids unsafe Rust and
+owns parsing, validation, reusable frame/storage state, encoder policy, scheduling, entropy coding,
+ALV1/ALA1, and the production container state machine. `prod/rust/kernels/` is the small audited
+unsafe boundary for architecture intrinsics. `prod/rust/wasm/` exposes the incremental browser ABI,
+and `prod/rust/lab/` contains reproducible micro/end-to-end measurements and format experiments.
 
-* CPU/WASM: parsing, control flow, entropy coding/decoding, dependency management;
-* native SIMD / WASM SIMD: prediction, transform/reconstruction, color conversion, bulk pixel work;
-* optional WebGPU: large regular batches such as motion-cost evaluation, transforms/reconstruction, color conversion, scaling/compositing, and editor-oriented GPU-resident pipelines.
+The current split is deliberately hybrid:
 
-[#avl-production-backend-status]
-== Current status
+* CPU/WASM: syntax, parsing, entropy, decisions, dependencies and resource limits;
+* native SIMD / WASM SIMD: measured pixel/transform/CRC kernels;
+* bounded native worker pool: coarse independent plane work, with single-thread fallback;
+* optional WebGPU: experimental coarse compute/presentation work only, never required for codec
+  correctness.
 
-`prod/rust/` is a compiling placeholder only. No optimized backend is currently claimed.
+Native x86-64 and scalar/SIMD128 WASM are execution-tested by `scripts/validate-prod.sh`. AArch64
+NEON/CRC source is implemented, but runtime performance must not be claimed without AArch64
+hardware; local cross-compilation is also explicitly skipped when that target stdlib is absent.
+
+[#avl-production-backend-safety]
+== Safety and validation
+
+`avelune-prod` uses `#![forbid(unsafe_code)]`. Unsafe code is accepted only in the kernel crate and
+checked by `scripts/audit-prod-unsafe.sh`. Every retained optimized kernel has a scalar equivalent
+and randomized differential coverage. No hand-written assembly is currently retained.
+
+Production codecs are differentially checked against both ALV1 decoders and the ALA1 reference
+codec. Structured valid-stream generation, truncation/mutation cases, resource ceilings, arbitrary
+transport fragmentation, forced CPU backends, WASM scalar/SIMD execution, and browser streaming
+are part of the deeper gate.
+
+Run:
+
+[source,sh]
+----
+./scripts/validate-prod.sh
+----
+
+The word *production* describes this implementation layer: reusable state, defensive parsing,
+measured optimization and embedding-oriented APIs. Draft Generation 1 remains unfrozen research
+format work and is not implied to match the compression maturity of established codecs.

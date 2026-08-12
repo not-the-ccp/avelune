@@ -1,36 +1,54 @@
 = Browser streaming contract
 :page-type: architecture
 :page-status: current
-:summary: The incremental browser decoder and bounded-buffering contract that precedes the production WASM ABI.
+:summary: The incremental production decoder ABI and bounded-buffering contract for browser streaming.
 :nav-order: 40
 
-The browser API must be designed around incremental delivery before the production WASM ABI is frozen.
+The production browser API is incremental and container-aware. A whole-file `decode_entire_file`
+interface is intentionally not the primary ABI.
 
-[#avl-rejected-whole-file-api]
-== Rejected whole-file API shape
+[#avl-production-wasm-surface]
+== Production WASM surface
 
-[source,text]
-----
-decode_entire_file(bytes) -> all_frames
-----
-
-[#avl-incremental-decoder-api]
-== Required conceptual API
+The current production WASM surface is conceptually:
 
 [source,text]
 ----
-create_decoder(config)
-push_container_bytes(fragment)
-pop_video_frame()
-pop_audio_samples()
-seek_reset(epoch_metadata)
+decoder_create(config) -> handle
+decoder_destroy(handle)
+input_reserve(handle, len) -> ptr
+decoder_push(handle, len)
+decoder_pop_video(handle)
+decoder_pop_audio(handle)
+decoder_seek_reset(handle, ...)
 ----
 
-`push_container_bytes` may receive an arbitrary fragment boundary, including one byte. The demux parser already has a regression test for one-byte fragments.
+`input_reserve` exposes the production parser's own tail storage. JavaScript writes fetched bytes
+there and `decoder_push` commits them; validated packet payloads are consumed as borrowed views rather
+than copied into a second input packet buffer. Arbitrary transport fragmentation, including one-byte
+fragments, is covered by the native parser tests.
 
-The first WASM crate therefore exports only tiny build/conformance functions. This is intentional: a fake whole-file buffer ABI would create an implementation convenience that pressures the specification in the wrong direction.
+The WASM ABI also exposes the Rust-validated front index (stream descriptors and epoch byte ranges),
+so the browser does not maintain a second implementation of Avelune file-header/front-index/packet
+framing or CRC rules.
 
-[#avl-player-buffering-rule]
-== V1 player buffering rule
+[#avl-artifact-selection]
+== Artifact selection
 
-The V1 static player fetches one indexed epoch at a time. It schedules that epoch's audio packets, then decodes and renders video frames sequentially at presentation time. It does *not* decode an entire epoch into a frame queue. Thus decoded-video memory is approximately one presented frame plus the codec's bounded four-reference history, rather than `epoch_frames * frame_size`.
+The browser loader tries the separately built SIMD128 artifact first and falls back to the scalar
+artifact. SIMD support is therefore a module-selection concern rather than pretending native-style
+runtime dispatch can make one SIMD-containing WASM binary universally loadable.
+
+Browser threads are not required for baseline correctness and are not part of the current validated
+artifact set.
+
+[#avl-range-and-buffering-rule]
+== Range and buffering rule
+
+JavaScript remains responsible for HTTP Range scheduling and presentation. It fetches the fixed
+header, then the exact validated front-index length, then indexed epoch ranges. The Rust production
+container/parser handles interpretation and validation of those bytes.
+
+The player processes one indexed epoch at a time and does not require decoding the entire file before
+playback. Reference-picture history remains bounded by the codec's four-reference limit. WebGPU is
+currently a presentation/experimental compute path and is not claimed as a validated codec backend.

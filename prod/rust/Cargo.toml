@@ -1,11 +1,24 @@
 [package]
-name = "avelune-prod-stub"
+name = "avelune-prod"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 publish = false
-description = "Placeholder crate for future optimized Avelune production backends"
+description = "Production backend for Avelune Draft Generation codecs"
+
+[dependencies]
+avelune-prod-kernels = { path = "kernels" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rayon = "1.12.0"
+
+[dev-dependencies]
+avelune-video-v1 = { path = "../../impl/rust/crates/avelune-video-v1" }
+avelune-video-ref-v1 = { path = "../../impl/rust/crates/avelune-video-ref-v1" }
+avelune-audio-v1 = { path = "../../impl/rust/crates/avelune-audio-v1" }
+avelune-container-v1 = { path = "../../impl/rust/crates/avelune-container-v1" }
+proptest = "1.11.0"
 
 [lints]
 workspace = true

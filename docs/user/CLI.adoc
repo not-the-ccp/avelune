@@ -7,9 +7,17 @@
 [#cli-purpose]
 == Purpose and status
 
-`avelune` is the command-line front end for the current reference/research implementation. It is
-intended to make the codec/container POC easy to inspect and experiment with; it is *not* the future
-production-performance backend.
+`avelune` is the command-line front end for both the optimized production backend and the
+reference/research implementation. Codec commands accept a global backend selector:
+
+[source,text]
+----
+--backend auto | prod | reference
+----
+
+`auto` currently selects `prod`. The reference backend remains available as a conformance/debugging
+oracle; structural container-maintenance commands do not pretend backend selection is meaningful when
+they are not doing codec work.
 
 Run `avelune <command> --help` for the authoritative option list.
 
@@ -35,7 +43,7 @@ Useful encode options:
 --video-q N       experimental ALV1 quantizer step
 --audio-q N       ALA1 quantizer step; defaults to 1 (mathematically lossless)
 --epoch N         maximum epoch length in video frames
---preset NAME     fast | balanced | quality reference search preset
+--preset NAME     fast | balanced | quality encoder search preset
 ----
 
 `--video-q` and `--audio-q` are codec experiment knobs, *not* CRF values or bitrate targets. Do not
@@ -70,15 +78,12 @@ avelune reindex input.avl reindexed.avl
 avelune repair damaged.avl recovered.avl
 ----
 
-* `inspect` parses the file header/front index and prints streams and epochs.
-* `verify` additionally decodes media payloads.
-* `frames` prints compact video-frame metadata and is pipe-friendly.
-* `benchmark` measures scalar reference video decoding only.
+* `benchmark` measures video decode throughput using the selected backend.
 * `reindex` rebuilds the front index from intact packets.
 * `repair` performs best-effort packet-magic resynchronization; it is not forensic recovery software.
 
 [#cli-raw-workflows]
-== Raw/reference workflows
+== Raw codec workflows
 
 Raw subcommands avoid the ordinary-media front end where possible:
 
