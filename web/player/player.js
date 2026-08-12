@@ -6,7 +6,7 @@ function streamFormat(stream) {
   const codec = stream.codec === 1 ? (stream.kind === 1 ? 'ALV1' : 'ALA1') : `codec ${stream.codec}`;
   return stream.kind === 1 ? `${codec} · ${stream.param0} × ${stream.param1}` : `${codec} · ${stream.param0} Hz · ${stream.param1} ch`;
 }
-let decoder, idx, currentUrl, renderer, ctxAudio, nextAudio = 0, playToken = 0;
+let decoder, idx, currentUrl, renderer, ctxAudio, nextAudio = 0, playToken = 0, loadToken = 0;
 
 function colorParams(meta0) {
   const matrix = meta0 & 15, full = !!(meta0 & (1 << 12));
@@ -67,10 +67,10 @@ function scheduleAudio(a, when) {
   const source = ctxAudio.createBufferSource(); source.buffer = buffer; source.connect(ctxAudio.destination); source.start(when); return frames / a.rate;
 }
 
-async function epoch(index, token) {
+async function epoch(index, token, activeDecoder) {
   const e = idx.epochs[index], videos = [], audios = [];
   show('playback-epoch', `${index + 1} / ${idx.epochs.length}`);
-  await decoder.decodeEpoch(currentUrl, e, {
+  await activeDecoder.decodeEpoch(currentUrl, e, {
     onVideo: f => { show('format-dimensions', `${f.w} × ${f.h}`); videos.push(f); },
     onAudio: a => audios.push(a),
     onRange: (first, last) => show('playback-range', `${first}–${last}`),
@@ -92,23 +92,42 @@ async function epoch(index, token) {
 
 async function playFrom(sec) {
   const token = ++playToken;
+  const activeDecoder = decoder;
+  if (!activeDecoder || !idx) return;
   if (!ctxAudio) ctxAudio = new AudioContext(); await ctxAudio.resume(); nextAudio = ctxAudio.currentTime + .05;
   const ei = Math.max(0, idx.epochs.findLastIndex(e => Number(e.pts) / 1e6 <= sec));
-  for (let i = ei; i < idx.epochs.length && token === playToken; i++) await epoch(i, token);
+  for (let i = ei; i < idx.epochs.length && token === playToken && activeDecoder === decoder; i++) {
+    await epoch(i, token, activeDecoder);
+  }
 }
 
 $('load').onclick = async () => {
+  const token = ++loadToken;
+  ++playToken;
+  const previous = decoder;
+  decoder = undefined;
+  previous?.destroy();
+  let candidate;
   try {
     show('state-label', 'LOADING');
-    decoder?.destroy(); decoder = await createAveluneProdDecoder(); currentUrl = $('url').value; idx = await decoder.loadIndex(currentUrl);
-    $('status').textContent = `backend=${decoder.backend}\nstreams=${idx.streams.length} epochs=${idx.epochs.length}\nfront bytes=${idx.frontBytes}`;
+    candidate = await createAveluneProdDecoder();
+    if (token !== loadToken) { candidate.destroy(); return; }
+    decoder = candidate; currentUrl = $('url').value; idx = await candidate.loadIndex(currentUrl);
+    if (token !== loadToken) { candidate.destroy(); if (decoder === candidate) decoder = undefined; return; }
+    $('status').textContent = `backend=${candidate.backend}\nstreams=${idx.streams.length} epochs=${idx.epochs.length}\nfront bytes=${idx.frontBytes}`;
     show('container-streams', idx.streams.length); show('container-epochs', idx.epochs.length); show('container-front', `${idx.frontBytes} B`);
     const video = idx.streams.find(s => s.kind === 1), audio = idx.streams.find(s => s.kind === 2);
     show('format-video', video ? streamFormat(video) : '—'); show('format-audio', audio ? streamFormat(audio) : '—');
-    renderer = await chooseRenderer(video?.meta0 || 0); $('status').textContent += `\nvideo meta0=0x${(video?.meta0 || 0).toString(16)}`;
+    renderer = await chooseRenderer(video?.meta0 || 0);
+    if (token !== loadToken) { candidate.destroy(); if (decoder === candidate) decoder = undefined; return; }
+    $('status').textContent += `\nvideo meta0=0x${(video?.meta0 || 0).toString(16)}`;
     const end = Math.max(...idx.epochs.map(e => Number(e.pts) / 1e6 + Number(e.duration) / 1e6)); $('seek').max = end; $('seek').disabled = false; $('play').disabled = false; show('state-label', 'READY'); await playFrom(0);
-  } catch (e) { show('state-label', 'ERROR'); $('status').textContent = 'ERROR ' + (e.stack || e); }
+  } catch (e) {
+    candidate?.destroy();
+    if (decoder === candidate) decoder = undefined;
+    if (token === loadToken) { show('state-label', 'ERROR'); $('status').textContent = 'ERROR ' + (e.stack || e); }
+  }
 };
 $('play').onclick = () => playFrom(+$('seek').value);
 $('seek').onchange = () => playFrom(+$('seek').value);
-window.addEventListener('pagehide', () => decoder?.destroy());
+window.addEventListener('pagehide', () => { ++loadToken; ++playToken; decoder?.destroy(); decoder = undefined; });

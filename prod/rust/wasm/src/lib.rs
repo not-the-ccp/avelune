@@ -12,6 +12,8 @@ use avelune_prod::{
 };
 use std::{cell::RefCell, collections::VecDeque, sync::Arc};
 
+const MAX_PENDING_OUTPUTS: usize = 128;
+
 #[derive(Debug)]
 struct AudioOutput {
     pts: u64,
@@ -54,7 +56,12 @@ impl DecoderState {
                     frame_id,
                     frame,
                     ..
-                } => video_queue.push_back((pts, frame_id, frame)),
+                } => {
+                    if video_queue.len() >= MAX_PENDING_OUTPUTS {
+                        return Err("decoded video output queue limit exceeded");
+                    }
+                    video_queue.push_back((pts, frame_id, frame));
+                }
                 DecodedOutput::Audio {
                     pts,
                     duration,
@@ -62,16 +69,21 @@ impl DecoderState {
                     channels,
                     pcm,
                     ..
-                } => audio_queue.push_back(AudioOutput {
-                    pts,
-                    duration,
-                    rate: sample_rate,
-                    channels,
-                    pcm,
-                }),
+                } => {
+                    if audio_queue.len() >= MAX_PENDING_OUTPUTS {
+                        return Err("decoded audio output queue limit exceeded");
+                    }
+                    audio_queue.push_back(AudioOutput {
+                        pts,
+                        duration,
+                        rate: sample_rate,
+                        channels,
+                        pcm,
+                    });
+                }
                 DecodedOutput::EpochStart { .. } | DecodedOutput::Metadata { .. } => {}
             }
-            Ok::<(), std::convert::Infallible>(())
+            Ok::<(), &str>(())
         });
         match result {
             Ok(()) => {
@@ -128,6 +140,9 @@ pub extern "C" fn decoder_create() -> u32 {
 /// Destroys a decoder handle. Returns zero on success.
 #[unsafe(no_mangle)]
 pub extern "C" fn decoder_destroy(handle: u32) -> i32 {
+    if handle == 0 {
+        return -1;
+    }
     HANDLES.with(|h| {
         let mut h = h.borrow_mut();
         let Some(slot) = h.get_mut(handle.saturating_sub(1) as usize) else {
@@ -490,4 +505,17 @@ pub extern "C" fn kernel_sad_probe() -> u64 {
         b[i] = (i as u8).wrapping_mul(29).wrapping_add(11);
     }
     avelune_prod::kernels::KernelSet::auto().sad(&a, &b)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zero_handle_cannot_destroy_first_decoder() {
+        let handle = decoder_create();
+        assert_ne!(handle, 0);
+        assert_eq!(decoder_destroy(0), -1);
+        assert_eq!(decoder_destroy(handle), 0);
+    }
 }

@@ -24,11 +24,13 @@ export class AveluneProdDecoder {
     this.instance = instance;
     this.ex = instance.exports;
     this.backend = backend;
+    this.abortController = new AbortController();
     this.handle = this.ex.decoder_create();
     if (!this.handle) throw Error('decoder_create failed');
   }
 
   destroy() {
+    this.abortController.abort();
     if (this.handle) {
       this.ex.decoder_destroy(this.handle);
       this.handle = 0;
@@ -97,6 +99,7 @@ export class AveluneProdDecoder {
     if (onRange) onRange(epoch.offset, end);
     const response = await fetch(url, {
       headers: {Range: `bytes=${epoch.offset}-${end}`},
+      signal: this.abortController.signal,
       cache: 'no-store',
     });
     if (response.status !== 206) throw Error(`server must support HTTP Range; got ${response.status}`);
@@ -141,7 +144,11 @@ export class AveluneProdDecoder {
   }
 
   async #range(url, first, last) {
-    const response = await fetch(url, {headers: {Range: `bytes=${first}-${last}`}, cache: 'no-store'});
+    const response = await fetch(url, {
+      headers: {Range: `bytes=${first}-${last}`},
+      signal: this.abortController.signal,
+      cache: 'no-store',
+    });
     if (response.status !== 206) throw Error(`server must support HTTP Range; got ${response.status} for ${first}-${last}`);
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes.length !== last - first + 1) throw Error('short HTTP Range response');
