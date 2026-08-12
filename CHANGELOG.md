@@ -5,6 +5,19 @@ may be incompatible until a stable major line is explicitly declared.
 
 ## Unreleased
 
+### Added
+
+- Integrated the production backend: safe stateful `avelune-prod` engine under `prod/rust/`, the
+  audited `avelune-prod-kernels` unsafe boundary, the incremental `avelune-prod-wasm` browser ABI,
+  and the reproducible `avelune-prod-lab` measurements crate.
+- Wired the production backend through the CLI facade (`--backend auto|prod|reference`; `auto`
+  currently selects `prod`) and the browser demo (scalar/SIMD128 artifact selection via
+  `avelune-prod-loader.js`).
+- Added production validation gates (`scripts/validate-prod.sh`, unsafe audit, disassembly
+  retention, WASM/browser smoke, differential/hostile/property/metamorphic/scenario/soak tests,
+  cargo-fuzz targets) and CI platform gates (Windows/macOS portable check, AArch64 cross-check,
+  same-runner base/head media regression, sanitizer/32-bit jobs, coverage inventory).
+
 ### Changed
 
 - Replaced the Pandoc Pages pipeline with a custom static Astro site, native AsciiDoc documentation

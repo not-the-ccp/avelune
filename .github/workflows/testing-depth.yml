@@ -10,7 +10,7 @@ jobs:
   soak:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install 1.97.1 --profile minimal && rustup default 1.97.1
       - name: Stateful soak tests
         run: cargo test -p avelune-prod --release --test soak -- --ignored --test-threads=1
@@ -22,7 +22,7 @@ jobs:
       matrix:
         target: [entropy, video_decode, audio_decode, container_stream, structured_video]
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install nightly fuzz tooling
         run: |
           rustup toolchain install nightly --profile minimal
@@ -42,7 +42,7 @@ jobs:
       matrix:
         sanitizer: [address, thread]
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install nightly with rust-src
         run: rustup toolchain install nightly --profile minimal --component rust-src
       - name: Sanitized production tests
@@ -55,7 +55,7 @@ jobs:
   i686-compile:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install 1.97.1 --profile minimal --target i686-unknown-linux-gnu && rustup default 1.97.1
       - name: 32-bit portability compile gate
         run: cargo check -p avelune-prod-kernels -p avelune-prod --target i686-unknown-linux-gnu --locked
@@ -63,7 +63,7 @@ jobs:
   coverage-inventory:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install 1.97.1 --profile minimal && rustup default 1.97.1
       - name: Install coverage tool
         run: cargo install cargo-llvm-cov --locked

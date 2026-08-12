@@ -20,3 +20,5 @@
 /fuzz/target/
 /fuzz/corpus/*/.generated-*
 /results/ci-media/
+# Local production-validation evidence. Rebuild with scripts/validate-prod.sh.
+/results/
