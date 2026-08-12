@@ -185,8 +185,9 @@ impl KernelSet {
         fx: u8,
         fy: u8,
     ) -> Option<[u8; 64]> {
-        let scalar = || scalar::halfpel_predict_8x8(reference, stride, fx, fy);
-        let expected = scalar()?;
+        if !scalar::halfpel_footprint_valid(reference.len(), stride, fx, fy) {
+            return None;
+        }
         #[cfg(target_arch = "x86_64")]
         if matches!(self.backend, Backend::Sse42 | Backend::Avx2) {
             let mut out = [0u8; 64];
@@ -203,7 +204,7 @@ impl KernelSet {
             unsafe { wasm::halfpel_predict_8x8_simd128(reference, stride, fx, fy, &mut out) };
             return Some(out);
         }
-        Some(expected)
+        scalar::halfpel_predict_8x8(reference, stride, fx, fy)
     }
 
     /// Exact SAD of one strided 8x8 source block against half-sample prediction.

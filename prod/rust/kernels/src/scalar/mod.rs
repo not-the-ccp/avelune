@@ -26,17 +26,27 @@ pub fn sad_block(
     sum
 }
 
+/// Validates the exact footprint required by one full 8x8 half-sample prediction.
+pub(super) fn halfpel_footprint_valid(src_len: usize, stride: usize, fx: u8, fy: u8) -> bool {
+    if fx > 1 || fy > 1 || stride < 8 + usize::from(fx) {
+        return false;
+    }
+    let Some(rows) = 8usize.checked_add(usize::from(fy)) else {
+        return false;
+    };
+    let Some(need) = (rows - 1)
+        .checked_mul(stride)
+        .and_then(|n| n.checked_add(8 + usize::from(fx)))
+    else {
+        return false;
+    };
+    need <= src_len
+}
+
 /// Predicts one full 8x8 half-sample block from an interior reference footprint.
 /// `fx`/`fy` are fractional phases in {0,1}.
 pub fn halfpel_predict_8x8(src: &[u8], stride: usize, fx: u8, fy: u8) -> Option<[u8; 64]> {
-    if fx > 1 || fy > 1 || stride < 8 + usize::from(fx) {
-        return None;
-    }
-    let rows = 8 + usize::from(fy);
-    let need = (rows - 1)
-        .checked_mul(stride)?
-        .checked_add(8 + usize::from(fx))?;
-    if need > src.len() {
+    if !halfpel_footprint_valid(src.len(), stride, fx, fy) {
         return None;
     }
     let mut out = [0u8; 64];
