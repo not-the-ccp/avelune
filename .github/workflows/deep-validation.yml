@@ -11,7 +11,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Rust 1.97.1
         run: |
           rustup toolchain install 1.97.1 --profile minimal --component rustfmt --target wasm32-unknown-unknown
@@ -22,8 +22,12 @@ jobs:
         run: ffmpeg -version | head -1 && node --version
       - name: Deep Draft Generation 1 validation
         run: ./scripts/validate-draft.sh
+      - name: Production backend validation
+        run: ./scripts/validate-prod.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: draft-validation
-          path: dist/
+          path: |
+            dist/
+            results/

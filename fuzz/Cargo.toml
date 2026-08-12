@@ -1,0 +1,51 @@
+[package]
+name = "avelune-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+avelune-prod = { path = "../prod/rust" }
+avelune-video-ref-v1 = { path = "../impl/rust/crates/avelune-video-ref-v1" }
+avelune-audio-v1 = { path = "../impl/rust/crates/avelune-audio-v1" }
+
+[[bin]]
+name = "video_decode"
+path = "fuzz_targets/video_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "audio_decode"
+path = "fuzz_targets/audio_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "container_stream"
+path = "fuzz_targets/container_stream.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "entropy"
+path = "fuzz_targets/entropy.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "structured_video"
+path = "fuzz_targets/structured_video.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

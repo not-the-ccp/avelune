@@ -257,6 +257,8 @@ pub enum ContainerError {
     PacketHeaderChecksum,
     PayloadChecksum,
     TrailingData,
+    /// An indexed epoch does not begin with the matching EpochStart packet.
+    BadEpoch,
 }
 
 /// Computes the CRC-32C checksum used by the container.
@@ -486,6 +488,29 @@ pub fn parse_file_prefix(b: &[u8]) -> Result<(FileHeader, Front, usize), Contain
     Ok((h, f, end))
 }
 
+/// Validates that every indexed byte range begins with the matching EpochStart packet.
+pub fn validate_epoch_ranges(epochs: &[(u32, u64, u32, Vec<u8>)]) -> Result<(), ContainerError> {
+    for (id, _pts, _duration, bytes) in epochs {
+        let (packet, _) = decode_packet(bytes, DEFAULT_MAX_PACKET)?;
+        if packet.kind != PacketKind::EpochStart
+            || packet.payload.len() != 4
+            || u32::from_le_bytes(packet.payload[..4].try_into().unwrap()) != *id
+        {
+            return Err(ContainerError::BadEpoch);
+        }
+    }
+    Ok(())
+}
+
+/// Checked builder used by muxing integrations.
+pub fn build_file_checked(
+    streams: Vec<StreamDesc>,
+    epochs: Vec<(u32, u64, u32, Vec<u8>)>,
+) -> Result<Vec<u8>, ContainerError> {
+    validate_epoch_ranges(&epochs)?;
+    Ok(build_file(streams, epochs))
+}
+
 /// Build a front-indexed Draft Generation 1 file from already packetized epochs.
 /// Builds a complete file from stream descriptors and pre-encoded epoch byte ranges.
 pub fn build_file(streams: Vec<StreamDesc>, epochs: Vec<(u32, u64, u32, Vec<u8>)>) -> Vec<u8> {
@@ -618,6 +643,25 @@ mod tests {
         );
         v
     }
+    #[test]
+    fn checked_builder_rejects_epoch_without_matching_start() {
+        let s = vec![StreamDesc {
+            id: 1,
+            kind: StreamKind::Video,
+            codec: 1,
+            timescale: TIMEBASE,
+            param0: 2,
+            param1: 2,
+            flags: 0,
+            meta0: 0,
+        }];
+        let bytes = ep();
+        assert_eq!(
+            build_file_checked(s, vec![(7, 0, 1000, bytes)]),
+            Err(ContainerError::BadEpoch)
+        );
+    }
+
     #[test]
     fn file_index_roundtrip() {
         let s = vec![StreamDesc {

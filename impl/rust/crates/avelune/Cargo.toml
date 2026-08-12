@@ -14,6 +14,7 @@ avelune-container-v1 = { path = "../avelune-container-v1" }
 avelune-video-v1 = { path = "../avelune-video-v1" }
 avelune-video-ref-v1 = { path = "../avelune-video-ref-v1" }
 avelune-audio-v1 = { path = "../avelune-audio-v1" }
+avelune-prod = { path = "../../../../prod/rust" }
 
 [lints]
 workspace = true

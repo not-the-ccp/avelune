@@ -26,6 +26,57 @@ jobs:
       - name: Development checks
         run: ./scripts/dev-check.sh
 
+  prod-portable-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust 1.97.1
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup default 1.97.1
+      - name: Compile and test portable production core
+        run: cargo test -p avelune-prod-kernels -p avelune-prod --locked
+
+  prod-aarch64-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust 1.97.1 with AArch64 target
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal --target aarch64-unknown-linux-gnu
+          rustup default 1.97.1
+      - name: Cross-check production core and kernels
+        run: |
+          cargo check -p avelune-prod-kernels --target aarch64-unknown-linux-gnu --locked
+          cargo check -p avelune-prod --target aarch64-unknown-linux-gnu --locked
+
+  prod-regression:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Install Rust 1.97.1
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup default 1.97.1
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Same-runner base/head codec regression
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: ./scripts/ci-media-base-head.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: codec-regression
+          path: results/ci-media/
+
   pages-build:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: check
