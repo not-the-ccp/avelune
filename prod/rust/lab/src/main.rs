@@ -274,6 +274,69 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         64,
     ));
 
+    let half_ref_stride = 640usize;
+    let half_ref = xorshift_bytes(half_ref_stride * 9, 0x243f_6a88_85a3_08d3);
+    let half_src = xorshift_bytes(half_ref_stride * 8, 0xa409_3822_299f_31d0);
+    samples.push(measure(
+        || {
+            let p = scalar
+                .halfpel_predict_8x8(black_box(&half_ref), half_ref_stride, 1, 1)
+                .unwrap();
+            u64::from(p[0]) ^ u64::from(p[63])
+        },
+        "halfpel.predict8x8.scalar.diagonal",
+        100_000 * scale,
+        100,
+        64,
+    ));
+    samples.push(measure(
+        || {
+            let p = auto
+                .halfpel_predict_8x8(black_box(&half_ref), half_ref_stride, 1, 1)
+                .unwrap();
+            u64::from(p[0]) ^ u64::from(p[63])
+        },
+        "halfpel.predict8x8.auto.diagonal",
+        100_000 * scale,
+        100,
+        64,
+    ));
+    samples.push(measure(
+        || {
+            scalar
+                .halfpel_sad_8x8(
+                    black_box(&half_src),
+                    half_ref_stride,
+                    black_box(&half_ref),
+                    half_ref_stride,
+                    1,
+                    1,
+                )
+                .unwrap()
+        },
+        "halfpel.sad8x8.scalar.diagonal",
+        100_000 * scale,
+        100,
+        64,
+    ));
+    samples.push(measure(
+        || {
+            auto.halfpel_sad_8x8(
+                black_box(&half_src),
+                half_ref_stride,
+                black_box(&half_ref),
+                half_ref_stride,
+                1,
+                1,
+            )
+            .unwrap()
+        },
+        "halfpel.sad8x8.auto.diagonal",
+        100_000 * scale,
+        100,
+        64,
+    ));
+
     let mut transform_input = [0_i32; 64];
     for (i, v) in transform_input.iter_mut().enumerate() {
         *v = ((i as i32 * 65_537) % 2_000_001) - 1_000_000;

@@ -1,10 +1,11 @@
 //! x86/x86-64 architecture kernels.
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::{
-    __m128i, __m256i, _mm_add_epi64, _mm_crc32_u8, _mm_crc32_u64, _mm_cvtsi128_si64,
-    _mm_loadl_epi64, _mm_sad_epu8, _mm_setzero_si128, _mm256_add_epi32, _mm256_loadu_si256,
-    _mm256_sad_epu8, _mm256_set1_epi32, _mm256_srai_epi32, _mm256_storeu_si256, _mm256_sub_epi32,
-    _mm256_xor_si256,
+    __m128i, __m256i, _mm_add_epi16, _mm_add_epi64, _mm_avg_epu8, _mm_crc32_u8, _mm_crc32_u64,
+    _mm_cvtsi128_si64, _mm_loadl_epi64, _mm_sad_epu8, _mm_set1_epi16, _mm_setzero_si128,
+    _mm_srli_epi16, _mm_storel_epi64, _mm_storeu_si128, _mm_unpacklo_epi8, _mm256_add_epi32,
+    _mm256_loadu_si256, _mm256_sad_epu8, _mm256_set1_epi32, _mm256_srai_epi32, _mm256_storeu_si256,
+    _mm256_sub_epi32, _mm256_xor_si256,
 };
 
 /// Computes CRC-32C using SSE4.2 after the safe caller has verified feature support.
@@ -38,6 +39,66 @@ pub(super) unsafe fn sad_8x8_sse2(a: &[u8], a_stride: usize, b: &[u8], b_stride:
         acc = _mm_add_epi64(acc, _mm_sad_epu8(va, vb));
     }
     _mm_cvtsi128_si64(acc) as u64
+}
+
+/// SSE2 exact 8x8 half-sample prediction for an already bounds-validated interior footprint.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "sse2")]
+pub(super) unsafe fn halfpel_predict_8x8_sse2(
+    src: &[u8],
+    stride: usize,
+    fx: u8,
+    fy: u8,
+    out: &mut [u8; 64],
+) {
+    let zero = _mm_setzero_si128();
+    let two = _mm_set1_epi16(2);
+    for y in 0..8 {
+        // SAFETY: safe wrapper proves all required 8/9-byte rows and optional ninth row exist.
+        let a = unsafe { _mm_loadl_epi64(src.as_ptr().add(y * stride).cast::<__m128i>()) };
+        let pred = match (fx, fy) {
+            (0, 0) => a,
+            (1, 0) => {
+                let b =
+                    unsafe { _mm_loadl_epi64(src.as_ptr().add(y * stride + 1).cast::<__m128i>()) };
+                _mm_avg_epu8(a, b)
+            }
+            (0, 1) => {
+                let c = unsafe {
+                    _mm_loadl_epi64(src.as_ptr().add((y + 1) * stride).cast::<__m128i>())
+                };
+                _mm_avg_epu8(a, c)
+            }
+            (1, 1) => {
+                let b =
+                    unsafe { _mm_loadl_epi64(src.as_ptr().add(y * stride + 1).cast::<__m128i>()) };
+                let c = unsafe {
+                    _mm_loadl_epi64(src.as_ptr().add((y + 1) * stride).cast::<__m128i>())
+                };
+                let d = unsafe {
+                    _mm_loadl_epi64(src.as_ptr().add((y + 1) * stride + 1).cast::<__m128i>())
+                };
+                let aw = _mm_unpacklo_epi8(a, zero);
+                let bw = _mm_unpacklo_epi8(b, zero);
+                let cw = _mm_unpacklo_epi8(c, zero);
+                let dw = _mm_unpacklo_epi8(d, zero);
+                let sum = _mm_add_epi16(_mm_add_epi16(aw, bw), _mm_add_epi16(cw, dw));
+                _mm_srli_epi16::<2>(_mm_add_epi16(sum, two))
+            }
+            _ => unreachable!(),
+        };
+        if fx == 1 && fy == 1 {
+            let mut lanes = [0u16; 8];
+            // SAFETY: lanes is exactly one writable 128-bit region.
+            unsafe { _mm_storeu_si128(lanes.as_mut_ptr().cast::<__m128i>(), pred) };
+            for x in 0..8 {
+                out[y * 8 + x] = lanes[x] as u8;
+            }
+        } else {
+            // SAFETY: each iteration writes exactly 8 bytes into one output row.
+            unsafe { _mm_storel_epi64(out.as_mut_ptr().add(y * 8).cast::<__m128i>(), pred) };
+        }
+    }
 }
 
 /// AVX2 byte SAD over the common prefix of two slices.

@@ -82,10 +82,24 @@ function browserProgram(wasmBytes) {
     while(ex.decoder_pop_video(h)>0)video++;
     while(ex.decoder_pop_audio(h)>0)audio++;
     const sad=ex.kernel_sad_probe();
+    const half=[];
+    for(let phase=0;phase<4;phase++){
+      const fx=phase&1,fy=(phase>>1)&1,ref=new Uint8Array(16*9),src=new Uint8Array(16*8);
+      for(let i=0;i<ref.length;i++)ref[i]=(i*31+7)&255; for(let i=0;i<src.length;i++)src[i]=(i*13+19)&255;
+      let checksum=0n,hsad=0n;
+      for(let y=0;y<8;y++)for(let x=0;x<8;x++){
+        const a=ref[y*16+x],b=ref[y*16+x+fx],c=ref[(y+fy)*16+x],d=ref[(y+fy)*16+x+fx];
+        const pv=fx===0&&fy===0?a:fx===1&&fy===0?((a+b+1)>>1):fx===0&&fy===1?((a+c+1)>>1):((a+b+c+d+2)>>2);
+        const i=y*8+x;checksum+=BigInt(i+1)*BigInt(pv);hsad+=BigInt(Math.abs(src[y*16+x]-pv));
+      }
+      const gotP=BigInt(ex.kernel_halfpel_predict_probe(phase)),gotS=BigInt(ex.kernel_halfpel_sad_probe(phase));
+      if(gotP!==checksum||gotS!==hsad)throw Error('halfpel phase '+phase+' mismatch');
+      half.push([String(gotP),String(gotS)]);
+    }
     const abi=ex.avelune_prod_abi_version();
     if(ex.decoder_destroy(h)!==0) throw Error('decoder_destroy failed');
     if(video!==60||audio!==100) throw Error('unexpected decoded counts '+video+'/'+audio);
-    return {abi,bytes:media.length,chunks,video,audio,sad:String(sad)};
+    return {abi,bytes:media.length,chunks,video,audio,sad:String(sad),half};
   })()`;
 }
 
@@ -97,6 +111,7 @@ try {
     results[name] = await cdpEvaluate(page.webSocketDebuggerUrl, browserProgram(wasm));
   }
   if (results.scalar.sad !== results.simd128.sad) throw Error('scalar/SIMD SAD probe differs');
+  if (JSON.stringify(results.scalar.half)!==JSON.stringify(results.simd128.half)) throw Error('scalar/SIMD halfpel probes differ');
   console.log(JSON.stringify({chromium: true, results}));
 } finally {
   child.kill('SIGTERM');

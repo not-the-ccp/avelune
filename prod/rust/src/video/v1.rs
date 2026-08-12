@@ -348,6 +348,63 @@ fn intra_sample(
         }
     }
 }
+fn intra_prediction_block(
+    recon: &[u8],
+    w: usize,
+    h: usize,
+    bx: usize,
+    by: usize,
+    mode: u8,
+) -> [u8; 64] {
+    let mut out = [128u8; 64];
+    let bw = (w - bx).min(BLOCK);
+    let bh = (h - by).min(BLOCK);
+    match mode {
+        1 => {
+            if bx > 0 {
+                for y in 0..bh {
+                    let value = recon[(by + y) * w + bx - 1];
+                    out[y * 8..y * 8 + bw].fill(value);
+                }
+            }
+        }
+        2 => {
+            if by > 0 {
+                for y in 0..bh {
+                    for x in 0..bw {
+                        out[y * 8 + x] = recon[(by - 1) * w + bx + x];
+                    }
+                }
+            }
+        }
+        _ => {
+            let mut sum = 0u32;
+            let mut n = 0u32;
+            if by > 0 {
+                for x in 0..bw {
+                    sum += u32::from(recon[(by - 1) * w + bx + x]);
+                    n += 1;
+                }
+            }
+            if bx > 0 {
+                for y in 0..bh {
+                    sum += u32::from(recon[(by + y) * w + bx - 1]);
+                    n += 1;
+                }
+            }
+            let value = if n == 0 {
+                128
+            } else {
+                ((sum + n / 2) / n) as u8
+            };
+            for y in 0..bh {
+                out[y * 8..y * 8 + bw].fill(value);
+            }
+        }
+    }
+    out
+}
+
 fn floor_div2(v: i32) -> i32 {
     v.div_euclid(2)
 }
@@ -389,22 +446,63 @@ fn integer_motion_origin(
     }
 }
 
+fn halfpel_interior_origin(
+    w: usize,
+    h: usize,
+    bx: usize,
+    by: usize,
+    dx2: i32,
+    dy2: i32,
+) -> Option<(usize, usize, u8, u8)> {
+    if bx.checked_add(BLOCK)? > w || by.checked_add(BLOCK)? > h {
+        return None;
+    }
+    let x2 = i32::try_from(bx).ok()?.checked_mul(2)?.checked_add(dx2)?;
+    let y2 = i32::try_from(by).ok()?.checked_mul(2)?.checked_add(dy2)?;
+    let x0 = floor_div2(x2);
+    let y0 = floor_div2(y2);
+    let fx = x2.rem_euclid(2) as u8;
+    let fy = y2.rem_euclid(2) as u8;
+    if x0 < 0 || y0 < 0 {
+        return None;
+    }
+    let sx = usize::try_from(x0).ok()?;
+    let sy = usize::try_from(y0).ok()?;
+    if sx.checked_add(BLOCK + usize::from(fx))? > w || sy.checked_add(BLOCK + usize::from(fy))? > h
+    {
+        return None;
+    }
+    Some((sx, sy, fx, fy))
+}
+
+fn halfpel_prediction_block(
+    reference: &[u8],
+    w: usize,
+    h: usize,
+    bx: usize,
+    by: usize,
+    dx2: i32,
+    dy2: i32,
+    kernels: crate::kernels::KernelSet,
+) -> Option<[u8; 64]> {
+    let (sx, sy, fx, fy) = halfpel_interior_origin(w, h, bx, by, dx2, dy2)?;
+    kernels.halfpel_predict_8x8(&reference[sy * w + sx..], w, fx, fy)
+}
+
 fn sad_intra(src: &[u8], recon: &[u8], w: usize, h: usize, bx: usize, by: usize, mode: u8) -> u32 {
-    let mut s = 0;
-    for y in 0..BLOCK {
-        if by + y >= h {
-            break;
-        }
-        for x in 0..BLOCK {
-            if bx + x >= w {
-                break;
-            }
-            let p = intra_sample(recon, w, h, bx, by, x, y, mode);
-            s += (i32::from(src[(by + y) * w + bx + x]) - i32::from(p)).unsigned_abs();
+    let prediction = intra_prediction_block(recon, w, h, bx, by, mode);
+    let bw = (w - bx).min(BLOCK);
+    let bh = (h - by).min(BLOCK);
+    let mut sad = 0u32;
+    for y in 0..bh {
+        for x in 0..bw {
+            sad += (i32::from(src[(by + y) * w + bx + x]) - i32::from(prediction[y * 8 + x]))
+                .unsigned_abs();
         }
     }
-    s
+    sad
 }
+
 #[inline(always)]
 fn sad_inter(
     src: &[u8],
@@ -426,6 +524,12 @@ fn sad_inter(
         return kernels
             .sad_block(a, w, b, w, bw, bh)
             .min(u64::from(u32::MAX)) as u32;
+    }
+    if let Some((sx, sy, fx, fy)) = halfpel_interior_origin(w, h, bx, by, dx2, dy2)
+        && let Some(sad) =
+            kernels.halfpel_sad_8x8(&src[by * w + bx..], w, &r[sy * w + sx..], w, fx, fy)
+    {
+        return sad.min(u64::from(u32::MAX)) as u32;
     }
     for y in 0..BLOCK {
         if by + y >= h {
@@ -673,13 +777,29 @@ fn evaluate_residual_candidate(
 ) -> ResidualEval {
     let mut residual = [0i32; 64];
     let mut prediction = [128u8; 64];
+    let inter_prediction = if mode == 3 {
+        halfpel_prediction_block(refs[ref_idx], w, h, bx, by, dx2, dy2, kernels)
+    } else {
+        None
+    };
+    let intra_prediction = if mode == 3 {
+        None
+    } else {
+        Some(intra_prediction_block(recon, w, h, bx, by, mode))
+    };
     for y in 0..BLOCK {
         for x in 0..BLOCK {
             let i = y * 8 + x;
             if bx + x >= w || by + y >= h {
                 continue;
             }
-            let pred = prediction_sample(recon, refs, w, h, bx, by, x, y, mode, ref_idx, dx2, dy2);
+            let pred = if let Some(block) = &inter_prediction {
+                block[i]
+            } else if let Some(block) = &intra_prediction {
+                block[i]
+            } else {
+                prediction_sample(recon, refs, w, h, bx, by, x, y, mode, ref_idx, dx2, dy2)
+            };
             prediction[i] = pred;
             residual[i] = i32::from(src[(by + y) * w + bx + x]) - i32::from(pred);
         }
@@ -1312,6 +1432,13 @@ fn decode_plane_single_into(
                             let dst = &mut recon[(by + y) * w + bx..(by + y) * w + bx + bw];
                             dst.copy_from_slice(src)
                         }
+                    } else if let Some(block) =
+                        halfpel_prediction_block(refs[ri], w, h, bx, by, dx, dy, kernels)
+                    {
+                        for y in 0..8 {
+                            let dst = &mut recon[(by + y) * w + bx..(by + y) * w + bx + 8];
+                            dst.copy_from_slice(&block[y * 8..y * 8 + 8]);
+                        }
                     } else {
                         for y in 0..8 {
                             for x in 0..8 {
@@ -1329,14 +1456,12 @@ fn decode_plane_single_into(
                         }
                     }
                 } else {
-                    for y in 0..8 {
-                        for x in 0..8 {
-                            if bx + x >= w || by + y >= h {
-                                continue;
-                            }
-                            recon[(by + y) * w + bx + x] =
-                                intra_sample(recon, w, h, bx, by, x, y, mode)
-                        }
+                    let block = intra_prediction_block(recon, w, h, bx, by, mode);
+                    let bw = (w - bx).min(8);
+                    let bh = (h - by).min(8);
+                    for y in 0..bh {
+                        let dst = &mut recon[(by + y) * w + bx..(by + y) * w + bx + bw];
+                        dst.copy_from_slice(&block[y * 8..y * 8 + bw]);
                     }
                 }
                 continue;
@@ -1354,6 +1479,16 @@ fn decode_plane_single_into(
             } else {
                 None
             };
+            let half_fast = if mode == 3 && fast.is_none() {
+                halfpel_prediction_block(refs[ri], w, h, bx, by, dx, dy, kernels)
+            } else {
+                None
+            };
+            let intra_fast = if mode == 3 {
+                None
+            } else {
+                Some(intra_prediction_block(recon, w, h, bx, by, mode))
+            };
             for y in 0..8 {
                 for x in 0..8 {
                     if bx + x >= w || by + y >= h {
@@ -1362,6 +1497,8 @@ fn decode_plane_single_into(
                     let pred = if mode == 3 {
                         if let Some((sx, sy)) = fast {
                             refs[ri][(sy + y) * w + sx + x]
+                        } else if let Some(block) = &half_fast {
+                            block[y * 8 + x]
                         } else {
                             sample_half(
                                 refs[ri],
@@ -1371,8 +1508,10 @@ fn decode_plane_single_into(
                                 ((by + y) as i32) * 2 + dy,
                             )
                         }
+                    } else if let Some(block) = &intra_fast {
+                        block[y * 8 + x]
                     } else {
-                        intra_sample(recon, w, h, bx, by, x, y, mode)
+                        unreachable!("intra prediction is materialized for non-inter modes")
                     };
                     recon[(by + y) * w + bx + x] = clip8(i32::from(pred) + rr[y * 8 + x]);
                 }
@@ -1504,6 +1643,13 @@ fn decode_plane_into(
                             let dst = &mut recon[(by + y) * w + bx..(by + y) * w + bx + bw];
                             dst.copy_from_slice(src)
                         }
+                    } else if let Some(block) =
+                        halfpel_prediction_block(refs[ri], w, h, bx, by, dx, dy, kernels)
+                    {
+                        for y in 0..8 {
+                            let dst = &mut recon[(by + y) * w + bx..(by + y) * w + bx + 8];
+                            dst.copy_from_slice(&block[y * 8..y * 8 + 8]);
+                        }
                     } else {
                         for y in 0..8 {
                             for x in 0..8 {
@@ -1521,14 +1667,12 @@ fn decode_plane_into(
                         }
                     }
                 } else {
-                    for y in 0..8 {
-                        for x in 0..8 {
-                            if bx + x >= w || by + y >= h {
-                                continue;
-                            }
-                            recon[(by + y) * w + bx + x] =
-                                intra_sample(recon, w, h, bx, by, x, y, mode)
-                        }
+                    let block = intra_prediction_block(recon, w, h, bx, by, mode);
+                    let bw = (w - bx).min(8);
+                    let bh = (h - by).min(8);
+                    for y in 0..bh {
+                        let dst = &mut recon[(by + y) * w + bx..(by + y) * w + bx + bw];
+                        dst.copy_from_slice(&block[y * 8..y * 8 + bw]);
                     }
                 }
                 continue;
@@ -1546,6 +1690,16 @@ fn decode_plane_into(
             } else {
                 None
             };
+            let half_fast = if mode == 3 && fast.is_none() {
+                halfpel_prediction_block(refs[ri], w, h, bx, by, dx, dy, kernels)
+            } else {
+                None
+            };
+            let intra_fast = if mode == 3 {
+                None
+            } else {
+                Some(intra_prediction_block(recon, w, h, bx, by, mode))
+            };
             for y in 0..8 {
                 for x in 0..8 {
                     if bx + x >= w || by + y >= h {
@@ -1554,6 +1708,8 @@ fn decode_plane_into(
                     let pred = if mode == 3 {
                         if let Some((sx, sy)) = fast {
                             refs[ri][(sy + y) * w + sx + x]
+                        } else if let Some(block) = &half_fast {
+                            block[y * 8 + x]
                         } else {
                             sample_half(
                                 refs[ri],
@@ -1563,8 +1719,10 @@ fn decode_plane_into(
                                 ((by + y) as i32) * 2 + dy,
                             )
                         }
+                    } else if let Some(block) = &intra_fast {
+                        block[y * 8 + x]
                     } else {
-                        intra_sample(recon, w, h, bx, by, x, y, mode)
+                        unreachable!("intra prediction is materialized for non-inter modes")
                     };
                     recon[(by + y) * w + bx + x] = clip8(i32::from(pred) + rr[y * 8 + x]);
                 }

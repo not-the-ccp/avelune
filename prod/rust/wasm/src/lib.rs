@@ -438,6 +438,47 @@ pub extern "C" fn decoder_last_error_len(handle: u32) -> u32 {
     with_state(handle, |s| s.error.len() as u32).unwrap_or(0)
 }
 
+fn halfpel_probe_inputs() -> ([u8; 16 * 9], [u8; 16 * 8]) {
+    let mut reference = [0u8; 16 * 9];
+    let mut source = [0u8; 16 * 8];
+    for (i, v) in reference.iter_mut().enumerate() {
+        *v = (i as u8).wrapping_mul(31).wrapping_add(7);
+    }
+    for (i, v) in source.iter_mut().enumerate() {
+        *v = (i as u8).wrapping_mul(13).wrapping_add(19);
+    }
+    (reference, source)
+}
+
+/// Deterministic exact half-sample prediction checksum for phase `0..=3`.
+#[unsafe(no_mangle)]
+pub extern "C" fn kernel_halfpel_predict_probe(phase: u32) -> u64 {
+    let (reference, _) = halfpel_probe_inputs();
+    let fx = (phase & 1) as u8;
+    let fy = ((phase >> 1) & 1) as u8;
+    let Some(predicted) =
+        avelune_prod::kernels::KernelSet::auto().halfpel_predict_8x8(&reference, 16, fx, fy)
+    else {
+        return u64::MAX;
+    };
+    predicted
+        .iter()
+        .enumerate()
+        .map(|(i, &v)| (i as u64 + 1) * u64::from(v))
+        .sum()
+}
+
+/// Deterministic exact half-sample SAD for phase `0..=3`.
+#[unsafe(no_mangle)]
+pub extern "C" fn kernel_halfpel_sad_probe(phase: u32) -> u64 {
+    let (reference, source) = halfpel_probe_inputs();
+    let fx = (phase & 1) as u8;
+    let fy = ((phase >> 1) & 1) as u8;
+    avelune_prod::kernels::KernelSet::auto()
+        .halfpel_sad_8x8(&source, 16, &reference, 16, fx, fy)
+        .unwrap_or(u64::MAX)
+}
+
 /// Runs the selected production SAD kernel on a deterministic validation vector.
 /// The result is backend-independent and exercises the scalar/SIMD dispatch selected by the artifact.
 #[unsafe(no_mangle)]

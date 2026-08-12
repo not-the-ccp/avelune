@@ -174,6 +174,69 @@ impl KernelSet {
         }
     }
 
+    /// Exact V1 half-sample prediction for one full interior 8x8 block.
+    ///
+    /// `reference` must begin at the integer floor of the requested prediction footprint.
+    /// Fractional phases are 0 or 1. `None` means the supplied footprint/phase is invalid.
+    pub fn halfpel_predict_8x8(
+        self,
+        reference: &[u8],
+        stride: usize,
+        fx: u8,
+        fy: u8,
+    ) -> Option<[u8; 64]> {
+        let scalar = || scalar::halfpel_predict_8x8(reference, stride, fx, fy);
+        let expected = scalar()?;
+        #[cfg(target_arch = "x86_64")]
+        if matches!(self.backend, Backend::Sse42 | Backend::Avx2) {
+            let mut out = [0u8; 64];
+            // SAFETY: scalar validation above proves the complete interior footprint exists;
+            // SSE2 is baseline on x86-64 and the kernel uses unaligned loads/stores.
+            unsafe { x86::halfpel_predict_8x8_sse2(reference, stride, fx, fy, &mut out) };
+            return Some(out);
+        }
+        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+        if matches!(self.backend, Backend::WasmSimd128) {
+            let mut out = [0u8; 64];
+            // SAFETY: scalar validation above proves the complete footprint; this backend only
+            // exists in a wasm32 artifact compiled with SIMD128 enabled.
+            unsafe { wasm::halfpel_predict_8x8_simd128(reference, stride, fx, fy, &mut out) };
+            return Some(out);
+        }
+        Some(expected)
+    }
+
+    /// Exact SAD of one strided 8x8 source block against half-sample prediction.
+    pub fn halfpel_sad_8x8(
+        self,
+        source: &[u8],
+        source_stride: usize,
+        reference: &[u8],
+        reference_stride: usize,
+        fx: u8,
+        fy: u8,
+    ) -> Option<u64> {
+        if matches!(self.backend, Backend::Scalar) {
+            return scalar::halfpel_sad_8x8(
+                source,
+                source_stride,
+                reference,
+                reference_stride,
+                fx,
+                fy,
+            );
+        }
+        let predicted = self.halfpel_predict_8x8(reference, reference_stride, fx, fy)?;
+        if source_stride < 8 {
+            return None;
+        }
+        let need = 7usize.checked_mul(source_stride)?.checked_add(8)?;
+        if need > source.len() {
+            return None;
+        }
+        Some(self.sad_block(source, source_stride, &predicted, 8, 8, 8))
+    }
+
     /// Sum of absolute differences for a strided rectangular block.
     ///
     /// Returns scalar semantics for general shapes. x86 SIMD backends specialize the normative
@@ -304,6 +367,64 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn halfpel_backends_match_scalar_for_all_phases_and_strides() {
+        let scalar = KernelSet::scalar();
+        let auto = KernelSet::auto();
+        let mut state = 0x1319_8a2e_0370_7344_u64;
+        for ref_stride in 9..=31usize {
+            for src_stride in 8..=23usize {
+                for fy in 0..=1u8 {
+                    for fx in 0..=1u8 {
+                        for _ in 0..64 {
+                            let rows = 8 + usize::from(fy);
+                            let mut reference = vec![0u8; ref_stride * rows];
+                            let mut source = vec![0u8; src_stride * 8];
+                            for v in reference.iter_mut().chain(&mut source) {
+                                state ^= state << 13;
+                                state ^= state >> 7;
+                                state ^= state << 17;
+                                *v = state as u8;
+                            }
+                            let expected = scalar
+                                .halfpel_predict_8x8(&reference, ref_stride, fx, fy)
+                                .unwrap();
+                            assert_eq!(
+                                auto.halfpel_predict_8x8(&reference, ref_stride, fx, fy),
+                                Some(expected)
+                            );
+                            let sad = scalar
+                                .halfpel_sad_8x8(
+                                    &source, src_stride, &reference, ref_stride, fx, fy,
+                                )
+                                .unwrap();
+                            assert_eq!(
+                                auto.halfpel_sad_8x8(
+                                    &source, src_stride, &reference, ref_stride, fx, fy,
+                                ),
+                                Some(sad)
+                            );
+                            if let Ok(k) = KernelSet::avx2() {
+                                assert_eq!(
+                                    k.halfpel_predict_8x8(&reference, ref_stride, fx, fy),
+                                    Some(expected)
+                                );
+                                assert_eq!(
+                                    k.halfpel_sad_8x8(
+                                        &source, src_stride, &reference, ref_stride, fx, fy,
+                                    ),
+                                    Some(sad)
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(auto.halfpel_predict_8x8(&[0; 64], 8, 1, 1), None);
+        assert_eq!(auto.halfpel_predict_8x8(&[0; 72], 9, 2, 0), None);
     }
 
     #[test]

@@ -21,6 +21,7 @@ need_native() {
 }
 need_native 'SSE4.2 CRC32C' '\bcrc32[bqlw]?\b'
 need_native 'x86 packed SAD' '\bpsadbw\b'
+need_native 'SSE2 rounded byte average for half-pel' '\bpavgb\b'
 need_native 'AVX2 integer vector work' '\bvp(add|sub)d\b'
 
 {
@@ -29,7 +30,7 @@ need_native 'AVX2 integer vector work' '\bvp(add|sub)d\b'
   echo "objdump=$(objdump --version | head -n1)"
   echo
   echo '## Native x86 excerpts'
-  grep -E -m 30 '\b(crc32[bqlw]?|psadbw|vp(add|sub)d|vmovdqu)\b' "$native"
+  grep -E -m 40 '\b(crc32[bqlw]?|psadbw|pavgb|paddw|psrlw|vp(add|sub)d|vmovdqu)\b' "$native"
 } > results/disassembly-evidence.txt
 
 # WASM SIMD is a separate artifact with a compile-time feature requirement. If the target exists,
@@ -50,11 +51,14 @@ if rustc --print target-libdir --target wasm32-unknown-unknown >/dev/null 2>&1 \
     grep -q 'i16x8.extadd_pairwise_i8x16_u' "$wasm_dump" || {
       echo 'ERROR: SIMD128 artifact lacks expected pairwise widening reduction' >&2; exit 1;
     }
+    grep -q 'i8x16.avgr_u' "$wasm_dump" || {
+      echo 'ERROR: SIMD128 artifact lacks expected rounded byte average for half-pel' >&2; exit 1;
+    }
     {
       echo
       echo '## WASM SIMD128 excerpts'
       echo "llvm_objdump=$($llvm_objdump --version | head -n1)"
-      grep -E -m 20 'i8x16.sub_sat_u|i16x8.extadd_pairwise_i8x16_u|i32x4.extadd_pairwise_i16x8_u' "$wasm_dump"
+      grep -E -m 30 'i8x16.sub_sat_u|i8x16.avgr_u|i16x8.add|i16x8.shr_u|i16x8.extadd_pairwise_i8x16_u|i32x4.extadd_pairwise_i16x8_u' "$wasm_dump"
     } >> results/disassembly-evidence.txt
   else
     echo 'NOTE: llvm-objdump unavailable; WASM instruction disassembly gate skipped' >> results/disassembly-evidence.txt
