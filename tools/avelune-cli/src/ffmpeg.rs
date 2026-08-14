@@ -95,8 +95,8 @@ pub fn probe_video_meta(input: &str) -> u32 {
 /// Extracts the first video stream as 8-bit 4:2:0 Y4M with `ffmpeg`.
 ///
 /// `seconds` limits the decoded duration and `size` requests a `WIDTHxHEIGHT`
-/// scale. The intermediate Y4M file is removed when this function returns,
-/// including on errors.
+/// scale. Cleanup of the intermediate Y4M file is attempted when this
+/// function returns, including on errors.
 pub fn extract_video(input: &str, seconds: Option<&str>, size: Option<&str>) -> Result<y4m::Y4m> {
     let temp = TempPath::new("encode-video.y4m")?;
     let mut command = Command::new("ffmpeg");
@@ -131,8 +131,9 @@ pub fn extract_video(input: &str, seconds: Option<&str>, size: Option<&str>) -> 
 
 /// Extracts the first audio stream as stereo 48 kHz signed 16-bit PCM.
 ///
-/// Returns `Ok(None)` when the input has no audio stream. The intermediate PCM
-/// file is removed when this function returns, including on errors.
+/// Returns `Ok(None)` when the input has no audio stream. Cleanup of the
+/// intermediate PCM file is attempted when this function returns, including
+/// on errors.
 pub fn extract_audio(input: &str, seconds: Option<&str>) -> Result<Option<AudioData>> {
     if !has_audio(input) {
         return Ok(None);
@@ -168,7 +169,7 @@ pub fn extract_audio(input: &str, seconds: Option<&str>) -> Result<Option<AudioD
 ///
 /// Video is supplied to `ffmpeg` through a temporary Y4M file and audio through
 /// a temporary signed 16-bit PCM file. Both files and their private temporary
-/// directories are removed when this function returns, including on errors.
+/// directories is attempted when this function returns, including on errors.
 pub fn write_media(media: &DecodedMedia, output: &str) -> Result<()> {
     if media.video.is_none() && media.audio.is_none() {
         return Err(CliError::message(
