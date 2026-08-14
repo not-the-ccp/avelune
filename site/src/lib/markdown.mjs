@@ -7,7 +7,6 @@ const rootDocuments = {
   contributing: { file: "CONTRIBUTING.md", title: "Contributing", summary: "Development workflow and review expectations." },
   security: { file: "SECURITY.md", title: "Security", summary: "Security support and vulnerability reporting." },
   support: { file: "SUPPORT.md", title: "Support", summary: "Where to ask questions and report problems." },
-  agents: { file: "AGENTS.md", title: "Agent guidance", summary: "Durable repository guidance for coding agents and contributors." },
 };
 
 const sourceRoutes = new Map([
@@ -19,17 +18,22 @@ const sourceRoutes = new Map([
   ["spec/README.adoc", "/spec/overview/"],
   ["STATUS.md", "/project/status/"],
   ["CONTRIBUTING.md", "/project/contributing/"],
-  ["AGENTS.md", "/project/agents/"],
   ["SECURITY.md", "/project/security/"],
   ["SUPPORT.md", "/project/support/"],
+]);
+
+const repositorySourceUrls = new Map([
+  ["AGENTS.md", "https://github.com/not-the-ccp/avelune/blob/main/AGENTS.md"],
 ]);
 
 function canonicalLink(href) {
   if (!href || /^(?:[a-z]+:|#)/i.test(href)) return href;
   const [target, fragment = ""] = href.split("#", 2);
   const route = sourceRoutes.get(target);
-  if (!route) return href;
-  return `${import.meta.env.BASE_URL.replace(/\/$/, "")}${route}${fragment ? `#${fragment}` : ""}`;
+  if (route) return `${import.meta.env.BASE_URL.replace(/\/$/, "")}${route}${fragment ? `#${fragment}` : ""}`;
+  const sourceUrl = repositorySourceUrls.get(target);
+  if (sourceUrl) return `${sourceUrl}${fragment ? `#${fragment}` : ""}`;
+  return href;
 }
 
 export function loadRootDocuments() {
