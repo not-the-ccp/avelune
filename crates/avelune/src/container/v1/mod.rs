@@ -27,7 +27,9 @@ pub const TIMEBASE: u32 = 1_000_000;
 #[repr(u8)]
 /// Stream media category.
 pub enum StreamKind {
+    /// A video stream whose media packets are [`PacketKind::VideoFrame`].
     Video = 1,
+    /// An audio stream whose media packets are [`PacketKind::AudioFrame`].
     Audio = 2,
 }
 impl TryFrom<u8> for StreamKind {
@@ -44,9 +46,13 @@ impl TryFrom<u8> for StreamKind {
 #[repr(u8)]
 /// Packet semantic category.
 pub enum PacketKind {
+    /// Opens an independently decodable epoch and carries its encoded epoch identifier.
     EpochStart = 1,
+    /// Carries one ALV1 video-frame payload for the declared video stream ID.
     VideoFrame = 2,
+    /// Carries one ALA1 audio-frame payload for the declared audio stream ID.
     AudioFrame = 3,
+    /// Carries non-codec metadata associated with the packet stream/timeline.
     Metadata = 4,
 }
 impl TryFrom<u8> for PacketKind {
@@ -246,17 +252,29 @@ pub struct FileHeader {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Errors returned while parsing or validating the container.
 pub enum ContainerError {
+    /// Input ended before the complete requested header, front index, packet, or payload was present.
     UnexpectedEof,
+    /// The fixed file/container magic did not match Draft Generation 1.
     BadMagic,
+    /// The file declares a container version this implementation does not support.
     UnsupportedVersion(u16),
+    /// Fixed-header fields or reserved bits violate the Draft Generation 1 syntax.
     BadHeader,
+    /// The fixed file-header checksum does not match its encoded contents.
     HeaderChecksum,
+    /// The front index is malformed, internally inconsistent, or contains invalid stream metadata.
     BadFront,
+    /// The front-index checksum does not match its encoded contents.
     FrontChecksum,
+    /// A packet header contains an unknown packet-kind discriminator.
     UnknownPacketKind(u8),
+    /// A packet payload length exceeds the configured/representable packet limit.
     PacketTooLarge(u32),
+    /// A packet header checksum does not match the encoded packet header.
     PacketHeaderChecksum,
+    /// A packet payload checksum does not match the encoded payload bytes.
     PayloadChecksum,
+    /// Complete input contained bytes that cannot belong to the parsed object/epoch.
     TrailingData,
     /// The caller violated the incremental parser reserve/commit protocol.
     ParserState,

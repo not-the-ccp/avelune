@@ -345,6 +345,17 @@ mod tests {
         }
     }
     #[test]
+    fn scalar_sad_block_rejects_incomplete_or_overlapping_footprints() {
+        let bytes = [0u8; 16];
+        assert_eq!(scalar::sad_block(&bytes, 8, &bytes, 8, 8, 3), 0);
+        assert_eq!(scalar::sad_block(&bytes, 4, &bytes, 8, 8, 2), 0);
+        assert_eq!(
+            scalar::sad_block(&bytes, usize::MAX, &bytes, usize::MAX, 1, 3),
+            0
+        );
+    }
+
+    #[test]
     fn strided_8x8_sad_matches_scalar() {
         let scalar = KernelSet::scalar();
         let auto = KernelSet::auto();

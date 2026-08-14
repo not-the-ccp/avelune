@@ -93,7 +93,7 @@ pub fn probe_video_meta(input: &str) -> u32 {
 }
 
 pub fn extract_video(input: &str, seconds: Option<&str>, size: Option<&str>) -> Result<y4m::Y4m> {
-    let temp = TempPath::new("encode-video.y4m");
+    let temp = TempPath::new("encode-video.y4m")?;
     let mut command = Command::new("ffmpeg");
     command.args(["-y", "-loglevel", "error"]);
     if let Some(seconds) = seconds {
@@ -128,7 +128,7 @@ pub fn extract_audio(input: &str, seconds: Option<&str>) -> Result<Option<AudioD
     if !has_audio(input) {
         return Ok(None);
     }
-    let temp = TempPath::new("encode-audio.s16");
+    let temp = TempPath::new("encode-audio.s16")?;
     let mut command = Command::new("ffmpeg");
     command.args(["-y", "-loglevel", "error"]);
     if let Some(seconds) = seconds {
@@ -161,8 +161,8 @@ pub fn write_media(media: &DecodedMedia, output: &str) -> Result<()> {
             "container has no decodable media streams",
         ));
     }
-    let video_temp = TempPath::new("decode-video.y4m");
-    let audio_temp = TempPath::new("decode-audio.s16");
+    let video_temp = TempPath::new("decode-video.y4m")?;
+    let audio_temp = TempPath::new("decode-audio.s16")?;
     if let Some(video) = &media.video {
         fs::write(video_temp.path(), y4m::emit(video))
             .map_err(|e| CliError::io(format!("write {}", video_temp.path().display()), e))?;

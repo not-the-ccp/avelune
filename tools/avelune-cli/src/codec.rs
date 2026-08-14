@@ -33,18 +33,15 @@ pub struct VerifySummary {
 }
 
 pub fn video_options(qstep: u16, preset: EncoderPreset) -> VideoOptions {
-    let (motion_radius, max_refs) = match preset {
-        EncoderPreset::Fast => (2, 1),
-        EncoderPreset::Balanced => (4, 1),
-        EncoderPreset::Quality => (5, 4),
-    };
-    VideoOptions {
-        qstep,
-        motion_radius,
-        max_refs,
-        preset,
-        allow_palette: true,
-    }
+    VideoOptions::for_preset(qstep, preset)
+}
+
+fn duration_u32(value: u64, what: &str) -> Result<u32> {
+    u32::try_from(value).map_err(|_| {
+        CliError::message(format!(
+            "{what} cannot be represented by the Draft Gen 1 microsecond timebase"
+        ))
+    })
 }
 
 fn scene_cut(a: &Frame420, b: &Frame420) -> bool {
@@ -72,8 +69,30 @@ pub fn encode_av(
     if y4m.frames.is_empty() {
         return Err(CliError::message("input contains no video frames"));
     }
+    if let Some((samples, channels, rate)) = audio_input {
+        if rate == 0 {
+            return Err(CliError::message("audio sample rate must be > 0"));
+        }
+        if channels == 0 || channels > 8 {
+            return Err(CliError::message("audio channel count must be in 1..=8"));
+        }
+        if !samples.len().is_multiple_of(channels as usize) {
+            return Err(CliError::message(
+                "audio samples are not aligned to the channel count",
+            ));
+        }
+    }
     let video_options = video_options(video_q, preset);
-    let frame_us = (1_000_000u64 * u64::from(y4m.fps_d)) / u64::from(y4m.fps_n);
+    let frame_us = 1_000_000u64
+        .checked_mul(u64::from(y4m.fps_d))
+        .ok_or_else(|| CliError::message("frame duration overflow"))?
+        / u64::from(y4m.fps_n);
+    let frame_duration = duration_u32(frame_us, "frame duration")?;
+    if frame_duration == 0 {
+        return Err(CliError::message(
+            "frame rate cannot be represented by the Draft Gen 1 microsecond timebase",
+        ));
+    }
     let mut starts = vec![0usize];
     for i in 1..y4m.frames.len() {
         if (i % epoch_frames == 0 || scene_cut(&y4m.frames[i - 1], &y4m.frames[i]))
@@ -85,6 +104,8 @@ pub fn encode_av(
     starts.push(y4m.frames.len());
     let mut epochs = Vec::new();
     for epoch_index in 0..starts.len() - 1 {
+        let epoch_id = u32::try_from(epoch_index)
+            .map_err(|_| CliError::message("too many epochs for Draft Gen 1"))?;
         let start = starts[epoch_index];
         let end = starts[epoch_index + 1];
         if start == end {
@@ -98,8 +119,8 @@ pub fn encode_av(
             flags: 0,
             stream_id: 0,
             pts,
-            duration: (end_pts - pts) as u32,
-            payload: (epoch_index as u32).to_le_bytes().to_vec(),
+            duration: duration_u32(end_pts - pts, "epoch duration")?,
+            payload: epoch_id.to_le_bytes().to_vec(),
         });
         let mut encoder = VideoEncoder::new(video_options);
         for i in start..end {
@@ -109,17 +130,12 @@ pub fn encode_av(
                 flags: 0,
                 stream_id: 1,
                 pts: i as u64 * frame_us,
-                duration: frame_us as u32,
+                duration: frame_duration,
                 payload: encoded.packet,
             });
         }
         if let Some((samples, channels, rate)) = audio_input {
             let ch = channels as usize;
-            if ch == 0 || samples.len() % ch != 0 {
-                return Err(CliError::message(
-                    "audio samples are not aligned to the channel count",
-                ));
-            }
             let total_frames = samples.len() / ch;
             let start_af = ((pts * u64::from(rate)) / 1_000_000) as usize;
             let end_af =
@@ -142,7 +158,10 @@ pub fn encode_av(
                     flags: 0,
                     stream_id: 2,
                     pts: audio_pts,
-                    duration: (n as u64 * 1_000_000 / u64::from(rate)) as u32,
+                    duration: duration_u32(
+                        n as u64 * 1_000_000 / u64::from(rate),
+                        "audio packet duration",
+                    )?,
                     payload: coded,
                 });
                 af += n;
@@ -166,7 +185,12 @@ pub fn encode_av(
         for packet in packets {
             container::encode_packet_checked(&packet, &mut bytes)?;
         }
-        epochs.push((epoch_index as u32, pts, (end_pts - pts) as u32, bytes));
+        epochs.push((
+            epoch_id,
+            pts,
+            duration_u32(end_pts - pts, "epoch duration")?,
+            bytes,
+        ));
     }
     let mut streams = vec![StreamDesc {
         id: 1,
@@ -200,10 +224,13 @@ pub fn encode_audio_only(
     qstep: u16,
     epoch_seconds: usize,
 ) -> Result<Vec<u8>> {
-    if channels == 0 || !samples.len().is_multiple_of(channels as usize) {
+    if channels == 0 || channels > 8 || !samples.len().is_multiple_of(channels as usize) {
         return Err(CliError::message(
-            "audio samples are not aligned to channels",
+            "audio samples are not aligned to a channel count in 1..=8",
         ));
+    }
+    if rate == 0 {
+        return Err(CliError::message("audio sample rate must be > 0"));
     }
     if epoch_seconds == 0 {
         return Err(CliError::message("epoch length must be > 0"));
@@ -226,7 +253,7 @@ pub fn encode_audio_only(
                 flags: 0,
                 stream_id: 0,
                 pts,
-                duration: (end_pts - pts) as u32,
+                duration: duration_u32(end_pts - pts, "epoch duration")?,
                 payload: epoch_id.to_le_bytes().to_vec(),
             },
             &mut bytes,
@@ -251,14 +278,22 @@ pub fn encode_audio_only(
                     flags: 0,
                     stream_id: 2,
                     pts: frame as u64 * 1_000_000 / u64::from(rate),
-                    duration: (n as u64 * 1_000_000 / u64::from(rate)) as u32,
+                    duration: duration_u32(
+                        n as u64 * 1_000_000 / u64::from(rate),
+                        "audio packet duration",
+                    )?,
                     payload,
                 },
                 &mut bytes,
             )?;
             frame += n;
         }
-        epochs.push((epoch_id, pts, (end_pts - pts) as u32, bytes));
+        epochs.push((
+            epoch_id,
+            pts,
+            duration_u32(end_pts - pts, "epoch duration")?,
+            bytes,
+        ));
         start = end;
         epoch_id += 1;
     }
@@ -334,11 +369,22 @@ pub fn decode(bytes: &[u8]) -> Result<DecodedMedia> {
             frames: video_frames,
         }
     });
-    let audio = audio_desc.map(|s| AudioData {
-        rate: s.param0,
-        channels: s.param1 as u8,
-        samples: audio_samples,
-    });
+    let audio = match audio_desc {
+        Some(s) => {
+            let channels = u8::try_from(s.param1)
+                .ok()
+                .filter(|channels| (1..=8).contains(channels))
+                .ok_or_else(|| {
+                    CliError::message("audio stream declares an invalid channel count")
+                })?;
+            Some(AudioData {
+                rate: s.param0,
+                channels,
+                samples: audio_samples,
+            })
+        }
+        None => None,
+    };
     Ok(DecodedMedia { video, audio })
 }
 

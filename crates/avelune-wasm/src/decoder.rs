@@ -122,7 +122,7 @@ fn with_state<R>(handle: u32, f: impl FnOnce(&mut DecoderState) -> R) -> Option<
 /// ABI version as `0xMMMM_mmmm`.
 #[unsafe(no_mangle)]
 pub extern "C" fn avelune_abi_version() -> u32 {
-    0x0001_0000
+    0x0002_0000
 }
 
 /// Fixed Draft Generation 1 container header length used for the first range request.

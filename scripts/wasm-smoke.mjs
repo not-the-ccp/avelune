@@ -4,7 +4,7 @@ const wasmPath = process.argv[2] ?? 'web/player/avelune-scalar.wasm';
 const mediaPath = process.argv[3] ?? 'web/player/demo.avl';
 const {instance} = await WebAssembly.instantiate(fs.readFileSync(wasmPath), {});
 const ex = instance.exports;
-if (ex.avelune_abi_version() !== 0x0001_0000) throw Error(`unexpected ABI ${ex.avelune_abi_version()}`);
+if (ex.avelune_abi_version() !== 0x0002_0000) throw Error(`unexpected ABI ${ex.avelune_abi_version()}`);
 const handle = ex.decoder_create();
 if (!handle) throw Error('decoder_create failed');
 

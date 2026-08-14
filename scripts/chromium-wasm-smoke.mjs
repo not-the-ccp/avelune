@@ -98,7 +98,7 @@ function browserProgram(wasmBytes) {
       half.push([String(gotP),String(gotS)]);
     }
     const abi=ex.avelune_abi_version();
-    if(abi!==0x00010000) throw Error('unexpected ABI '+abi);
+    if(abi!==0x00020000) throw Error('unexpected ABI '+abi);
     if(ex.decoder_destroy(h)!==0) throw Error('decoder_destroy failed');
     if(video!==60||audio!==100) throw Error('unexpected decoded counts '+video+'/'+audio);
 

@@ -5,7 +5,9 @@ The source is entirely procedural and contains no third-party media. The encoded
 by the canonical CLI with q=96 / balanced so changes are reviewable with --check.
 """
 from __future__ import annotations
-import argparse, subprocess, tempfile
+import argparse
+import subprocess
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,8 +53,10 @@ def write_y4m(path: Path, kind: str) -> None:
                     x0, y0, x1, y1 = max(0, x0), max(0, y0), min(W, x1), min(H, y1)
                     for row in range(y0, y1):
                         y[row * W + x0:row * W + x1] = bytes([value]) * (x1 - x0)
-                rect(0, 0, W, 9, 50); rect(0, 9, 30, H, 194)
-                rect(32, 11, 158, 61, 242); rect(32, 63, 158, 88, 42)
+                rect(0, 0, W, 9, 50)
+                rect(0, 9, 30, H, 194)
+                rect(32, 11, 158, 61, 242)
+                rect(32, 63, 158, 88, 42)
                 for cx, value in ((7, 170), (14, 205), (21, 120)):
                     rect(cx - 2, 3, cx + 2, 7, value)
                 for row in range(15, 82, 8):
@@ -75,7 +79,10 @@ def write_y4m(path: Path, kind: str) -> None:
                             u[yy * cw + xx], v[yy * cw + xx] = 174, 105
             else:
                 raise ValueError(kind)
-            f.write(b'FRAME\n'); f.write(y); f.write(u); f.write(v)
+            f.write(b'FRAME\n')
+            f.write(y)
+            f.write(u)
+            f.write(v)
 
 def encode(cli: Path, source: Path, output: Path) -> None:
     subprocess.run(

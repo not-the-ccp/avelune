@@ -1,6 +1,6 @@
 //! Deterministic content-family scenarios that random property generation is unlikely to hit reliably.
-use avelune::video::v1 as p;
-use avelune_reference::video_decoder as r;
+use avelune::video::v1 as video;
+use avelune_reference::video_decoder as ref_decoder;
 
 #[derive(Clone, Copy)]
 enum Kind {
@@ -18,7 +18,7 @@ enum Kind {
     Impulse,
 }
 
-fn make(kind: Kind, t: usize, w: u32, h: u32) -> p::Frame420 {
+fn make(kind: Kind, t: usize, w: u32, h: u32) -> video::Frame420 {
     let (wu, hu) = (w as usize, h as usize);
     let mut y = vec![0u8; wu * hu];
     let mut u = vec![128u8; wu * hu / 4];
@@ -83,9 +83,9 @@ fn make(kind: Kind, t: usize, w: u32, h: u32) -> p::Frame420 {
             }
         }
     }
-    p::Frame420::from_planes(w, h, y, u, vv).unwrap()
+    video::Frame420::from_planes(w, h, y, u, vv).unwrap()
 }
-fn assert_r(g: &p::Frame420, x: &r::Frame420) {
+fn assert_reference(g: &video::Frame420, x: &ref_decoder::Frame420) {
     assert_eq!(g.y(), x.y);
     assert_eq!(g.u(), x.u);
     assert_eq!(g.v(), x.v);
@@ -112,23 +112,23 @@ fn deterministic_content_families_cross_decode() {
             for &(w, h) in &[(34u32, 26u32), (18, 10)] {
                 for t in 0..6usize {
                     let src = make(kind, t, w, h);
-                    let e = p::encode(
+                    let e = video::encode(
                         (ki * 100 + t) as u64 + 1,
                         &src,
                         &[],
-                        p::EncodeOptions {
+                        video::EncodeOptions {
                             qstep: q,
                             motion_radius: 3,
                             max_refs: 0,
-                            preset: p::EncoderPreset::Balanced,
+                            preset: video::EncoderPreset::Balanced,
                             allow_palette: true,
                         },
                     )
                     .unwrap();
-                    let (_, pd, _) = p::decode(&e.packet, &[]).unwrap();
-                    let (_, rd, _) = r::decode(&e.packet, &[]).unwrap();
+                    let (_, pd, _) = video::decode(&e.packet, &[]).unwrap();
+                    let (_, rd, _) = ref_decoder::decode(&e.packet, &[]).unwrap();
                     assert_eq!(pd, e.reconstructed);
-                    assert_r(&pd, &rd);
+                    assert_reference(&pd, &rd);
                     if q == 1 {
                         assert_eq!(pd, src);
                     }
@@ -142,11 +142,11 @@ fn deterministic_content_families_cross_decode() {
 fn extreme_aspect_and_partial_shapes_remain_lossless() {
     for &(w, h) in &[(2u32, 8192u32), (8192, 2), (2, 2), (18, 10), (66, 34)] {
         let src = make(Kind::Gradient, 2, w, h);
-        let e = p::encode(
+        let e = video::encode(
             99,
             &src,
             &[],
-            p::EncodeOptions {
+            video::EncodeOptions {
                 qstep: 1,
                 motion_radius: 0,
                 max_refs: 0,
@@ -154,7 +154,7 @@ fn extreme_aspect_and_partial_shapes_remain_lossless() {
             },
         )
         .unwrap();
-        let (_, got, _) = p::decode(&e.packet, &[]).unwrap();
+        let (_, got, _) = video::decode(&e.packet, &[]).unwrap();
         assert_eq!(got, src);
     }
 }

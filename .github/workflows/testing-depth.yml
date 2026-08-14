@@ -50,7 +50,7 @@ jobs:
           RUSTFLAGS: -Zsanitizer=${{ matrix.sanitizer }}
           RUSTDOCFLAGS: -Zsanitizer=${{ matrix.sanitizer }}
         run: |
-          cargo +nightly test -Zbuild-std --target x86_64-unknown-linux-gnu -p avelune-kernels -p avelune --release --tests
+          cargo +nightly test -Zbuild-std --target x86_64-unknown-linux-gnu -p avelune-kernels -p avelune --release --tests --locked
 
   i686-compile:
     runs-on: ubuntu-latest
@@ -68,7 +68,7 @@ jobs:
       - name: Install coverage tool
         run: cargo install cargo-llvm-cov --locked
       - name: Coverage inventory (diagnostic, not a percentage gate)
-        run: cargo llvm-cov -p avelune -p avelune-kernels --all-targets --lcov --output-path results/canonical.lcov
+        run: cargo llvm-cov -p avelune -p avelune-kernels --all-targets --lcov --output-path results/canonical.lcov --locked
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: canonical-coverage

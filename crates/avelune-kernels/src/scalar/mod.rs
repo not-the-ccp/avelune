@@ -1,5 +1,7 @@
 //! Scalar semantic kernels.
-/// Sum of absolute byte differences.
+/// Sum of absolute byte differences over the common prefix of both slices.
+///
+/// If the inputs differ in length, samples beyond the shorter slice are ignored.
 #[inline]
 pub fn sad(a: &[u8], b: &[u8]) -> u64 {
     a.iter()
@@ -17,11 +19,33 @@ pub fn sad_block(
     width: usize,
     height: usize,
 ) -> u64 {
+    fn footprint_valid(len: usize, stride: usize, width: usize, height: usize) -> bool {
+        if height == 0 {
+            return true;
+        }
+        if stride < width {
+            return false;
+        }
+        let Some(last_row) = (height - 1).checked_mul(stride) else {
+            return false;
+        };
+        let Some(need) = last_row.checked_add(width) else {
+            return false;
+        };
+        need <= len
+    }
+
+    if !footprint_valid(a.len(), a_stride, width, height)
+        || !footprint_valid(b.len(), b_stride, width, height)
+    {
+        return 0;
+    }
+
     let mut sum = 0_u64;
     for y in 0..height {
-        let aa = &a[y * a_stride..y * a_stride + width];
-        let bb = &b[y * b_stride..y * b_stride + width];
-        sum += sad(aa, bb);
+        let a_start = y * a_stride;
+        let b_start = y * b_stride;
+        sum += sad(&a[a_start..a_start + width], &b[b_start..b_start + width]);
     }
     sum
 }

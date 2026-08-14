@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 const wasmPath = process.argv[2] ?? 'web/player/avelune-scalar.wasm';
 const {instance} = await WebAssembly.instantiate(fs.readFileSync(wasmPath), {});
 const ex = instance.exports;
-if (ex.avelune_abi_version() !== 0x0001_0000) throw Error(`unexpected ABI ${ex.avelune_abi_version()}`);
+if (ex.avelune_abi_version() !== 0x0002_0000) throw Error(`unexpected ABI ${ex.avelune_abi_version()}`);
 
 function encoderError(handle) {
   const ptr = ex.video_encoder_last_error_ptr(handle), len = ex.video_encoder_last_error_len(handle);
@@ -14,6 +14,13 @@ function decoderError(handle) {
   const ptr = ex.decoder_last_error_ptr(handle), len = ex.decoder_last_error_len(handle);
   return len ? new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, len)) : 'unknown decoder error';
 }
+
+const badEncoder=ex.video_encoder_create(31,24,(30<<16)|1,96,1,4,2<<13);
+if (badEncoder) throw Error('invalid encoder configuration was accepted');
+const createErrorLen=ex.video_encoder_create_error_len();
+const createErrorPtr=ex.video_encoder_create_error_ptr();
+const createError=createErrorLen ? new TextDecoder().decode(new Uint8Array(ex.memory.buffer,createErrorPtr,createErrorLen)) : '';
+if (!createError.includes('dimensions')) throw Error(`missing canonical create error: ${createError}`);
 
 const width=32, height=24, frames=9;
 const encoder=ex.video_encoder_create(width,height,(30<<16)|1,96,1,4,2<<13);

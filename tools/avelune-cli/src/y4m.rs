@@ -47,18 +47,16 @@ pub fn parse(bytes: &[u8]) -> Result<Y4m> {
                 .map_err(|_| CliError::message("bad Y4M fps"))?;
         } else if let Some(x) = token.strip_prefix('C') {
             chroma = x;
-            meta.chroma = if x.starts_with("420mpeg2") {
-                ChromaLocation::Left
-            } else if x.starts_with("420jpeg") || x.starts_with("420paldv") {
-                ChromaLocation::Center
-            } else {
-                ChromaLocation::Unspecified
+            meta.chroma = match x {
+                "420mpeg2" => ChromaLocation::Left,
+                "420jpeg" => ChromaLocation::Center,
+                _ => ChromaLocation::Unspecified,
             };
         } else if let Some(x) = token.strip_prefix("XCOLORRANGE=") {
             meta.full_range = x.eq_ignore_ascii_case("FULL");
         }
     }
-    if !chroma.starts_with("420") {
+    if !matches!(chroma, "420" | "420jpeg" | "420mpeg2") {
         return Err(CliError::message(format!(
             "Draft Gen 1 baseline requires 8-bit 4:2:0 Y4M, got C{chroma}"
         )));
@@ -72,6 +70,11 @@ pub fn parse(bytes: &[u8]) -> Result<Y4m> {
     }
     if fps_n == 0 || fps_d == 0 {
         return Err(CliError::message("Y4M frame rate must be non-zero"));
+    }
+    if fps_n > u16::MAX.into() || fps_d > u16::MAX.into() {
+        return Err(CliError::message(
+            "Y4M frame-rate numerator/denominator must fit the Draft Gen 1 16-bit fields",
+        ));
     }
     let y = (w as usize)
         .checked_mul(h as usize)
@@ -115,10 +118,9 @@ pub fn parse(bytes: &[u8]) -> Result<Y4m> {
 
 pub fn emit(y4m: &Y4m) -> Vec<u8> {
     let meta = VideoMeta::unpack(y4m.meta0).unwrap_or_default();
-    let chroma = if meta.chroma == ChromaLocation::Left {
-        "420mpeg2"
-    } else {
-        "420jpeg"
+    let chroma = match meta.chroma {
+        ChromaLocation::Left => "420mpeg2",
+        ChromaLocation::Center | ChromaLocation::Unspecified => "420jpeg",
     };
     let range = if meta.full_range { "FULL" } else { "LIMITED" };
     let mut out = format!(
@@ -136,8 +138,32 @@ pub fn emit(y4m: &Y4m) -> Vec<u8> {
 }
 
 pub fn fps_flags(n: u32, d: u32) -> u32 {
-    (n.min(65535) << 16) | d.min(65535)
+    debug_assert!(n <= u16::MAX.into() && d <= u16::MAX.into());
+    (n << 16) | d
 }
 pub fn fps_from_flags(flags: u32) -> (u32, u32) {
     ((flags >> 16).max(1), (flags & 65535).max(1))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_unrepresentable_y4m_profiles_and_frame_rates() {
+        for chroma in ["420p10", "420p12", "420p16", "420paldv"] {
+            let input = format!("YUV4MPEG2 W2 H2 F30:1 Ip A1:1 C{chroma}\n");
+            assert!(parse(input.as_bytes()).is_err(), "accepted C{chroma}");
+        }
+        assert!(parse(b"YUV4MPEG2 W2 H2 F65536:1 Ip A1:1 C420\n").is_err());
+        assert!(parse(b"YUV4MPEG2 W2 H2 F1:65536 Ip A1:1 C420\n").is_err());
+    }
+
+    #[test]
+    fn accepts_representable_8_bit_420_locations() {
+        for chroma in ["420", "420jpeg", "420mpeg2"] {
+            let input = format!("YUV4MPEG2 W2 H2 F30:1 Ip A1:1 C{chroma}\n");
+            assert!(parse(input.as_bytes()).is_ok(), "rejected C{chroma}");
+        }
+    }
 }

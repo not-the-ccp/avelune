@@ -182,8 +182,27 @@ pub fn decode_front(b: &[u8], expected_streams: u16) -> Result<Front, ContainerE
     Ok(Front { streams, epochs })
 }
 
-pub(super) fn packet_stream<'a>(
+pub(super) type StreamIndex = std::collections::HashMap<u16, usize>;
+const MAX_INDEXED_STREAMS: usize = u16::MAX as usize;
+
+pub(super) fn build_stream_index(streams: &[StreamDesc]) -> Result<StreamIndex, ContainerError> {
+    // The on-wire stream count is u16 and incremental parsing additionally bounds the complete
+    // front index by the configured stream-buffer ceiling.
+    if streams.len() > MAX_INDEXED_STREAMS {
+        return Err(ContainerError::ResourceLimit);
+    }
+    let mut index = StreamIndex::with_capacity(streams.len());
+    for (position, stream) in streams.iter().enumerate() {
+        if index.insert(stream.id, position).is_some() {
+            return Err(ContainerError::BadFront);
+        }
+    }
+    Ok(index)
+}
+
+pub(super) fn packet_stream_indexed<'a>(
     front: &'a Front,
+    index: &StreamIndex,
     packet: PacketView<'_>,
 ) -> Result<Option<&'a StreamDesc>, ContainerError> {
     let expected_kind = match packet.kind {
@@ -192,11 +211,13 @@ pub(super) fn packet_stream<'a>(
         PacketKind::EpochStart | PacketKind::Metadata => None,
     };
     if let Some(expected) = expected_kind {
+        let position = *index
+            .get(&packet.stream_id)
+            .ok_or(ContainerError::BadStream)?;
         let stream = front
             .streams
-            .iter()
-            .find(|stream| stream.id == packet.stream_id)
-            .ok_or(ContainerError::BadStream)?;
+            .get(position)
+            .ok_or(ContainerError::BadFront)?;
         if stream.kind != expected {
             return Err(ContainerError::BadStream);
         }
@@ -204,10 +225,6 @@ pub(super) fn packet_stream<'a>(
     } else {
         Ok(None)
     }
-}
-
-fn validate_packet_stream(front: &Front, packet: PacketView<'_>) -> Result<(), ContainerError> {
-    packet_stream(front, packet).map(|_| ())
 }
 
 /// Appends one framed, checksummed packet after validating fields that cannot be represented
@@ -277,14 +294,18 @@ pub fn validate_epoch_ranges(epochs: &[(u32, u64, u32, Vec<u8>)]) -> Result<(), 
         let mut pos = 0usize;
         let mut first = true;
         while pos < bytes.len() {
-            let (packet, used) = decode_packet(&bytes[pos..], DEFAULT_MAX_PACKET)?;
+            let (packet, used) = decode_packet_view_with(
+                &bytes[pos..],
+                DEFAULT_MAX_PACKET,
+                avelune_kernels::KernelSet::auto(),
+            )?;
             if used == 0 {
                 return Err(ContainerError::BadEpoch);
             }
             if first {
                 if packet.kind != PacketKind::EpochStart
                     || packet.payload.len() != 4
-                    || u32::from_le_bytes(packet.payload.as_slice().try_into().unwrap()) != *id
+                    || u32::from_le_bytes(packet.payload.try_into().unwrap()) != *id
                 {
                     return Err(ContainerError::BadEpoch);
                 }
@@ -305,12 +326,7 @@ fn validate_mux_streams(
     streams: &[StreamDesc],
     epochs: &[(u32, u64, u32, Vec<u8>)],
 ) -> Result<(), ContainerError> {
-    let mut ids = std::collections::BTreeSet::new();
-    for stream in streams {
-        if !ids.insert(stream.id) {
-            return Err(ContainerError::BadFront);
-        }
-    }
+    let stream_index = build_stream_index(streams)?;
     let front = Front {
         streams: streams.to_vec(),
         epochs: Vec::new(),
@@ -323,7 +339,7 @@ fn validate_mux_streams(
                 DEFAULT_MAX_PACKET,
                 avelune_kernels::KernelSet::auto(),
             )?;
-            validate_packet_stream(&front, packet)?;
+            packet_stream_indexed(&front, &stream_index, packet)?;
             pos = pos.checked_add(used).ok_or(ContainerError::BadEpoch)?;
         }
     }

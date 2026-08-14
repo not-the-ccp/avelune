@@ -143,7 +143,10 @@ struct CompletionsArgs {
 }
 
 fn default_epoch_frames(video: &y4m::Y4m) -> usize {
-    ((video.fps_n / video.fps_d.max(1)) * 2).max(1) as usize
+    let fps = u64::from(video.fps_n / video.fps_d.max(1));
+    usize::try_from(fps.saturating_mul(2))
+        .unwrap_or(usize::MAX)
+        .max(1)
 }
 
 fn encode_media(args: MediaEncodeArgs) -> Result<()> {
@@ -202,7 +205,7 @@ fn play(input: &str) -> Result<()> {
     eprintln!(
         "note: `avelune play` is a convenience transcode path; the browser player is the indexed low-latency integration"
     );
-    let temp = io_util::TempPath::new("play.mkv");
+    let temp = io_util::TempPath::new("play.mkv")?;
     let path = temp.path().to_string_lossy().into_owned();
     decode_media(input, &path)?;
     let mut command = ProcessCommand::new("ffplay");

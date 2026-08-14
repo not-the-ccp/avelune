@@ -49,6 +49,28 @@ impl Frame420 {
         })
     }
 
+    /// Adopts one tightly packed Y/U/V allocation.
+    pub fn from_tightly_packed(width: u32, height: u32, data: Vec<u8>) -> Result<Self, VideoError> {
+        let (y_len, c_len) = sizes(width, height)?;
+        let expected = y_len
+            .checked_add(c_len.checked_mul(2).ok_or(VideoError::PlaneLength)?)
+            .ok_or(VideoError::PlaneLength)?;
+        if data.len() != expected {
+            return Err(VideoError::PlaneLength);
+        }
+        let storage = crate::buffer::OwnedFrame420::from_tightly_packed_data(
+            width as usize,
+            height as usize,
+            data,
+        )
+        .ok_or(VideoError::PlaneLength)?;
+        Ok(Self {
+            width,
+            height,
+            storage,
+        })
+    }
+
     /// Adopts three tightly packed planes into one allocation.
     pub fn from_planes(
         width: u32,
@@ -101,6 +123,11 @@ impl Frame420 {
     pub fn v_mut(&mut self) -> &mut [u8] {
         self.storage.v_mut()
     }
+
+    /// Returns the tightly packed Y/U/V backing allocation.
+    pub fn into_tightly_packed(self) -> Vec<u8> {
+        self.storage.into_data()
+    }
     /// Explicit-stride immutable frame view for bulk kernels/embedders.
     pub fn view(&self) -> crate::buffer::Frame420View<'_> {
         self.storage.view()
@@ -148,6 +175,24 @@ pub struct EncodeOptions {
     /// Whether exact small-palette blocks may be considered.
     pub allow_palette: bool,
 }
+impl EncodeOptions {
+    /// Builds the standard search configuration for one preset and caller-selected quantizer.
+    pub fn for_preset(qstep: u16, preset: EncoderPreset) -> Self {
+        let (motion_radius, max_refs) = match preset {
+            EncoderPreset::Fast => (2, 1),
+            EncoderPreset::Balanced => (4, 1),
+            EncoderPreset::Quality => (5, 4),
+        };
+        Self {
+            qstep,
+            motion_radius,
+            max_refs,
+            preset,
+            allow_palette: true,
+        }
+    }
+}
+
 impl Default for EncodeOptions {
     fn default() -> Self {
         Self {
@@ -183,18 +228,31 @@ pub struct SharedEncodedFrame {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Errors from ALV1 frame validation, encoding, or decoding.
 pub enum VideoError {
+    /// Frame dimensions are zero, odd for 4:2:0, overflow addressable storage, or exceed limits.
     BadDimensions,
+    /// One or more Y/U/V planes do not have the exact length implied by the frame dimensions.
     PlaneLength,
+    /// An ALV1 packet ended before all required syntax could be read.
     UnexpectedEof,
+    /// The ALV1 frame header, reserved fields, IDs, or other header-level invariants are invalid.
     BadHeader,
+    /// A block uses an unknown or invalid prediction/encoding mode.
     BadMode,
+    /// The encoded quantizer is outside the Draft Generation 1 valid range.
     BadQuantizer,
+    /// A referenced frame ID is not present in the decoder's current epoch history.
     ReferenceMissing(u64),
+    /// A supplied/reference frame has dimensions incompatible with the frame being processed.
     ReferenceShape,
+    /// Entropy/varint syntax failed while parsing or writing the ALV1 bitstream.
     Bitstream(BitstreamError),
+    /// Transform coefficient syntax is malformed or outside defensive numeric bounds.
     BadCoefficient,
+    /// Palette-block syntax is malformed or contains invalid palette/index data.
     BadPalette,
+    /// A complete ALV1 packet contains bytes after the expected syntax.
     TrailingData,
+    /// Decoding would exceed a configured frame/entropy output ceiling.
     OutputTooLarge,
 }
 impl From<BitstreamError> for VideoError {
@@ -265,6 +323,7 @@ pub struct VideoDecoder {
     scheduler: crate::scheduler::Scheduler,
     max_frame_pixels: u64,
     max_entropy_bytes: usize,
+    expected_dimensions: Option<(u32, u32)>,
     entropy: [PlaneEntropyScratch; 3],
     frame_pool: Vec<Frame420>,
 }
@@ -283,6 +342,7 @@ impl VideoDecoder {
             scheduler: crate::scheduler::Scheduler::new(crate::config::ThreadPolicy::Auto),
             max_frame_pixels: crate::limits::Limits::default().max_frame_pixels,
             max_entropy_bytes: crate::limits::Limits::default().max_entropy_bytes,
+            expected_dimensions: None,
             entropy: std::array::from_fn(|_| PlaneEntropyScratch::default()),
             frame_pool: Vec::with_capacity(4),
         }
@@ -298,10 +358,23 @@ impl VideoDecoder {
             scheduler: crate::scheduler::Scheduler::new(config.threads),
             max_frame_pixels: config.limits.max_frame_pixels,
             max_entropy_bytes: config.limits.max_entropy_bytes,
+            expected_dimensions: None,
             entropy: std::array::from_fn(|_| PlaneEntropyScratch::default()),
             frame_pool: Vec::with_capacity(4),
         })
     }
+    pub(crate) fn for_stream(
+        mut config: crate::config::Config,
+        width: u32,
+        height: u32,
+    ) -> Result<Self, crate::config::BackendUnavailable> {
+        let pixels = u64::from(width).saturating_mul(u64::from(height));
+        config.limits.max_frame_pixels = config.limits.max_frame_pixels.min(pixels);
+        let mut decoder = Self::with_config(config)?;
+        decoder.expected_dimensions = Some((width, height));
+        Ok(decoder)
+    }
+
     /// Drops all reference pictures, as required at an epoch boundary or seek reset.
     pub fn reset_epoch(&mut self) {
         while let Some((_, frame)) = self.references.pop_front() {
@@ -344,6 +417,7 @@ impl VideoDecoder {
             Some(&mut self.frame_pool),
             self.max_frame_pixels,
             self.max_entropy_bytes,
+            self.expected_dimensions,
         )?;
         if self.references.iter().any(|(rid, _)| *rid == id) {
             return Err(VideoError::BadHeader);

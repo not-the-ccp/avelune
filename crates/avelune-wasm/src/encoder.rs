@@ -78,18 +78,7 @@ impl VideoEncoderState {
                 "frame rate cannot be represented by the Draft Gen 1 microsecond timebase".into(),
             );
         }
-        let (motion_radius, max_refs) = match preset {
-            EncoderPreset::Fast => (2, 1),
-            EncoderPreset::Balanced => (4, 1),
-            EncoderPreset::Quality => (5, 4),
-        };
-        let options = EncodeOptions {
-            qstep,
-            motion_radius,
-            max_refs,
-            preset,
-            allow_palette: true,
-        };
+        let options = EncodeOptions::for_preset(qstep, preset);
         let y =
             usize::try_from(pixels).map_err(|_| "frame size exceeds address space".to_string())?;
         let frame_bytes = y
@@ -129,22 +118,13 @@ impl VideoEncoderState {
         if self.frame_index - self.epoch_start_frame >= self.epoch_frames {
             self.finish_epoch()?;
         }
-        let y_len = usize::try_from(u64::from(self.width) * u64::from(self.height))
-            .map_err(|_| "frame size exceeds address space".to_string())?;
-        let c_len = y_len / 4;
-        let frame = Frame420::from_planes(
-            self.width,
-            self.height,
-            self.input[..y_len].to_vec(),
-            self.input[y_len..y_len + c_len].to_vec(),
-            self.input[y_len + c_len..].to_vec(),
-        )
-        .map_err(|e| e.to_string())?;
-        let frame_id = self.frame_index;
-        let encoded = self
-            .encoder
-            .encode_shared(frame_id, &frame)
+        let input = std::mem::take(&mut self.input);
+        let frame = Frame420::from_tightly_packed(self.width, self.height, input)
             .map_err(|e| e.to_string())?;
+        let frame_id = self.frame_index;
+        let encoded = self.encoder.encode_shared(frame_id, &frame);
+        self.input = frame.into_tightly_packed();
+        let encoded = encoded.map_err(|e| e.to_string())?;
         let pts = frame_id
             .checked_mul(self.frame_us)
             .ok_or_else(|| "frame timestamp overflow".to_string())?;
@@ -239,6 +219,12 @@ impl VideoEncoderState {
 
 thread_local! {
     static ENCODERS: RefCell<Vec<Option<VideoEncoderState>>> = const { RefCell::new(Vec::new()) };
+    static CREATE_ERROR: RefCell<String> = const { RefCell::new(String::new()) };
+}
+
+fn fail_create(message: impl Into<String>) -> u32 {
+    CREATE_ERROR.with(|error| *error.borrow_mut() = message.into());
+    0
 }
 
 fn with_encoder<R>(handle: u32, default: R, f: impl FnOnce(&mut VideoEncoderState) -> R) -> R {
@@ -266,16 +252,18 @@ pub extern "C" fn video_encoder_create(
     epoch_frames: u32,
     meta0: u32,
 ) -> u32 {
+    CREATE_ERROR.with(|error| error.borrow_mut().clear());
     let preset = match preset {
         0 => EncoderPreset::Fast,
         1 => EncoderPreset::Balanced,
         2 => EncoderPreset::Quality,
-        _ => return 0,
+        _ => return fail_create("unknown encoder preset"),
     };
-    let Ok(qstep) = u16::try_from(qstep) else {
-        return 0;
+    let qstep = match u16::try_from(qstep) {
+        Ok(value) => value,
+        Err(_) => return fail_create("video quantizer step must fit u16"),
     };
-    let Ok(state) = VideoEncoderState::new(
+    let state = match VideoEncoderState::new(
         width,
         height,
         fps_flags,
@@ -283,8 +271,9 @@ pub extern "C" fn video_encoder_create(
         preset,
         u64::from(epoch_frames),
         meta0,
-    ) else {
-        return 0;
+    ) {
+        Ok(state) => state,
+        Err(error) => return fail_create(error),
     };
     ENCODERS.with(|encoders| {
         let mut encoders = encoders.borrow_mut();
@@ -302,6 +291,22 @@ pub extern "C" fn video_encoder_create(
     })
 }
 
+/// Returns the UTF-8 byte pointer for the most recent failed [`video_encoder_create`] call.
+/// Pair with [`video_encoder_create_error_len`]; a zero length means the pointer must not be read.
+/// The pointer remains valid only until another create attempt mutates this error or WebAssembly
+/// memory growth invalidates the caller's linear-memory view.
+#[unsafe(no_mangle)]
+pub extern "C" fn video_encoder_create_error_ptr() -> *const u8 {
+    CREATE_ERROR.with(|error| error.borrow().as_ptr())
+}
+
+/// Returns the UTF-8 byte length for the most recent failed [`video_encoder_create`] call.
+#[unsafe(no_mangle)]
+pub extern "C" fn video_encoder_create_error_len() -> u32 {
+    CREATE_ERROR.with(|error| error.borrow().len().try_into().unwrap_or(0))
+}
+
+/// Destroys an encoder handle. Returns `0` on success and `-1` for an invalid/already-destroyed handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn video_encoder_destroy(handle: u32) -> i32 {
     if handle == 0 {
@@ -316,6 +321,7 @@ pub extern "C" fn video_encoder_destroy(handle: u32) -> i32 {
     })
 }
 
+/// Returns the writable tightly packed Y/U/V staging-buffer length, or `0` for an invalid handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn video_encoder_frame_len(handle: u32) -> u32 {
     with_encoder(handle, 0, |encoder| {
@@ -323,6 +329,10 @@ pub extern "C" fn video_encoder_frame_len(handle: u32) -> u32 {
     })
 }
 
+/// Returns the writable frame staging-buffer pointer, or null for an invalid handle.
+///
+/// Pair this pointer with [`video_encoder_frame_len`]. Reacquire the pointer after any exported
+/// call that can allocate/grow WebAssembly memory before constructing a new JavaScript view.
 #[unsafe(no_mangle)]
 pub extern "C" fn video_encoder_frame_ptr(handle: u32) -> *mut u8 {
     with_encoder(handle, std::ptr::null_mut(), |encoder| {
@@ -330,6 +340,9 @@ pub extern "C" fn video_encoder_frame_ptr(handle: u32) -> *mut u8 {
     })
 }
 
+/// Encodes the frame currently stored in the staging buffer. Returns `0` on success and `-1` on
+/// failure; inspect [`video_encoder_last_error_ptr`] and [`video_encoder_last_error_len`] after a
+/// failure.
 #[unsafe(no_mangle)]
 pub extern "C" fn video_encoder_push_frame(handle: u32) -> i32 {
     with_encoder(handle, -1, |encoder| match encoder.push_frame() {
@@ -338,6 +351,8 @@ pub extern "C" fn video_encoder_push_frame(handle: u32) -> i32 {
     })
 }
 
+/// Finalizes the current epoch/container output. Returns `0` on success and `-1` on failure.
+/// Output pointers must be reacquired after this call because finalization may grow memory.
 #[unsafe(no_mangle)]
 pub extern "C" fn video_encoder_finish(handle: u32) -> i32 {
     with_encoder(handle, -1, |encoder| match encoder.finish() {
@@ -346,11 +361,16 @@ pub extern "C" fn video_encoder_finish(handle: u32) -> i32 {
     })
 }
 
+/// Returns the encoded output pointer, or null for an invalid handle.
+///
+/// Pair with [`video_encoder_output_len`]. The pointer is valid until a later encoder call mutates
+/// output or any WebAssembly memory growth invalidates the caller's linear-memory view.
 #[unsafe(no_mangle)]
 pub extern "C" fn video_encoder_output_ptr(handle: u32) -> *const u8 {
     with_encoder(handle, std::ptr::null(), |encoder| encoder.output.as_ptr())
 }
 
+/// Returns the current encoded output length, or `0` for an invalid handle/empty output.
 #[unsafe(no_mangle)]
 pub extern "C" fn video_encoder_output_len(handle: u32) -> u32 {
     with_encoder(handle, 0, |encoder| {
@@ -358,11 +378,17 @@ pub extern "C" fn video_encoder_output_len(handle: u32) -> u32 {
     })
 }
 
+/// Returns the current last-error UTF-8 byte pointer, or null for an invalid handle.
+///
+/// Read only when [`video_encoder_last_error_len`] is nonzero and pair the pointer with that exact
+/// length. Reacquire it after any later encoder call or WebAssembly memory growth.
 #[unsafe(no_mangle)]
 pub extern "C" fn video_encoder_last_error_ptr(handle: u32) -> *const u8 {
     with_encoder(handle, std::ptr::null(), |encoder| encoder.error.as_ptr())
 }
 
+/// Returns the current last-error UTF-8 byte length. A zero length means there is no readable
+/// last-error string and the corresponding pointer must not be dereferenced.
 #[unsafe(no_mangle)]
 pub extern "C" fn video_encoder_last_error_len(handle: u32) -> u32 {
     with_encoder(handle, 0, |encoder| {

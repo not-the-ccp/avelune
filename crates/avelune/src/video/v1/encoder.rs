@@ -413,80 +413,92 @@ fn encode_plane(
     (blocks, used)
 }
 
-fn serialize_blocks_single(blocks: &[BlockRec], remap: &[usize]) -> Vec<u8> {
-    let mut t = Vec::new();
-    for b in blocks {
-        match b {
-            BlockRec::Palette { colors, idx } => {
-                t.push(4);
-                t.push(colors.len() as u8);
-                t.extend(colors);
-                t.push(idx.len() as u8);
-                let mut p = 0u8;
-                let mut shift = 0;
-                for &v in idx {
-                    p |= (v & 3) << shift;
-                    shift += 2;
-                    if shift == 8 {
-                        t.push(p);
-                        p = 0;
-                        shift = 0
-                    }
-                }
-                if shift != 0 {
-                    t.push(p)
-                }
-            }
-            BlockRec::Residual {
-                mode,
-                ref_idx,
-                dx2,
-                dy2,
-                qcoeff,
-            } => {
-                t.push(*mode);
-                if *mode == 3 {
-                    t.push(remap[*ref_idx] as u8);
-                    put_svarint_i32(*dx2, &mut t);
-                    put_svarint_i32(*dy2, &mut t)
-                }
-                let nz = qcoeff.iter().filter(|&&v| v != 0).count();
-                put_uvarint(nz as u64, &mut t);
-                for (i, &v) in qcoeff.iter().enumerate() {
-                    if v != 0 {
-                        put_uvarint(i as u64, &mut t);
-                        put_svarint_i32(v, &mut t)
-                    }
-                }
-            }
-        }
-    }
-    t
+#[derive(Clone, Copy)]
+enum BlockLayout {
+    Single,
+    Split,
 }
 
-fn serialize_blocks_split(blocks: &[BlockRec], remap: &[usize]) -> (Vec<u8>, Vec<u8>) {
-    let mut control = Vec::with_capacity(blocks.len());
-    let mut data = Vec::new();
-    for b in blocks {
-        match b {
+enum SerializedBlocks {
+    Single(Vec<u8>),
+    Split { control: Vec<u8>, data: Vec<u8> },
+}
+
+struct BlockWriter {
+    layout: BlockLayout,
+    control: Vec<u8>,
+    data: Vec<u8>,
+}
+
+impl BlockWriter {
+    fn new(layout: BlockLayout, block_count: usize) -> Self {
+        Self {
+            layout,
+            control: if matches!(layout, BlockLayout::Split) {
+                Vec::with_capacity(block_count)
+            } else {
+                Vec::new()
+            },
+            data: Vec::new(),
+        }
+    }
+
+    fn mode(&mut self, value: u8) {
+        match self.layout {
+            BlockLayout::Single => self.data.push(value),
+            BlockLayout::Split => self.control.push(value),
+        }
+    }
+
+    fn data_u8(&mut self, value: u8) {
+        self.data.push(value);
+    }
+
+    fn data_extend(&mut self, bytes: &[u8]) {
+        self.data.extend_from_slice(bytes);
+    }
+
+    fn uvarint(&mut self, value: u64) {
+        put_uvarint(value, &mut self.data);
+    }
+
+    fn svarint_i32(&mut self, value: i32) {
+        put_svarint_i32(value, &mut self.data);
+    }
+
+    fn finish(self) -> SerializedBlocks {
+        match self.layout {
+            BlockLayout::Single => SerializedBlocks::Single(self.data),
+            BlockLayout::Split => SerializedBlocks::Split {
+                control: self.control,
+                data: self.data,
+            },
+        }
+    }
+}
+
+fn serialize_blocks(blocks: &[BlockRec], remap: &[usize], layout: BlockLayout) -> SerializedBlocks {
+    let mut out = BlockWriter::new(layout, blocks.len());
+    for block in blocks {
+        match block {
             BlockRec::Palette { colors, idx } => {
-                control.push(4);
-                data.push(colors.len() as u8);
-                data.extend(colors);
-                data.push(idx.len() as u8);
+                out.mode(4);
+                out.data_u8(colors.len() as u8);
+                out.data_extend(colors);
+                out.data_u8(idx.len() as u8);
                 let mut packed = 0u8;
                 let mut shift = 0;
-                for &v in idx {
-                    packed |= (v & 3) << shift;
+                for &value in idx {
+                    packed |= (value & 3) << shift;
                     shift += 2;
                     if shift == 8 {
-                        data.push(packed);
+                        out.data_u8(packed);
                         packed = 0;
                         shift = 0;
                     }
                 }
                 if shift != 0 {
-                    data.push(packed);
+                    out.data_u8(packed);
                 }
             }
             BlockRec::Residual {
@@ -496,24 +508,24 @@ fn serialize_blocks_split(blocks: &[BlockRec], remap: &[usize]) -> (Vec<u8>, Vec
                 dy2,
                 qcoeff,
             } => {
-                control.push(*mode);
+                out.mode(*mode);
                 if *mode == 3 {
-                    data.push(remap[*ref_idx] as u8);
-                    put_svarint_i32(*dx2, &mut data);
-                    put_svarint_i32(*dy2, &mut data);
+                    out.data_u8(remap[*ref_idx] as u8);
+                    out.svarint_i32(*dx2);
+                    out.svarint_i32(*dy2);
                 }
-                let nz = qcoeff.iter().filter(|&&v| v != 0).count();
-                put_uvarint(nz as u64, &mut data);
-                for (i, &v) in qcoeff.iter().enumerate() {
-                    if v != 0 {
-                        put_uvarint(i as u64, &mut data);
-                        put_svarint_i32(v, &mut data);
+                let nz = qcoeff.iter().filter(|&&value| value != 0).count();
+                out.uvarint(nz as u64);
+                for (i, &value) in qcoeff.iter().enumerate() {
+                    if value != 0 {
+                        out.uvarint(i as u64);
+                        out.svarint_i32(value);
                     }
                 }
             }
         }
     }
-    (control, data)
+    out.finish()
 }
 
 fn encode_one_plane(
@@ -604,9 +616,18 @@ pub(super) fn encode_with_threads(
                 let h0 = scope.spawn(|| encode_one_plane(0, frame, refs, opt, kernels, y));
                 let h1 = scope.spawn(|| encode_one_plane(1, frame, refs, opt, kernels, u));
                 let h2 = scope.spawn(|| encode_one_plane(2, frame, refs, opt, kernels, v));
-                let a = h0.join().map_err(|_| VideoError::BadHeader)?;
-                let b = h1.join().map_err(|_| VideoError::BadHeader)?;
-                let c = h2.join().map_err(|_| VideoError::BadHeader)?;
+                let a = match h0.join() {
+                    Ok(value) => value,
+                    Err(payload) => std::panic::resume_unwind(payload),
+                };
+                let b = match h1.join() {
+                    Ok(value) => value,
+                    Err(payload) => std::panic::resume_unwind(payload),
+                };
+                let c = match h2.join() {
+                    Ok(value) => value,
+                    Err(payload) => std::panic::resume_unwind(payload),
+                };
                 Ok::<_, VideoError>((a, b, c))
             })?
         }
@@ -646,8 +667,15 @@ pub(super) fn encode_with_threads(
         out.extend(id.to_le_bytes());
     }
     for (blocks, _) in &plane_results {
-        let single = entropy_compress(&serialize_blocks_single(blocks, &remap));
-        let (control, data) = serialize_blocks_split(blocks, &remap);
+        let single_raw = match serialize_blocks(blocks, &remap, BlockLayout::Single) {
+            SerializedBlocks::Single(bytes) => bytes,
+            SerializedBlocks::Split { .. } => unreachable!(),
+        };
+        let (control, data) = match serialize_blocks(blocks, &remap, BlockLayout::Split) {
+            SerializedBlocks::Split { control, data } => (control, data),
+            SerializedBlocks::Single(_) => unreachable!(),
+        };
+        let single = entropy_compress(&single_raw);
         let cc = entropy_compress(&control);
         let dc = entropy_compress(&data);
         if 4 + single.len() <= 8 + cc.len() + dc.len() {

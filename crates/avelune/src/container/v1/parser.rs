@@ -1,4 +1,6 @@
-use super::wire::{decode_front, decode_header, packet_stream};
+use super::wire::{
+    StreamIndex, build_stream_index, decode_front, decode_header, packet_stream_indexed,
+};
 use super::*;
 
 /// Borrowed view of one validated packet in a contiguous input range.
@@ -188,6 +190,7 @@ pub struct StreamParser {
     reserved_start: Option<usize>,
     header: Option<FileHeader>,
     front: Option<Front>,
+    stream_index: StreamIndex,
 }
 impl Default for StreamParser {
     fn default() -> Self {
@@ -219,6 +222,7 @@ impl StreamParser {
             reserved_start: None,
             header: None,
             front: None,
+            stream_index: StreamIndex::new(),
         }
     }
     fn unread_len(&self) -> usize {
@@ -290,6 +294,7 @@ impl StreamParser {
                 &self.buf[start + FIXED_HEADER_LEN..start + n],
                 h.stream_count,
             )?;
+            self.stream_index = build_stream_index(&front.streams)?;
             self.front = Some(front);
             self.cursor += n;
             self.prefix_done = true;
@@ -302,7 +307,7 @@ impl StreamParser {
             match decode_packet_view_with(&self.buf[start..], self.max_packet, self.kernels) {
                 Ok((view, n)) => {
                     let stream = if let Some(front) = &self.front {
-                        packet_stream(front, view)?
+                        packet_stream_indexed(front, &self.stream_index, view)?
                     } else {
                         None
                     };
@@ -327,17 +332,7 @@ impl StreamParser {
         written: usize,
         mut consume: impl FnMut(PacketView<'_>) -> Result<(), E>,
     ) -> Result<(), StreamPushError<E>> {
-        let start = self
-            .reserved_start
-            .take()
-            .ok_or(ContainerError::ParserState)?;
-        let reserved = self.buf.len().saturating_sub(start);
-        if written > reserved {
-            self.buf.truncate(start);
-            return Err(ContainerError::ParserState.into());
-        }
-        self.buf.truncate(start + written);
-        self.parse_available_each_context(|packet, _stream| consume(packet))
+        self.commit_reserved_context(written, |packet, _stream| consume(packet))
     }
 
     pub(super) fn commit_reserved_context<E>(
@@ -400,6 +395,7 @@ impl StreamParser {
         self.reserved_start = None;
         self.header = None;
         self.front = None;
+        self.stream_index.clear();
     }
 
     /// Resets the parser to accept a standalone epoch range rather than a full file prefix.

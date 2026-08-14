@@ -170,7 +170,10 @@ async function fetchBytes(url, signal) {
 
 async function instantiate(bytes) {
   if (!WebAssembly.validate(bytes)) throw Error('WASM validation failed');
-  return (await WebAssembly.instantiate(bytes, {})).instance;
+  const instance = (await WebAssembly.instantiate(bytes, {})).instance;
+  const abi = instance.exports.avelune_abi_version?.();
+  if (abi !== 0x0002_0000) throw Error(`unsupported Avelune WASM ABI: ${abi ?? '<missing>'}`);
+  return instance;
 }
 
 function decoderError(ex, handle) {
@@ -182,6 +185,13 @@ function decoderError(ex, handle) {
 function encoderError(ex, handle) {
   const ptr = ex.video_encoder_last_error_ptr(handle), len = ex.video_encoder_last_error_len(handle);
   return len ? new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, len)) : 'unknown encoder error';
+}
+
+function encoderCreateError(ex) {
+  const len = ex.video_encoder_create_error_len();
+  if (!len) return 'video encoder configuration was rejected';
+  const ptr = ex.video_encoder_create_error_ptr();
+  return new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, len));
 }
 
 export class StaleDecodeGenerationError extends Error {
@@ -366,13 +376,10 @@ export class AveluneVideoEncoder {
     for (const [label, value] of Object.entries({width, height, fpsN, fpsD, qstep, epochFrames, meta0})) {
       if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff_ffff) throw Error(`${label} must fit an unsigned 32-bit integer`);
     }
-    if (!width || !height || width % 2 || height % 2) throw Error('video width and height must be non-zero even values');
     if (!fpsN || !fpsD || fpsN > 0xffff || fpsD > 0xffff) throw Error('frame-rate numerator and denominator must be in 1..=65535');
-    if (!qstep || qstep > 0xffff) throw Error('qstep must be in 1..=65535');
-    if (!epochFrames) throw Error('epochFrames must be > 0');
-    const fpsFlags = (((fpsN & 0xffff) << 16) | (fpsD & 0xffff)) >>> 0;
+    const fpsFlags = ((fpsN << 16) | fpsD) >>> 0;
     this.handle = this.ex.video_encoder_create(width, height, fpsFlags, qstep, presetId, epochFrames, meta0);
-    if (!this.handle) throw Error('video encoder configuration was rejected');
+    if (!this.handle) throw Error(encoderCreateError(this.ex));
     this.expectedFrameBytes = this.ex.video_encoder_frame_len(this.handle);
   }
 

@@ -135,8 +135,8 @@ fn canonical_and_reference_audio_cross_decode() {
             )
             .unwrap();
             assert_eq!(
-                audio::decode(&packet).unwrap().2,
-                ref_audio::decode(&packet).unwrap().2
+                audio::decode(&packet).unwrap(),
+                ref_audio::decode(&packet).unwrap()
             );
 
             let reference_packet = ref_audio::encode(
@@ -150,8 +150,8 @@ fn canonical_and_reference_audio_cross_decode() {
             )
             .unwrap();
             assert_eq!(
-                audio::decode(&reference_packet).unwrap().2,
-                ref_audio::decode(&reference_packet).unwrap().2
+                audio::decode(&reference_packet).unwrap(),
+                ref_audio::decode(&reference_packet).unwrap()
             );
         }
     }
@@ -270,7 +270,7 @@ fn randomized_audio_syntax_range_matches_reference_decoder() {
         let rate = sample_rates[(case / 3) % sample_rates.len()];
         let qstep = qsteps[(case / 5) % qsteps.len()];
         let mut pcm = Vec::with_capacity(frames * channels as usize);
-        for _ in 0..pcm.capacity() {
+        for _ in 0..frames * channels as usize {
             state ^= state << 13;
             state ^= state >> 7;
             state ^= state << 17;
@@ -310,11 +310,12 @@ fn randomized_audio_syntax_range_matches_reference_decoder() {
                 "unexpected canonical encode error: case={case} channels={channels} frames={frames} rate={rate} q={qstep}: {e:?}"
             ),
         };
-        let (_, pch, canonical) = audio::decode(&packet).unwrap();
-        let (_, rch, reference) = ref_audio::decode(&packet).unwrap();
+        let canonical_decoded = audio::decode(&packet).unwrap();
+        let reference_decoded = ref_audio::decode(&packet).unwrap();
+        assert_eq!(canonical_decoded, reference_decoded);
+        let (decoded_rate, pch, canonical) = canonical_decoded;
+        assert_eq!(decoded_rate, rate);
         assert_eq!(pch, channels);
-        assert_eq!(rch, channels);
-        assert_eq!(canonical, reference);
         if qstep == 1 {
             assert_eq!(canonical, pcm);
         }

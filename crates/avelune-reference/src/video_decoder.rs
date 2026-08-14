@@ -651,6 +651,18 @@ mod tests {
             },
         )
         .unwrap();
+        let without_palette = encoder::encode(
+            1,
+            &source,
+            &[],
+            EncodeOptions {
+                qstep: 128,
+                allow_palette: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_ne!(encoded.packet.len(), without_palette.packet.len());
         let (_, decoded, _) = decode(&encoded.packet, &[]).unwrap();
         assert_same(&encoded.reconstructed, &decoded);
     }

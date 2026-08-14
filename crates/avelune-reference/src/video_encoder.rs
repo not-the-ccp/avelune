@@ -4,7 +4,7 @@
 //! throughput. Optimized backends belong outside this reference implementation.
 
 // The reference implementation intentionally mirrors spec-shaped loops and argument lists.
-use crate::bitstream::{BitstreamError, entropy_compress, put_svarint_i32, put_uvarint};
+use crate::bitstream::{entropy_compress, put_svarint_i32, put_uvarint};
 
 /// Four-byte packet magic for the current draft video generation.
 pub const CODEC_MAGIC: [u8; 4] = *b"ALV1";
@@ -74,22 +74,8 @@ pub struct EncodedFrame {
 pub enum VideoError {
     BadDimensions,
     PlaneLength,
-    UnexpectedEof,
-    BadHeader,
-    BadMode,
     BadQuantizer,
-    ReferenceMissing(u64),
     ReferenceShape,
-    Bitstream(BitstreamError),
-    BadCoefficient,
-    BadPalette,
-    TrailingData,
-    OutputTooLarge,
-}
-impl From<BitstreamError> for VideoError {
-    fn from(e: BitstreamError) -> Self {
-        Self::Bitstream(e)
-    }
 }
 fn sizes(w: u32, h: u32) -> Result<(usize, usize), VideoError> {
     if w == 0 || h == 0 || w % 2 != 0 || h % 2 != 0 || u64::from(w) * u64::from(h) > MAX_PIXELS {

@@ -95,7 +95,7 @@ where
 
 #[derive(Debug)]
 enum DecodeConsumerError<E> {
-    ContainerEpoch(ContainerError),
+    Container(ContainerError),
     Video(crate::video::v1::VideoError),
     Audio(crate::audio::v1::AudioError),
     Consumer(E),
@@ -172,12 +172,11 @@ impl ContainerStreamDecoder {
         let result = parser.commit_reserved_context(written, |packet, stream| {
             let started = epoch
                 .observe(packet)
-                .map_err(DecodeConsumerError::<E>::ContainerEpoch)?;
+                .map_err(DecodeConsumerError::<E>::Container)?;
             match packet.kind {
                 PacketKind::EpochStart => {
-                    let id = started.ok_or(DecodeConsumerError::ContainerEpoch(
-                        ContainerError::BadEpoch,
-                    ))?;
+                    let id =
+                        started.ok_or(DecodeConsumerError::Container(ContainerError::BadEpoch))?;
                     for decoder in video.values_mut() {
                         decoder.reset_epoch();
                     }
@@ -189,27 +188,34 @@ impl ContainerStreamDecoder {
                     .map_err(DecodeConsumerError::Consumer)
                 }
                 PacketKind::VideoFrame => {
-                    let stream = stream.ok_or(DecodeConsumerError::ContainerEpoch(
-                        ContainerError::BadStream,
-                    ))?;
-                    if stream.codec != 1 {
-                        return Err(DecodeConsumerError::ContainerEpoch(
-                            ContainerError::BadStream,
-                        ));
+                    let stream =
+                        stream.ok_or(DecodeConsumerError::Container(ContainerError::BadStream))?;
+                    if stream.codec != 1
+                        || stream.param0 == 0
+                        || stream.param1 == 0
+                        || !stream.param0.is_multiple_of(2)
+                        || !stream.param1.is_multiple_of(2)
+                        || u64::from(stream.param0) * u64::from(stream.param1)
+                            > config.limits.max_frame_pixels
+                    {
+                        return Err(DecodeConsumerError::Container(ContainerError::BadStream));
                     }
                     let decoder = video.entry(packet.stream_id).or_insert_with(|| {
-                        crate::video::v1::VideoDecoder::with_config(config).expect(
-                            "ContainerStreamDecoder validates its CPU backend at construction",
+                        crate::video::v1::VideoDecoder::for_stream(
+                            config,
+                            stream.param0,
+                            stream.param1,
                         )
+                        .expect("ContainerStreamDecoder validates its CPU backend at construction")
                     });
                     let (frame_id, frame, dependencies) = decoder
                         .decode_shared(packet.payload)
-                        .map_err(DecodeConsumerError::Video)?;
-                    if frame.width != stream.param0 || frame.height != stream.param1 {
-                        return Err(DecodeConsumerError::ContainerEpoch(
-                            ContainerError::BadStream,
-                        ));
-                    }
+                        .map_err(|error| match error {
+                            crate::video::v1::VideoError::BadDimensions => {
+                                DecodeConsumerError::Container(ContainerError::BadStream)
+                            }
+                            other => DecodeConsumerError::Video(other),
+                        })?;
                     consume(DecodedOutput::Video {
                         stream_id: packet.stream_id,
                         pts: packet.pts,
@@ -221,25 +227,33 @@ impl ContainerStreamDecoder {
                     .map_err(DecodeConsumerError::Consumer)
                 }
                 PacketKind::AudioFrame => {
-                    let stream = stream.ok_or(DecodeConsumerError::ContainerEpoch(
-                        ContainerError::BadStream,
-                    ))?;
-                    if stream.codec != 1 {
-                        return Err(DecodeConsumerError::ContainerEpoch(
-                            ContainerError::BadStream,
-                        ));
+                    let stream =
+                        stream.ok_or(DecodeConsumerError::Container(ContainerError::BadStream))?;
+                    let declared_channels = u8::try_from(stream.param1).ok();
+                    if stream.codec != 1
+                        || !(8_000..=384_000).contains(&stream.param0)
+                        || !declared_channels.is_some_and(|channels| (1..=8).contains(&channels))
+                    {
+                        return Err(DecodeConsumerError::Container(ContainerError::BadStream));
                     }
+                    let channels = declared_channels.expect("validated above");
                     let decoder = audio.entry(packet.stream_id).or_insert_with(|| {
-                        crate::audio::v1::AudioDecoder::with_limits(config.limits)
+                        crate::audio::v1::AudioDecoder::for_stream(
+                            config.limits,
+                            stream.param0,
+                            channels,
+                        )
                     });
-                    let (sample_rate, channels, pcm) = decoder
-                        .decode(packet.payload)
-                        .map_err(DecodeConsumerError::Audio)?;
-                    if sample_rate != stream.param0 || u32::from(channels) != stream.param1 {
-                        return Err(DecodeConsumerError::ContainerEpoch(
-                            ContainerError::BadStream,
-                        ));
-                    }
+                    let (sample_rate, channels, pcm) =
+                        decoder
+                            .decode(packet.payload)
+                            .map_err(|error| match error {
+                                crate::audio::v1::AudioError::BadRate
+                                | crate::audio::v1::AudioError::BadChannels => {
+                                    DecodeConsumerError::Container(ContainerError::BadStream)
+                                }
+                                other => DecodeConsumerError::Audio(other),
+                            })?;
                     consume(DecodedOutput::Audio {
                         stream_id: packet.stream_id,
                         pts: packet.pts,
@@ -271,7 +285,7 @@ impl ContainerStreamDecoder {
             Err(StreamPushError::Consumer(DecodeConsumerError::Consumer(e))) => {
                 Err(StreamDecodeError::Consumer(e))
             }
-            Err(StreamPushError::Consumer(DecodeConsumerError::ContainerEpoch(e))) => {
+            Err(StreamPushError::Consumer(DecodeConsumerError::Container(e))) => {
                 Err(StreamDecodeError::Container(e))
             }
         }

@@ -168,6 +168,11 @@ impl OwnedFrame420 {
         Some(Self { layout, data })
     }
 
+    /// Returns the owned backing allocation.
+    pub(crate) fn into_data(self) -> Vec<u8> {
+        self.data
+    }
+
     /// Builds a tightly packed single-allocation frame from three contiguous planes.
     pub fn from_planes(width: usize, height: usize, y: &[u8], u: &[u8], v: &[u8]) -> Option<Self> {
         let layout = FrameLayout::new(width, height, 1)?;
@@ -286,6 +291,7 @@ impl Scratch {
     /// Returns a zeroed slice of at least `len`, reusing capacity where possible.
     pub fn bytes(&mut self, len: usize) -> &mut [u8] {
         self.bytes.resize(len, 0);
+        self.bytes[..len].fill(0);
         &mut self.bytes[..len]
     }
     /// Current allocated capacity.
@@ -314,6 +320,15 @@ mod tests {
         assert!(view.u.row(4).unwrap().iter().all(|&v| v == 11));
         assert!(view.v.row(4).unwrap().iter().all(|&v| v == 13));
         assert!(view.y.contiguous().is_none());
+    }
+
+    #[test]
+    fn scratch_bytes_zeroes_reused_prefix() {
+        let mut scratch = Scratch::default();
+        scratch.bytes(16).fill(0xa5);
+        assert_eq!(scratch.bytes(8), &[0; 8]);
+        scratch.bytes(8).fill(0x5a);
+        assert_eq!(scratch.bytes(16), &[0; 16]);
     }
 
     #[test]

@@ -1,4 +1,4 @@
-import {BlobRangeSource, HttpRangeSource, StaleDecodeGenerationError, createAveluneDecoder, createAveluneVideoEncoder} from './avelune-loader.js';
+import {BlobRangeSource, HttpRangeSource, StaleDecodeGenerationError, createAveluneDecoder} from './avelune-loader.js';
 import {createRenderer} from './renderers.js';
 
 const $ = id => document.getElementById(id);
@@ -6,52 +6,6 @@ const setText = (id, value) => { const node = $(id); if (node) node.textContent 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const seconds = value => Number(value) / 1e6;
 
-
-function y4mLineEnd(bytes, start) {
-  for (let i = start; i < bytes.length; i++) if (bytes[i] === 10) return i;
-  return -1;
-}
-
-function parseY4m(bytes) {
-  if (bytes.length > 256 * 1024 * 1024) throw Error('Y4M encoder lab is limited to 256 MiB inputs');
-  const firstNl = y4mLineEnd(bytes, 0);
-  if (firstNl < 0) throw Error('Y4M header is truncated');
-  const header = new TextDecoder().decode(bytes.subarray(0, firstNl));
-  if (!header.startsWith('YUV4MPEG2 ')) throw Error('encoder lab accepts YUV4MPEG2 input');
-  let width, height, fpsN = 30, fpsD = 1, chroma = '420', fullRange = false;
-  for (const token of header.split(/\s+/).slice(1)) {
-    if (token.startsWith('W')) width = Number(token.slice(1));
-    else if (token.startsWith('H')) height = Number(token.slice(1));
-    else if (token.startsWith('F')) {
-      const [n, d = '1'] = token.slice(1).split(':');
-      fpsN = Number(n); fpsD = Number(d);
-    } else if (token.startsWith('C')) chroma = token.slice(1);
-    else if (token.toUpperCase() === 'XCOLORRANGE=FULL') fullRange = true;
-  }
-  for (const [name, value] of Object.entries({width, height, fpsN, fpsD})) {
-    if (!Number.isSafeInteger(value) || value <= 0) throw Error(`invalid Y4M ${name}`);
-  }
-  if (!chroma.startsWith('420')) throw Error(`encoder lab requires 8-bit 4:2:0 Y4M, got C${chroma}`);
-  if (width % 2 || height % 2) throw Error('Y4M 4:2:0 dimensions must be even');
-  const yLen = width * height, frameBytes = yLen + yLen / 2;
-  if (!Number.isSafeInteger(frameBytes)) throw Error('Y4M frame size is too large');
-  const frames = [];
-  let pos = firstNl + 1;
-  while (pos < bytes.length) {
-    const nl = y4mLineEnd(bytes, pos);
-    if (nl < 0) throw Error('truncated Y4M FRAME header');
-    const marker = new TextDecoder().decode(bytes.subarray(pos, nl));
-    if (marker !== 'FRAME' && !marker.startsWith('FRAME ')) throw Error(`expected Y4M FRAME header at byte ${pos}`);
-    pos = nl + 1;
-    if (pos + frameBytes > bytes.length) throw Error('truncated Y4M frame payload');
-    frames.push(bytes.subarray(pos, pos + frameBytes));
-    pos += frameBytes;
-  }
-  if (!frames.length) throw Error('Y4M input contains no frames');
-  const chromaLocation = chroma.startsWith('420mpeg2') ? 1 : (chroma.startsWith('420jpeg') || chroma.startsWith('420paldv') ? 2 : 0);
-  const meta0 = (fullRange ? (1 << 12) : 0) | (chromaLocation << 13);
-  return {width, height, fpsN, fpsD, meta0, frames};
-}
 
 function streamFormat(stream) {
   const codec = stream.codec === 1 ? (stream.kind === 1 ? 'ALV1' : 'ALA1') : `codec ${stream.codec}`;
@@ -131,6 +85,7 @@ class PlayerController {
     this.playAbort = null;
     this.playStartMedia = 0;
     this.playStartWall = 0;
+    this.playStartAudioContext = 0;
     this.audio = new AudioScheduler();
     this.log = new EventLog($('event-log'));
     this.frameId = null;
@@ -154,7 +109,12 @@ class PlayerController {
   }
 
   currentTime() {
-    if (this.state === 'playing') return Math.min(this.duration, this.playStartMedia + (performance.now() - this.playStartWall) / 1000);
+    if (this.state === 'playing') {
+      const elapsed = this.audioStreamId !== null && this.audio.context
+        ? this.audio.context.currentTime - this.playStartAudioContext
+        : (performance.now() - this.playStartWall) / 1000;
+      return Math.min(this.duration, this.playStartMedia + Math.max(0, elapsed));
+    }
     return Number($('seek').value) || 0;
   }
 
@@ -248,6 +208,7 @@ class PlayerController {
     const contextStart = this.audio.context.currentTime + 0.05;
     this.playStartMedia = start;
     this.playStartWall = performance.now() + 50;
+    this.playStartAudioContext = contextStart;
     this.setState('playing');
     const firstEpoch = Math.max(0, this.index.epochs.findLastIndex(epoch => seconds(epoch.pts) <= start));
     try {
@@ -264,10 +225,18 @@ class PlayerController {
             if (frame.streamId !== this.videoStreamId) return;
             const frameTime = seconds(frame.pts);
             if (frameTime < start) return;
-            const target = this.playStartWall + (frameTime - start) * 1000;
-            while (performance.now() + 1 < target) {
-              if (controller.signal.aborted) throw controller.signal.reason;
-              await sleep(Math.min(40, target - performance.now()));
+            if (this.audioStreamId !== null) {
+              const target = contextStart + (frameTime - start);
+              while (this.audio.context.currentTime + 0.001 < target) {
+                if (controller.signal.aborted) throw controller.signal.reason;
+                await sleep(Math.min(40, (target - this.audio.context.currentTime) * 1000));
+              }
+            } else {
+              const target = this.playStartWall + (frameTime - start) * 1000;
+              while (performance.now() + 1 < target) {
+                if (controller.signal.aborted) throw controller.signal.reason;
+                await sleep(Math.min(40, target - performance.now()));
+              }
             }
             this.renderer.render(frame);
             this.frameId = frame.id;
@@ -328,26 +297,29 @@ async function encodeLocalY4m() {
   const button = $('encode-y4m');
   button.disabled = true;
   status.textContent = 'Reading Y4M…';
-  let encoder;
+  const worker = new Worker(new URL('./encoder-worker.js', import.meta.url), {type: 'module'});
   try {
-    const y4m = parseY4m(new Uint8Array(await file.arrayBuffer()));
-    const qstep = Number($('encode-q').value);
-    const preset = $('encode-preset').value;
-    const fps = y4m.fpsN / y4m.fpsD;
-    const epochFrames = Math.max(1, Math.round(fps * 2));
-    status.textContent = `Encoding 0 / ${y4m.frames.length} frames…`;
-    encoder = await createAveluneVideoEncoder({
-      width: y4m.width, height: y4m.height, fpsN: y4m.fpsN, fpsD: y4m.fpsD,
-      qstep, preset, epochFrames, meta0: y4m.meta0,
-    }, {artifact: $('wasm-artifact').value});
-    for (let i = 0; i < y4m.frames.length; i++) {
-      encoder.pushFrame(y4m.frames[i]);
-      if ((i & 7) === 7 || i + 1 === y4m.frames.length) {
-        status.textContent = `Encoding ${i + 1} / ${y4m.frames.length} frames…`;
-        await sleep(0);
-      }
-    }
-    const encoded = encoder.finish();
+    const input = await file.arrayBuffer();
+    const result = await new Promise((resolve, reject) => {
+      worker.addEventListener('message', event => {
+        if (event.data?.type === 'progress') {
+          status.textContent = `Encoding ${event.data.done} / ${event.data.total} frames…`;
+        } else if (event.data?.type === 'done') {
+          resolve(event.data);
+        } else if (event.data?.type === 'error') {
+          reject(Error(event.data.message));
+        }
+      });
+      worker.addEventListener('error', event => reject(Error(event.message || 'encoder worker failed')), {once: true});
+      worker.postMessage({
+        type: 'encode',
+        buffer: input,
+        qstep: Number($('encode-q').value),
+        preset: $('encode-preset').value,
+        artifact: $('wasm-artifact').value,
+      }, [input]);
+    });
+    const encoded = new Uint8Array(result.encoded);
     const blob = new Blob([encoded], {type: 'application/octet-stream'});
     const stem = file.name.replace(/\.y4m$/i, '') || 'encoded';
     if (encodedObjectUrl) URL.revokeObjectURL(encodedObjectUrl);
@@ -357,10 +329,10 @@ async function encodeLocalY4m() {
     download.download = `${stem}.avl`;
     download.hidden = false;
     download.textContent = `Save ${stem}.avl`;
-    status.textContent = `${y4m.frames.length} frames → ${encoded.length.toLocaleString()} B · ${encoder.artifact}`;
+    status.textContent = `${result.frames} frames → ${encoded.length.toLocaleString()} B · ${result.artifact}`;
     await player.load(new BlobRangeSource(blob, `${stem}.avl`));
   } finally {
-    encoder?.destroy();
+    worker.terminate();
     button.disabled = false;
   }
 }

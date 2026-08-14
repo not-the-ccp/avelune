@@ -2,7 +2,7 @@
 
 `avelune-kernels` is the only crate permitted to contain executable unsafe Rust.
 `avelune` itself has `#![forbid(unsafe_code)]`, and `scripts/audit-unsafe.sh` rejects unsafe
-blocks/functions outside the kernel crate and rejects assembly entirely.
+blocks/functions outside the kernel crate and rejects assembly within `avelune-kernels`.
 
 Current unsafe surface:
 

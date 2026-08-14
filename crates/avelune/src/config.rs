@@ -1,4 +1,4 @@
-//! Production backend configuration.
+//! Canonical runtime configuration.
 
 /// CPU implementation policy.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

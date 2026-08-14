@@ -20,6 +20,6 @@ WRAP
   chmod +x "$TMP/base-wrapper"
   base_cli="$TMP/base-wrapper"
 fi
-python3 scripts/ci-media-regression.py --cli "$base_cli" --repeats "${AVELUNE_CI_MEDIA_REPEATS:-2}" --out-json "$OUT/base.json" --out-csv "$OUT/base.csv"
-python3 scripts/ci-media-regression.py --cli "$head_bin" --repeats "${AVELUNE_CI_MEDIA_REPEATS:-2}" --out-json "$OUT/head.json" --out-csv "$OUT/head.csv"
+python3 scripts/ci-media-regression.py --cli "$base_cli" --implementation legacy-production --repeats "${AVELUNE_CI_MEDIA_REPEATS:-2}" --out-json "$OUT/base.json" --out-csv "$OUT/base.csv"
+python3 scripts/ci-media-regression.py --cli "$head_bin" --implementation canonical --repeats "${AVELUNE_CI_MEDIA_REPEATS:-2}" --out-json "$OUT/head.json" --out-csv "$OUT/head.csv"
 python3 scripts/compare-ci-media.py "$OUT/base.json" "$OUT/head.json" --json "$OUT/comparison.json"

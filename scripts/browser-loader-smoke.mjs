@@ -73,6 +73,13 @@ try {
   }
   if (requests.some(r => r.url === '/demo.avl' && r.full)) throw Error('media fetched without HTTP Range');
 
+  await expectReject(
+    createAveluneVideoEncoder({
+      width: 31, height: 24, fpsN: 30, fpsD: 1, qstep: 96, preset: 'balanced', epochFrames: 3, meta0: 2 << 13,
+    }, {artifact: 'scalar', scalarUrl: `${base}/scalar.wasm`}),
+    /dimensions/,
+  );
+
   // Exercise the browser-facing encoder wrapper, not only the raw WASM exports.
   const browserEncoder = await createAveluneVideoEncoder({
     width: 32, height: 24, fpsN: 30, fpsD: 1, qstep: 96, preset: 'balanced', epochFrames: 3, meta0: 2 << 13,

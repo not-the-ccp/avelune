@@ -5,7 +5,7 @@ cd "$ROOT"
 
 outside=$(mktemp); assembly=$(mktemp)
 trap 'rm -f "$outside" "$assembly"' EXIT
-if rg -n '\bunsafe\s+(fn|impl|trait)\b|\bunsafe\s*\{' crates/avelune crates/avelune-reference crates/avelune-wasm tools > "$outside"; then
+if rg -n '\bunsafe\s+(fn|impl|trait)\b|\bunsafe\s*\{' crates/avelune crates/avelune-reference crates/avelune-wasm tools fuzz > "$outside"; then
   echo 'ERROR: executable unsafe Rust found outside crates/avelune-kernels:' >&2
   cat "$outside" >&2
   exit 1

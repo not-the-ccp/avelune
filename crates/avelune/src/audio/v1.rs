@@ -253,8 +253,14 @@ fn decode_with_scratch(
 ) -> Result<(u32, u8, Vec<i16>), AudioError> {
     let mut planes = Vec::new();
     let mut out = Vec::new();
-    let (rate, channels) =
-        decode_with_buffers(input, scratch, max_entropy_bytes, &mut planes, &mut out)?;
+    let (rate, channels) = decode_with_buffers(
+        input,
+        scratch,
+        max_entropy_bytes,
+        &mut planes,
+        &mut out,
+        None,
+    )?;
     Ok((rate, channels, out))
 }
 
@@ -264,6 +270,7 @@ fn decode_with_buffers(
     max_entropy_bytes: usize,
     planes: &mut Vec<i32>,
     out: &mut Vec<i16>,
+    expected_format: Option<(u32, u8)>,
 ) -> Result<(u32, u8), AudioError> {
     if input.len() < 20 {
         return Err(AudioError::UnexpectedEof);
@@ -286,6 +293,14 @@ fn decode_with_buffers(
     let rate = u32::from_le_bytes(input[8..12].try_into().unwrap());
     if rate < 8_000 || rate > 384_000 {
         return Err(AudioError::BadRate);
+    }
+    if let Some((expected_rate, expected_channels)) = expected_format {
+        if rate != expected_rate {
+            return Err(AudioError::BadRate);
+        }
+        if ch != usize::from(expected_channels) {
+            return Err(AudioError::BadChannels);
+        }
     }
     let frames = u16::from_le_bytes(input[12..14].try_into().unwrap()) as usize;
     if input[14] != 0 || input[15] != 0 {
@@ -397,6 +412,7 @@ pub struct AudioDecoder {
     entropy: EntropyScratch,
     planes: Vec<i32>,
     max_entropy_bytes: usize,
+    expected_format: Option<(u32, u8)>,
 }
 impl Default for AudioDecoder {
     fn default() -> Self {
@@ -404,6 +420,7 @@ impl Default for AudioDecoder {
             entropy: EntropyScratch::default(),
             planes: Vec::new(),
             max_entropy_bytes: crate::limits::Limits::default().max_entropy_bytes,
+            expected_format: None,
         }
     }
 }
@@ -418,7 +435,17 @@ impl AudioDecoder {
             entropy: EntropyScratch::default(),
             planes: Vec::new(),
             max_entropy_bytes: limits.max_entropy_bytes,
+            expected_format: None,
         }
+    }
+    pub(crate) fn for_stream(
+        limits: crate::limits::Limits,
+        sample_rate: u32,
+        channels: u8,
+    ) -> Self {
+        let mut decoder = Self::with_limits(limits);
+        decoder.expected_format = Some((sample_rate, channels));
+        decoder
     }
     /// Decodes one complete ALA1 packet.
     pub fn decode(&mut self, input: &[u8]) -> Result<(u32, u8, Vec<i16>), AudioError> {
@@ -429,6 +456,7 @@ impl AudioDecoder {
             self.max_entropy_bytes,
             &mut self.planes,
             &mut out,
+            self.expected_format,
         )?;
         Ok((rate, channels, out))
     }
@@ -444,6 +472,7 @@ impl AudioDecoder {
             self.max_entropy_bytes,
             &mut self.planes,
             out,
+            self.expected_format,
         )
     }
     /// Capacity of the reusable planar i32 scratch buffer.

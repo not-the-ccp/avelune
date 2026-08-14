@@ -1,7 +1,103 @@
 use super::{prediction::*, *};
 
-fn decode_plane_single_into(
-    tokens: &[u8],
+enum BlockSyntax<'a> {
+    Single {
+        bytes: &'a [u8],
+        pos: usize,
+    },
+    Split {
+        control: &'a [u8],
+        control_pos: usize,
+        data: &'a [u8],
+        data_pos: usize,
+    },
+}
+
+impl<'a> BlockSyntax<'a> {
+    fn single(bytes: &'a [u8]) -> Self {
+        Self::Single { bytes, pos: 0 }
+    }
+
+    fn split(control: &'a [u8], data: &'a [u8]) -> Self {
+        Self::Split {
+            control,
+            control_pos: 0,
+            data,
+            data_pos: 0,
+        }
+    }
+
+    fn mode(&mut self) -> Result<u8, VideoError> {
+        match self {
+            Self::Single { bytes, pos } => {
+                let value = *bytes.get(*pos).ok_or(VideoError::UnexpectedEof)?;
+                *pos += 1;
+                Ok(value)
+            }
+            Self::Split {
+                control,
+                control_pos,
+                ..
+            } => {
+                let value = *control.get(*control_pos).ok_or(VideoError::UnexpectedEof)?;
+                *control_pos += 1;
+                Ok(value)
+            }
+        }
+    }
+
+    fn data_cursor(&mut self) -> (&'a [u8], &mut usize) {
+        match self {
+            Self::Single { bytes, pos } => (bytes, pos),
+            Self::Split { data, data_pos, .. } => (data, data_pos),
+        }
+    }
+
+    fn data_u8(&mut self) -> Result<u8, VideoError> {
+        let (bytes, pos) = self.data_cursor();
+        let value = *bytes.get(*pos).ok_or(VideoError::UnexpectedEof)?;
+        *pos += 1;
+        Ok(value)
+    }
+
+    fn data_slice(&mut self, len: usize) -> Result<&'a [u8], VideoError> {
+        let (bytes, pos) = self.data_cursor();
+        let end = pos.checked_add(len).ok_or(VideoError::UnexpectedEof)?;
+        let value = bytes.get(*pos..end).ok_or(VideoError::UnexpectedEof)?;
+        *pos = end;
+        Ok(value)
+    }
+
+    fn uvarint(&mut self) -> Result<u64, VideoError> {
+        let (bytes, pos) = self.data_cursor();
+        Ok(get_uvarint(bytes, pos)?)
+    }
+
+    fn svarint_i32(&mut self) -> Result<i32, VideoError> {
+        let (bytes, pos) = self.data_cursor();
+        Ok(get_svarint_i32(bytes, pos)?)
+    }
+
+    fn finish(self) -> Result<(), VideoError> {
+        let complete = match self {
+            Self::Single { bytes, pos } => pos == bytes.len(),
+            Self::Split {
+                control,
+                control_pos,
+                data,
+                data_pos,
+            } => control_pos == control.len() && data_pos == data.len(),
+        };
+        if complete {
+            Ok(())
+        } else {
+            Err(VideoError::TrailingData)
+        }
+    }
+}
+
+fn decode_plane_syntax_into(
+    mut syntax: BlockSyntax<'_>,
     refs: &[&[u8]],
     w: usize,
     h: usize,
@@ -13,31 +109,21 @@ fn decode_plane_single_into(
         return Err(VideoError::PlaneLength);
     }
     recon.fill(128);
-    let mut pos = 0usize;
     for by in (0..h).step_by(BLOCK) {
         for bx in (0..w).step_by(BLOCK) {
-            let mode = *tokens.get(pos).ok_or(VideoError::UnexpectedEof)?;
-            pos += 1;
+            let mode = syntax.mode()?;
             if mode == 4 {
-                let n = *tokens.get(pos).ok_or(VideoError::UnexpectedEof)? as usize;
-                pos += 1;
-                if n == 0 || n > 4 || tokens.len() < pos + n + 1 {
+                let n = usize::from(syntax.data_u8()?);
+                if n == 0 || n > 4 {
                     return Err(VideoError::BadPalette);
                 }
-                let colors = &tokens[pos..pos + n];
-                pos += n;
-                let count = *tokens.get(pos).ok_or(VideoError::UnexpectedEof)? as usize;
-                pos += 1;
+                let colors = syntax.data_slice(n)?;
+                let count = usize::from(syntax.data_u8()?);
                 let expected = (w - bx).min(8) * (h - by).min(8);
                 if count != expected {
                     return Err(VideoError::BadPalette);
                 }
-                let bytes = (count + 3) / 4;
-                if tokens.len() < pos + bytes {
-                    return Err(VideoError::UnexpectedEof);
-                }
-                let packed = &tokens[pos..pos + bytes];
-                pos += bytes;
+                let packed = syntax.data_slice(count.div_ceil(4))?;
                 let mut k = 0;
                 for y in 0..8 {
                     if by + y >= h {
@@ -48,11 +134,11 @@ fn decode_plane_single_into(
                             break;
                         }
                         let ci = (packed[k / 4] >> ((k % 4) * 2)) & 3;
-                        if ci as usize >= n {
+                        if usize::from(ci) >= n {
                             return Err(VideoError::BadPalette);
                         }
-                        recon[(by + y) * w + bx + x] = colors[ci as usize];
-                        k += 1
+                        recon[(by + y) * w + bx + x] = colors[usize::from(ci)];
+                        k += 1;
                     }
                 }
                 continue;
@@ -62,36 +148,34 @@ fn decode_plane_single_into(
             }
             let (mut ri, mut dx, mut dy) = (0usize, 0i32, 0i32);
             if mode == 3 {
-                ri = *tokens.get(pos).ok_or(VideoError::UnexpectedEof)? as usize;
-                pos += 1;
+                ri = usize::from(syntax.data_u8()?);
                 if ri >= refs.len() {
                     return Err(VideoError::BadMode);
                 }
-                dx = get_svarint_i32(tokens, &mut pos)?;
-                dy = get_svarint_i32(tokens, &mut pos)?;
+                dx = syntax.svarint_i32()?;
+                dy = syntax.svarint_i32()?;
                 if dx.unsigned_abs() > 64 || dy.unsigned_abs() > 64 {
                     return Err(VideoError::BadMode);
                 }
             }
-            let nz = usize::try_from(get_uvarint(tokens, &mut pos)?)
-                .map_err(|_| VideoError::BadCoefficient)?;
+            let nz = usize::try_from(syntax.uvarint()?).map_err(|_| VideoError::BadCoefficient)?;
             if nz > 64 {
                 return Err(VideoError::BadCoefficient);
             }
             let mut qc = [0i32; 64];
             let mut last = None;
             for _ in 0..nz {
-                let i = usize::try_from(get_uvarint(tokens, &mut pos)?)
-                    .map_err(|_| VideoError::BadCoefficient)?;
+                let i =
+                    usize::try_from(syntax.uvarint()?).map_err(|_| VideoError::BadCoefficient)?;
                 if i >= 64 || last.is_some_and(|x| i <= x) {
                     return Err(VideoError::BadCoefficient);
                 }
-                let v = get_svarint_i32(tokens, &mut pos)?;
+                let v = syntax.svarint_i32()?;
                 if v.unsigned_abs() > 1_000_000 {
                     return Err(VideoError::BadCoefficient);
                 }
                 qc[i] = v;
-                last = Some(i)
+                last = Some(i);
             }
             if nz == 0 {
                 if mode == 3 {
@@ -101,7 +185,7 @@ fn decode_plane_single_into(
                         for y in 0..bh {
                             let src = &refs[ri][(sy + y) * w + sx..(sy + y) * w + sx + bw];
                             let dst = &mut recon[(by + y) * w + bx..(by + y) * w + bx + bw];
-                            dst.copy_from_slice(src)
+                            dst.copy_from_slice(src);
                         }
                     } else if let Some(block) =
                         halfpel_prediction_block(refs[ri], w, h, bx, by, dx, dy, kernels)
@@ -122,7 +206,7 @@ fn decode_plane_single_into(
                                     h,
                                     ((bx + x) as i32) * 2 + dx,
                                     ((by + y) as i32) * 2 + dy,
-                                )
+                                );
                             }
                         }
                     }
@@ -189,10 +273,19 @@ fn decode_plane_single_into(
             }
         }
     }
-    if pos != tokens.len() {
-        return Err(VideoError::TrailingData);
-    }
-    Ok(())
+    syntax.finish()
+}
+
+fn decode_plane_single_into(
+    tokens: &[u8],
+    refs: &[&[u8]],
+    w: usize,
+    h: usize,
+    q: i32,
+    kernels: crate::kernels::KernelSet,
+    recon: &mut [u8],
+) -> Result<(), VideoError> {
+    decode_plane_syntax_into(BlockSyntax::single(tokens), refs, w, h, q, kernels, recon)
 }
 
 #[cfg(test)]
@@ -219,191 +312,15 @@ fn decode_plane_into(
     kernels: crate::kernels::KernelSet,
     recon: &mut [u8],
 ) -> Result<(), VideoError> {
-    if recon.len() != w.checked_mul(h).ok_or(VideoError::BadDimensions)? {
-        return Err(VideoError::PlaneLength);
-    }
-    recon.fill(128);
-    let mut cp = 0usize;
-    let mut dp = 0usize;
-    for by in (0..h).step_by(BLOCK) {
-        for bx in (0..w).step_by(BLOCK) {
-            let mode = *control.get(cp).ok_or(VideoError::UnexpectedEof)?;
-            cp += 1;
-            if mode == 4 {
-                let n = *data.get(dp).ok_or(VideoError::UnexpectedEof)? as usize;
-                dp += 1;
-                if n == 0 || n > 4 || data.len() < dp + n + 1 {
-                    return Err(VideoError::BadPalette);
-                }
-                let colors = &data[dp..dp + n];
-                dp += n;
-                let count = *data.get(dp).ok_or(VideoError::UnexpectedEof)? as usize;
-                dp += 1;
-                let expected = (w - bx).min(8) * (h - by).min(8);
-                if count != expected {
-                    return Err(VideoError::BadPalette);
-                }
-                let bytes = (count + 3) / 4;
-                if data.len() < dp + bytes {
-                    return Err(VideoError::UnexpectedEof);
-                }
-                let packed = &data[dp..dp + bytes];
-                dp += bytes;
-                let mut k = 0;
-                for y in 0..8 {
-                    if by + y >= h {
-                        break;
-                    }
-                    for x in 0..8 {
-                        if bx + x >= w {
-                            break;
-                        }
-                        let ci = (packed[k / 4] >> ((k % 4) * 2)) & 3;
-                        if ci as usize >= n {
-                            return Err(VideoError::BadPalette);
-                        }
-                        recon[(by + y) * w + bx + x] = colors[ci as usize];
-                        k += 1;
-                    }
-                }
-                continue;
-            }
-            if mode > 3 {
-                return Err(VideoError::BadMode);
-            }
-            let (mut ri, mut dx, mut dy) = (0usize, 0i32, 0i32);
-            if mode == 3 {
-                ri = *data.get(dp).ok_or(VideoError::UnexpectedEof)? as usize;
-                dp += 1;
-                if ri >= refs.len() {
-                    return Err(VideoError::BadMode);
-                }
-                dx = get_svarint_i32(data, &mut dp)?;
-                dy = get_svarint_i32(data, &mut dp)?;
-                if dx.unsigned_abs() > 64 || dy.unsigned_abs() > 64 {
-                    return Err(VideoError::BadMode);
-                }
-            }
-            let nz = usize::try_from(get_uvarint(data, &mut dp)?)
-                .map_err(|_| VideoError::BadCoefficient)?;
-            if nz > 64 {
-                return Err(VideoError::BadCoefficient);
-            }
-            let mut qc = [0i32; 64];
-            let mut last = None;
-            for _ in 0..nz {
-                let i = usize::try_from(get_uvarint(data, &mut dp)?)
-                    .map_err(|_| VideoError::BadCoefficient)?;
-                if i >= 64 || last.is_some_and(|x| i <= x) {
-                    return Err(VideoError::BadCoefficient);
-                }
-                let v = get_svarint_i32(data, &mut dp)?;
-                if v.unsigned_abs() > 1_000_000 {
-                    return Err(VideoError::BadCoefficient);
-                }
-                qc[i] = v;
-                last = Some(i);
-            }
-            if nz == 0 {
-                if mode == 3 {
-                    if let Some((sx, sy)) = integer_motion_origin(w, h, bx, by, dx, dy) {
-                        let bw = (w - bx).min(8);
-                        let bh = (h - by).min(8);
-                        for y in 0..bh {
-                            let src = &refs[ri][(sy + y) * w + sx..(sy + y) * w + sx + bw];
-                            let dst = &mut recon[(by + y) * w + bx..(by + y) * w + bx + bw];
-                            dst.copy_from_slice(src)
-                        }
-                    } else if let Some(block) =
-                        halfpel_prediction_block(refs[ri], w, h, bx, by, dx, dy, kernels)
-                    {
-                        for y in 0..8 {
-                            let dst = &mut recon[(by + y) * w + bx..(by + y) * w + bx + 8];
-                            dst.copy_from_slice(&block[y * 8..y * 8 + 8]);
-                        }
-                    } else {
-                        for y in 0..8 {
-                            for x in 0..8 {
-                                if bx + x >= w || by + y >= h {
-                                    continue;
-                                }
-                                recon[(by + y) * w + bx + x] = sample_half(
-                                    refs[ri],
-                                    w,
-                                    h,
-                                    ((bx + x) as i32) * 2 + dx,
-                                    ((by + y) as i32) * 2 + dy,
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    let block = intra_prediction_block(recon, w, h, bx, by, mode);
-                    let bw = (w - bx).min(8);
-                    let bh = (h - by).min(8);
-                    for y in 0..bh {
-                        let dst = &mut recon[(by + y) * w + bx..(by + y) * w + bx + bw];
-                        dst.copy_from_slice(&block[y * 8..y * 8 + bw]);
-                    }
-                }
-                continue;
-            }
-            let mut deq = [0i32; 64];
-            for i in 0..64 {
-                deq[i] = qc[i].checked_mul(q).ok_or(VideoError::BadCoefficient)?;
-                if deq[i].unsigned_abs() > 33_554_431 {
-                    return Err(VideoError::BadCoefficient);
-                }
-            }
-            let rr = inv_wht2(deq, kernels);
-            let fast = if mode == 3 {
-                integer_motion_origin(w, h, bx, by, dx, dy)
-            } else {
-                None
-            };
-            let half_fast = if mode == 3 && fast.is_none() {
-                halfpel_prediction_block(refs[ri], w, h, bx, by, dx, dy, kernels)
-            } else {
-                None
-            };
-            let intra_fast = if mode == 3 {
-                None
-            } else {
-                Some(intra_prediction_block(recon, w, h, bx, by, mode))
-            };
-            for y in 0..8 {
-                for x in 0..8 {
-                    if bx + x >= w || by + y >= h {
-                        continue;
-                    }
-                    let pred = if mode == 3 {
-                        if let Some((sx, sy)) = fast {
-                            refs[ri][(sy + y) * w + sx + x]
-                        } else if let Some(block) = &half_fast {
-                            block[y * 8 + x]
-                        } else {
-                            sample_half(
-                                refs[ri],
-                                w,
-                                h,
-                                ((bx + x) as i32) * 2 + dx,
-                                ((by + y) as i32) * 2 + dy,
-                            )
-                        }
-                    } else if let Some(block) = &intra_fast {
-                        block[y * 8 + x]
-                    } else {
-                        unreachable!("intra prediction is materialized for non-inter modes")
-                    };
-                    recon[(by + y) * w + bx + x] = clip8(i32::from(pred) + rr[y * 8 + x]);
-                }
-            }
-        }
-    }
-    if cp != control.len() || dp != data.len() {
-        return Err(VideoError::TrailingData);
-    }
-    Ok(())
+    decode_plane_syntax_into(
+        BlockSyntax::split(control, data),
+        refs,
+        w,
+        h,
+        q,
+        kernels,
+        recon,
+    )
 }
 
 #[derive(Debug, Default)]
@@ -525,6 +442,7 @@ pub fn decode(
         None,
         crate::limits::Limits::default().max_frame_pixels,
         crate::limits::Limits::default().max_entropy_bytes,
+        None,
     )
 }
 
@@ -538,6 +456,7 @@ pub(super) fn decode_with_threads(
     frame_pool: Option<&mut Vec<Frame420>>,
     max_frame_pixels: u64,
     max_entropy_bytes: usize,
+    expected_dimensions: Option<(u32, u32)>,
 ) -> Result<(u64, Frame420, Vec<u64>), VideoError> {
     if input.len() < 20 {
         return Err(VideoError::UnexpectedEof);
@@ -549,6 +468,9 @@ pub(super) fn decode_with_threads(
     let w = u16::from_le_bytes(input[12..14].try_into().unwrap()) as u32;
     let h = u16::from_le_bytes(input[14..16].try_into().unwrap()) as u32;
     let q = u16::from_le_bytes(input[16..18].try_into().unwrap());
+    if expected_dimensions.is_some_and(|expected| expected != (w, h)) {
+        return Err(VideoError::BadDimensions);
+    }
     if q == 0 {
         return Err(VideoError::BadQuantizer);
     }
@@ -704,9 +626,18 @@ pub(super) fn decode_with_threads(
                             v,
                         )
                     });
-                    h0.join().map_err(|_| VideoError::BadHeader)??;
-                    h1.join().map_err(|_| VideoError::BadHeader)??;
-                    h2.join().map_err(|_| VideoError::BadHeader)??;
+                    match h0.join() {
+                        Ok(result) => result?,
+                        Err(payload) => std::panic::resume_unwind(payload),
+                    };
+                    match h1.join() {
+                        Ok(result) => result?,
+                        Err(payload) => std::panic::resume_unwind(payload),
+                    };
+                    match h2.join() {
+                        Ok(result) => result?,
+                        Err(payload) => std::panic::resume_unwind(payload),
+                    };
                     Ok::<(), VideoError>(())
                 })?;
             }

@@ -11,11 +11,18 @@ export class CanvasRenderer {
     this.context = canvas.getContext('2d', {alpha: false});
     if (!this.context) throw Error('Canvas2D context unavailable');
     this.coefficients = colorParams(meta0);
+    this.image = null;
+    this.width = 0;
+    this.height = 0;
   }
   render(frame) {
     const {w, h, yuv} = frame, [ys, yo, rv, gu, gv, bu] = this.coefficients;
-    if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
-    const image = this.context.createImageData(w, h);
+    if (this.width !== w || this.height !== h || !this.image) {
+      this.width = w; this.height = h;
+      this.canvas.width = w; this.canvas.height = h;
+      this.image = this.context.createImageData(w, h);
+    }
+    const image = this.image;
     const yLen = w * h, cLen = yLen / 4;
     const yPlane = yuv.subarray(0, yLen), uPlane = yuv.subarray(yLen, yLen + cLen), vPlane = yuv.subarray(yLen + cLen);
     for (let row = 0, pixel = 0; row < h; row++) {
@@ -73,7 +80,7 @@ export class WebGpuRenderer {
       fragment: {module, entryPoint: 'fragment', targets: [{format}]},
       primitive: {topology: 'triangle-list'},
     });
-    const sampler = device.createSampler({magFilter: 'linear', minFilter: 'linear'});
+    const sampler = device.createSampler({magFilter: 'nearest', minFilter: 'nearest'});
     const uniform = device.createBuffer({size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST});
     const values = colorParams(meta0);
     device.queue.writeBuffer(uniform, 0, new Float32Array([values[0], values[1], values[2], values[3], values[4], values[5], 0, 0]));

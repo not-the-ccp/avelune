@@ -14,6 +14,7 @@ The important operations are conceptually:
 
 [source,text]
 ----
+avelune_abi_version() -> 0x0002_0000
 decoder_create() -> handle
 decoder_destroy(handle)
 input_reserve(handle, len) -> ptr
@@ -24,6 +25,7 @@ decoder_pop_video(handle)
 decoder_pop_audio(handle)
 
 video_encoder_create(width, height, fps_flags, qstep, preset, epoch_frames, meta0) -> handle
+video_encoder_create_error_ptr() / video_encoder_create_error_len()
 video_encoder_frame_ptr(handle) -> ptr
 video_encoder_push_frame(handle)
 video_encoder_finish(handle)

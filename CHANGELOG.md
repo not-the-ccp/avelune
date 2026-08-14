@@ -26,6 +26,8 @@ may be incompatible until a stable major line is explicitly declared.
   implementations into cohesive source modules instead of monolithic implementation files.
 - Reworked the browser player around owned playback generations, cancellable transport/audio,
   bounded presentation backpressure, reusable WebGPU resources, and explicit play/pause/seek.
+- Bumped the browser WASM ABI to `0x0002_0000` for the canonical decoder/encoder interface,
+  including explicit input finalization and retained encoder-creation diagnostics.
 - Simplified CI, benchmark, WASM, rustdoc, and validation tooling around the canonical
   implementation while retaining the independent oracle for differential tests.
 - Replaced the Pandoc Pages pipeline with the existing custom static Astro/AsciiDoc publication
