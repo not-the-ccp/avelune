@@ -1,6 +1,6 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use avelune_prod::bitstream::v1::{entropy_compress,entropy_decompress};
+use avelune::bitstream::v1::{entropy_compress,entropy_decompress};
 fuzz_target!(|data: &[u8]| {
     let coded=entropy_compress(data);
     let decoded=entropy_decompress(&coded,data.len().saturating_mul(16).saturating_add(4096)).unwrap();

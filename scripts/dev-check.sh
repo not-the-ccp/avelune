@@ -1,63 +1,65 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
-cd "$ROOT"
+ROOT=$(cd "$(dirname "$0")/.." && pwd); cd "$ROOT"
 
-echo '[1/11] rustfmt'
+echo '[1/9] rustfmt'
 cargo fmt --all -- --check
 
-echo '[2/11] clippy'
+echo '[2/9] clippy'
 cargo clippy --workspace --all-targets --locked -- -D warnings
 
-echo '[3/11] tests + doctests'
+echo '[3/9] tests + doctests'
 cargo test --workspace --locked
 cargo test --workspace --doc --locked
 
-echo '[4/11] rustdoc'
-RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked
+echo '[4/9] canonical rustdoc'
+RUSTDOCFLAGS='-D warnings' cargo doc -p avelune --no-deps --locked
 
-echo '[5/11] script syntax'
+echo '[5/9] script/source syntax'
 node --check web/player/player.js
-node --check web/player/avelune-prod-loader.js
-node --check web/player/serve.mjs
+node --check web/player/avelune-loader.js
+node --check web/player/renderers.js
+node --check scripts/browser-loader-smoke.mjs
+node --check scripts/wasm-smoke.mjs
+node --check scripts/wasm-encoder-smoke.mjs
+node --check scripts/chromium-wasm-smoke.mjs
 node --check scripts/validate-content.mjs
-node --check scripts/prod-wasm-smoke.mjs
-node --check scripts/prod-browser-smoke.mjs
-node --check scripts/prod-browser-loader-smoke.mjs
-python3 -m py_compile scripts/benchmark-real.py scripts/benchmark-real-audio.py scripts/benchmark-xiph.py scripts/check-site-links.py scripts/prod-format-experiments.py scripts/prod-encoder-curves.py scripts/ci-media-regression.py scripts/compare-ci-media.py scripts/test-ci-regression-tools.py
+python3 -m py_compile scripts/benchmark-real.py scripts/benchmark-real-audio.py scripts/benchmark-xiph.py scripts/check-site-links.py scripts/format-experiments.py scripts/encoder-curves.py scripts/ci-media-regression.py scripts/compare-ci-media.py scripts/test-ci-regression-tools.py scripts/generate-demo-fixtures.py
 python3 scripts/test-ci-regression-tools.py
-bash -n scripts/build-wasm.sh scripts/build-prod-wasm.sh scripts/build-site.sh scripts/fetch-xiph-corpus.sh scripts/validate-draft.sh scripts/audit-prod-unsafe.sh scripts/prod-disassembly-check.sh scripts/validate-prod.sh scripts/ci-media-base-head.sh
+bash -n scripts/build-wasm.sh scripts/build-site.sh scripts/fetch-xiph-corpus.sh scripts/audit-unsafe.sh scripts/disassembly-check.sh scripts/validate-release.sh scripts/ci-media-base-head.sh
 
-echo '[6/11] production safety audit'
-./scripts/audit-prod-unsafe.sh
+echo '[6/9] unsafe boundary'
+./scripts/audit-unsafe.sh
 
-echo '[7/11] cli smoke + completions'
+echo '[7/9] CLI fixture'
 cargo build -p avelune-cli --locked
 BIN=${CARGO_TARGET_DIR:-target}/debug/avelune
 "$BIN" --version
 "$BIN" --help >/dev/null
 for sh in bash zsh fish powershell elvish; do "$BIN" completions "$sh" >/dev/null; done
-"$BIN" --backend prod verify web/player/demo.avl >/dev/null
-"$BIN" --backend reference verify web/player/demo.avl >/dev/null
+"$BIN" verify web/player/demo.avl >/dev/null
+python3 scripts/generate-demo-fixtures.py --cli "$BIN" --check
 
-echo '[8/11] wasm (when target installed)'
+echo '[8/9] WASM + browser transport (when target installed)'
 WASM_LIBDIR=$(rustc --print target-libdir --target wasm32-unknown-unknown 2>/dev/null || true)
 if [[ -n $WASM_LIBDIR && -d $WASM_LIBDIR ]]; then
   ./scripts/build-wasm.sh
-  ./scripts/build-prod-wasm.sh
-  node scripts/prod-wasm-smoke.mjs web/player/avelune-prod-scalar.wasm web/player/demo.avl
-  node scripts/prod-wasm-smoke.mjs web/player/avelune-prod-simd128.wasm web/player/demo.avl
+  node scripts/wasm-smoke.mjs web/player/avelune-scalar.wasm web/player/demo.avl
+  node scripts/wasm-smoke.mjs web/player/avelune-simd128.wasm web/player/demo.avl
+  node scripts/wasm-encoder-smoke.mjs web/player/avelune-scalar.wasm
+  node scripts/wasm-encoder-smoke.mjs web/player/avelune-simd128.wasm
+  node scripts/browser-loader-smoke.mjs
 else
   echo 'SKIP: wasm32-unknown-unknown stdlib is not installed'
 fi
 
-echo '[9/11] AsciiDoc content'
-npm run check:content
-
-echo '[10/11] docs/site'
-./scripts/build-site.sh --skip-wasm
-
-echo '[11/11] generated-site links and fragments'
-python3 scripts/check-site-links.py dist/site
+echo '[9/9] content/site when npm dependencies are installed'
+if [[ -x node_modules/.bin/astro ]]; then
+  npm run check:content
+  ./scripts/build-site.sh --skip-wasm
+  python3 scripts/check-site-links.py dist/site
+else
+  echo 'SKIP: npm dependency tree is not installed; run npm ci explicitly'
+fi
 
 echo 'Avelune development checks PASS'

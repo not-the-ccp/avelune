@@ -1,7 +1,7 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use avelune_prod::video::v1 as p;
-use avelune_video_ref_v1 as r;
+use avelune::video::v1 as p;
+use avelune_reference::video_decoder as r;
 fn byte(data:&[u8],i:usize)->u8{data.get(i).copied().unwrap_or(0)}
 fn shifted(src:&p::Frame420,dx:usize,dy:usize)->p::Frame420{
     fn plane(s:&[u8],w:usize,h:usize,dx:usize,dy:usize)->Vec<u8>{let mut o=vec![0;s.len()];for y in 0..h{for x in 0..w{let sx=x.saturating_sub(dx).min(w-1);let sy=y.saturating_sub(dy).min(h-1);o[y*w+x]=s[sy*w+sx];}}o}

@@ -13,7 +13,7 @@ const rootDocuments = {
 const sourceRoutes = new Map([
   ["docs/user/CLI.adoc", "/docs/cli/"],
   ["docs/development/VERSIONING.adoc", "/docs/development/versioning/"],
-  ["docs/development/REFERENCE_IMPLEMENTATION.adoc", "/docs/development/reference-implementation/"],
+  ["docs/development/REFERENCE_ORACLE.adoc", "/docs/development/reference-oracle/"],
   ["docs/IPR-NOTES.adoc", "/docs/ipr-notes/"],
   ["spec/", "/spec/"],
   ["spec/README.adoc", "/spec/overview/"],

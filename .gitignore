@@ -9,16 +9,14 @@
 .DS_Store
 *.tmp
 *.log
-# Generated browser binary. Build with scripts/build-wasm.sh.
-/web/player/avelune.wasm
+# Generated browser binaries. Build with scripts/build-wasm.sh.
+/web/player/avelune-scalar.wasm
+/web/player/avelune-simd128.wasm
 # Local benchmark media is intentionally not redistributed.
 /tests/corpus/
-# Generated production browser artifacts. Build with scripts/build-prod-wasm.sh.
-/web/player/avelune-prod-scalar.wasm
-/web/player/avelune-prod-simd128.wasm
 /fuzz/artifacts/
 /fuzz/target/
 /fuzz/corpus/*/.generated-*
 /results/ci-media/
-# Local production-validation evidence. Rebuild with scripts/validate-prod.sh.
+# Local validation/benchmark evidence. Rebuild with scripts/validate-release.sh.
 /results/

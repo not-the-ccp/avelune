@@ -9,9 +9,8 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-avelune-prod = { path = "../prod/rust" }
-avelune-video-ref-v1 = { path = "../impl/rust/crates/avelune-video-ref-v1" }
-avelune-audio-v1 = { path = "../impl/rust/crates/avelune-audio-v1" }
+avelune = { path = "../crates/avelune" }
+avelune-reference = { path = "../crates/avelune-reference" }
 
 [[bin]]
 name = "video_decode"

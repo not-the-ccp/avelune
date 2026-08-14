@@ -55,7 +55,7 @@ def text(cmd):
     except Exception: return None
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument('--cli',required=True); ap.add_argument('--out-json',required=True); ap.add_argument('--out-csv'); ap.add_argument('--q',type=int,default=96); ap.add_argument('--repeats',type=int,default=2); ap.add_argument('--backend',choices=['prod','reference'],default='prod')
+    ap=argparse.ArgumentParser(); ap.add_argument('--cli',required=True); ap.add_argument('--out-json',required=True); ap.add_argument('--out-csv'); ap.add_argument('--q',type=int,default=96); ap.add_argument('--repeats',type=int,default=2)
     a=ap.parse_args(); cli=Path(a.cli).resolve(); rows=[]
     kinds=['cut','pan','ui','gradient','noise','chroma']
     with tempfile.TemporaryDirectory(prefix='avelune-ci-media-') as td0:
@@ -64,18 +64,18 @@ def main():
             src=td/f'{kind}.y4m'; enc=td/f'{kind}.avl'; dec=td/f'{kind}.decoded.y4m'; y4m(src,kind)
             samples=[]
             for _ in range(a.repeats):
-                t=time.perf_counter(); run([str(cli),'--backend',a.backend,'raw','encode-y4m',str(src),str(enc),'--q',str(a.q),'--preset','balanced']); samples.append(time.perf_counter()-t)
+                t=time.perf_counter(); run([str(cli),'raw','encode-y4m',str(src),str(enc),'--q',str(a.q),'--preset','balanced']); samples.append(time.perf_counter()-t)
             d_samples=[]
             for _ in range(a.repeats):
-                t=time.perf_counter(); run([str(cli),'--backend','prod','raw','decode-y4m',str(enc),str(dec)]); d_samples.append(time.perf_counter()-t)
-            rows.append({'case':kind,'backend':a.backend,'q':a.q,'source_sha256':sha(src),'encoded_bytes':enc.stat().st_size,'encoded_sha256':sha(enc),'decoded_sha256':sha(dec),'psnr_db':metric(src,dec,'psnr'),'ssim':metric(src,dec,'ssim'),'encode_seconds_samples':samples,'encode_seconds_median':statistics.median(samples),'decode_seconds_samples':d_samples,'decode_seconds_median':statistics.median(d_samples)})
+                t=time.perf_counter(); run([str(cli),'raw','decode-y4m',str(enc),str(dec)]); d_samples.append(time.perf_counter()-t)
+            rows.append({'case':kind,'implementation':'canonical','q':a.q,'source_sha256':sha(src),'encoded_bytes':enc.stat().st_size,'encoded_sha256':sha(enc),'decoded_sha256':sha(dec),'psnr_db':metric(src,dec,'psnr'),'ssim':metric(src,dec,'ssim'),'encode_seconds_samples':samples,'encode_seconds_median':statistics.median(samples),'decode_seconds_samples':d_samples,'decode_seconds_median':statistics.median(d_samples)})
     commit=text(['git','rev-parse','HEAD']); dirty=bool(text(['git','status','--porcelain']))
-    meta={'schema':'avelune-ci-media-v2','backend':a.backend,'q':a.q,'repeats':a.repeats,
+    meta={'schema':'avelune-ci-media-v3','implementation':'canonical','q':a.q,'repeats':a.repeats,
           'provenance':{'commit':commit,'dirty':dirty,'rustc':text(['rustc','--version']),'platform':platform.platform(),'machine':platform.machine(),'cli_sha256':sha(cli)},
           'cases':rows}
     Path(a.out_json).write_text(json.dumps(meta,indent=2)+'\n')
     if a.out_csv:
-        fields=['case','backend','q','source_sha256','encoded_bytes','psnr_db','ssim','encode_seconds_median','decode_seconds_median']
+        fields=['case','implementation','q','source_sha256','encoded_bytes','psnr_db','ssim','encode_seconds_median','decode_seconds_median']
         with Path(a.out_csv).open('w',newline='') as f:
             w=csv.DictWriter(f,fieldnames=fields);w.writeheader();w.writerows({k:r[k] for k in fields} for r in rows)
 if __name__=='__main__': main()

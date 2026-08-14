@@ -1,31 +1,23 @@
 = CLI guide
 :page-type: guide
 :page-status: current
-:summary: Encode, decode, inspect, verify, and experiment with Avelune from the command line.
+:summary: Encode, decode, inspect, verify, and maintain Avelune media from the command line.
 :nav-order: 10
 
 [#cli-purpose]
-== Purpose and status
+== Purpose
 
-`avelune` is the command-line front end for both the optimized production backend and the
-reference/research implementation. Codec commands accept a global backend selector:
-
-[source,text]
-----
---backend auto | prod | reference
-----
-
-`auto` currently selects `prod`. The reference backend remains available as a conformance/debugging
-oracle; structural container-maintenance commands do not pretend backend selection is meaningful when
-they are not doing codec work.
+`avelune` is the command-line front end to the one canonical Avelune implementation. There is no
+runtime `reference`/`production` backend selector; the independent oracle belongs to development and
+conformance tests.
 
 Run `avelune <command> --help` for the authoritative option list.
 
 [#cli-media-workflow]
-== Ordinary media workflow
+== Ordinary media
 
-Avelune deliberately does not implement H.264/AV1/AAC/etc. `encode`, `decode`, and `play` use FFmpeg
-for foreign media I/O.
+Avelune deliberately does not implement foreign H.264/AV1/AAC/etc. demuxing and decoding. Ordinary
+`encode`, `decode`, and `play` use FFmpeg/ffprobe/ffplay at that boundary.
 
 [source,sh]
 ----
@@ -34,36 +26,20 @@ avelune verify output.avl
 avelune decode output.avl roundtrip.mkv
 ----
 
-Useful encode options:
-
-[source,text]
-----
---seconds N       encode a prefix of the source
---size WxH        resize before reference encoding
---video-q N       experimental ALV1 quantizer step
---audio-q N       ALA1 quantizer step; defaults to 1 (mathematically lossless)
---epoch N         maximum epoch length in video frames
---preset NAME     fast | balanced | quality encoder search preset
-----
-
-`--video-q` and `--audio-q` are codec experiment knobs, *not* CRF values or bitrate targets. Do not
-assume a number has comparable meaning to x264/x265/AV1/Opus settings.
-
-Ordinary `encode` and `raw encode-audio` default to lossless ALA1 (`q=1`). Lossy ALA1 values remain
-available when explicitly selected, but are experimental and not perceptually tuned; the benchmark
-report shows that they can have very poor sample-SNR on some music and speech.
+Useful encode options include `--seconds`, `--size`, `--video-q`, `--audio-q`, `--epoch`, and
+`--preset fast|balanced|quality`. Quantizer values are experimental codec knobs, not CRF values or
+bitrate targets. Ordinary audio encoding defaults to mathematically lossless `q=1`.
 
 [#cli-playback]
-=== Playback
+== Playback
 
 [source,sh]
 ----
 avelune play movie.avl
 ----
 
-This is a convenience/reference path. It may decode/buffer/transcode through FFmpeg before launching
-`ffplay`; it is not a low-latency native Avelune player and should not be used to judge the eventual
-production architecture.
+This is a convenience transcode/`ffplay` path. The browser player is the indexed Range/local-file
+integration and should be used when evaluating Avelune's streaming model.
 
 [#cli-inspection]
 == Inspection and maintenance
@@ -73,65 +49,39 @@ production architecture.
 avelune inspect movie.avl
 avelune verify movie.avl
 avelune frames movie.avl
-avelune benchmark movie.avl
 avelune reindex input.avl reindexed.avl
 avelune repair damaged.avl recovered.avl
 ----
 
-* `benchmark` measures video decode throughput using the selected backend.
-* `reindex` rebuilds the front index from intact packets.
-* `repair` performs best-effort packet-magic resynchronization; it is not forensic recovery software.
+`verify` runs the same declared-stream-aware canonical session decoder used by other integrations.
+If the CLI output workflow sees multiple video or multiple audio streams, it rejects the ambiguous
+selection rather than silently combining them.
+
+`reindex` rebuilds the front index from intact packets. `repair` additionally attempts packet-magic
+resynchronization; it is best-effort recovery, not forensic repair software.
 
 [#cli-raw-workflows]
-== Raw codec workflows
-
-Raw subcommands avoid the ordinary-media front end where possible:
+== Raw workflows
 
 [source,sh]
 ----
-avelune raw encode-y4m input.y4m output.avl --q 96
+avelune raw encode-y4m input.y4m output.avl --q 96 --preset balanced
 avelune raw decode-y4m input.avl output.y4m
 avelune raw encode-audio input.wav output.avl --q 1
 avelune raw decode-audio input.avl output.s16le
 ----
 
-Draft Generation 1 video accepts 8-bit 4:2:0 Y4M only. Decoded raw audio is interleaved signed
+Draft Generation 1 video raw input/output is 8-bit 4:2:0 Y4M. Raw decoded audio is interleaved signed
 16-bit little-endian PCM.
-
-[#cli-conformance]
-== Conformance and robustness
-
-[source,sh]
-----
-avelune conformance dist/conformance
-avelune fuzz-smoke seed.avl 5000
-----
-
-`conformance` generates deterministic streams plus expected decoded outputs and cross-checks video
-through both the primary and source-separated scalar decoder.
-
-`fuzz-smoke` is deterministic mutation testing. It is useful for regression checks but does not
-replace a sustained coverage-guided fuzz campaign.
 
 [#cli-completions]
 == Shell completions
 
-Completion scripts are generated from the same command model as `--help`:
-
 [source,sh]
 ----
-avelune completions bash > ~/.local/share/bash-completion/completions/avelune
-avelune completions zsh  > ~/.zfunc/_avelune
-avelune completions fish > ~/.config/fish/completions/avelune.fish
-avelune completions powershell > avelune.ps1
-avelune completions elvish > avelune.elv
+avelune completions bash > avelune.bash
+avelune completions zsh > _avelune
+avelune completions fish > avelune.fish
 ----
 
-[#cli-color]
-== Color and non-interactive use
-
-Clap automatically uses terminal color where appropriate. Set the conventional `NO_COLOR`
-environment variable to suppress the custom runtime error prefix as well.
-
-Commands return a non-zero exit status on failure. Binary-producing raw commands support `-` where
-the underlying helper accepts stdin/stdout; ordinary FFmpeg-facing commands expect filesystem paths.
+Completion scripts are generated from the same typed Clap command model as `--help`.

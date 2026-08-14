@@ -48,8 +48,8 @@ maintainer explicitly asks you to do so.
 
 - [`STATUS.md`](STATUS.md) — what exists and what is not stable;
 - [`spec/README.adoc`](spec/README.adoc) — normative-draft hierarchy;
-- [`docs/development/REFERENCE_IMPLEMENTATION.adoc`](docs/development/REFERENCE_IMPLEMENTATION.adoc) —
-  what the Rust implementation is for;
+- [`docs/development/REFERENCE_ORACLE.adoc`](docs/development/REFERENCE_ORACLE.adoc) —
+  why the independent conformance oracle exists;
 - [`docs/development/VERSIONING.adoc`](docs/development/VERSIONING.adoc) — compatibility policy;
 - [`AGENTS.md`](AGENTS.md) — concise repository workflow for coding agents and humans.
 
@@ -62,7 +62,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo test --workspace --doc
-cargo doc --workspace --no-deps
+cargo doc -p avelune --no-deps
 ```
 
 `./scripts/dev-check.sh` runs the supported repository checks in one command.

@@ -62,97 +62,42 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 name = "avelune"
 version = "0.1.1"
 dependencies = [
- "avelune-audio-v1",
- "avelune-bitstream",
- "avelune-container-v1",
- "avelune-prod",
- "avelune-video-ref-v1",
- "avelune-video-v1",
-]
-
-[[package]]
-name = "avelune-audio-v1"
-version = "0.1.1"
-dependencies = [
- "avelune-bitstream",
-]
-
-[[package]]
-name = "avelune-bitstream"
-version = "0.1.1"
-
-[[package]]
-name = "avelune-cli"
-version = "0.1.1"
-dependencies = [
- "avelune-audio-v1",
- "avelune-container-v1",
- "avelune-prod",
- "avelune-video-ref-v1",
- "avelune-video-v1",
- "clap",
- "clap_complete",
-]
-
-[[package]]
-name = "avelune-container-v1"
-version = "0.1.1"
-
-[[package]]
-name = "avelune-prod"
-version = "0.1.1"
-dependencies = [
- "avelune-audio-v1",
- "avelune-container-v1",
- "avelune-prod-kernels",
- "avelune-video-ref-v1",
- "avelune-video-v1",
+ "avelune-kernels",
+ "avelune-reference",
  "proptest",
  "rayon",
 ]
 
 [[package]]
-name = "avelune-prod-kernels"
-version = "0.1.1"
-
-[[package]]
-name = "avelune-prod-lab"
+name = "avelune-cli"
 version = "0.1.1"
 dependencies = [
- "avelune-audio-v1",
- "avelune-prod",
- "avelune-video-ref-v1",
- "avelune-video-v1",
+ "avelune",
+ "clap",
+ "clap_complete",
 ]
 
 [[package]]
-name = "avelune-prod-wasm"
+name = "avelune-kernels"
+version = "0.1.1"
+
+[[package]]
+name = "avelune-lab"
 version = "0.1.1"
 dependencies = [
- "avelune-prod",
+ "avelune",
+ "avelune-reference",
 ]
 
 [[package]]
-name = "avelune-video-ref-v1"
+name = "avelune-reference"
 version = "0.1.1"
-dependencies = [
- "avelune-bitstream",
- "avelune-video-v1",
-]
 
 [[package]]
-name = "avelune-video-v1"
+name = "avelune-wasm"
 version = "0.1.1"
 dependencies = [
- "avelune-bitstream",
-]
-
-[[package]]
-name = "avelune-wasm-v1"
-version = "0.1.1"
-dependencies = [
- "avelune-audio-v1",
- "avelune-video-v1",
+ "avelune",
 ]
 
 [[package]]

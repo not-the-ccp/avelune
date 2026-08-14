@@ -1,54 +1,91 @@
 = Browser streaming contract
 :page-type: architecture
 :page-status: current
-:summary: The incremental production decoder ABI and bounded-buffering contract for browser streaming.
+:summary: The canonical WASM ABI, exact byte-range contract, cancellation generations, and bounded presentation model.
 :nav-order: 40
 
-The production browser API is incremental and container-aware. A whole-file `decode_entire_file`
-interface is intentionally not the primary ABI.
+The browser API is incremental and container-aware. Rust/WASM owns Avelune parsing and codec
+semantics; JavaScript owns byte transport, cancellation, clocks, audio scheduling, and presentation.
 
-[#avl-production-wasm-surface]
-== Production WASM surface
+[#browser-wasm-surface]
+== Canonical WASM surface
 
-The current production WASM surface is conceptually:
+The important operations are conceptually:
 
 [source,text]
 ----
-decoder_create(config) -> handle
+decoder_create() -> handle
 decoder_destroy(handle)
 input_reserve(handle, len) -> ptr
 decoder_push(handle, len)
+decoder_finish_input(handle)
+decoder_seek_reset_epoch(handle, epoch_id)
 decoder_pop_video(handle)
 decoder_pop_audio(handle)
-decoder_seek_reset(handle, ...)
+
+video_encoder_create(width, height, fps_flags, qstep, preset, epoch_frames, meta0) -> handle
+video_encoder_frame_ptr(handle) -> ptr
+video_encoder_push_frame(handle)
+video_encoder_finish(handle)
+video_encoder_output_ptr(handle) / video_encoder_output_len(handle)
 ----
 
-`input_reserve` exposes the production parser's own tail storage. JavaScript writes fetched bytes
-there and `decoder_push` commits them; validated packet payloads are consumed as borrowed views rather
-than copied into a second input packet buffer. Arbitrary transport fragmentation, including one-byte
-fragments, is covered by the native parser tests.
+The ABI also exposes the Rust-validated front index, stream descriptors, indexed epoch byte ranges,
+and stream IDs on decoded outputs. JavaScript therefore does not implement Avelune packet framing,
+CRC, stream routing, or reference-state semantics independently.
 
-The WASM ABI also exposes the Rust-validated front index (stream descriptors and epoch byte ranges),
-so the browser does not maintain a second implementation of Avelune file-header/front-index/packet
-framing or CRC rules.
+`decoder_finish_input` is required at an indexed-range boundary. Transport EOF by itself does not
+prove that a parser ended on a complete packet.
 
-[#avl-artifact-selection]
-== Artifact selection
+The video encoder surface is intentionally narrower than the decoder. It accepts complete planar
+8-bit 4:2:0 frames, uses fixed-duration epochs, and returns a video-only Draft Generation 1
+container. The demo's Y4M encoder lab is a validation/usefulness feature, not a claim that browsers
+can natively demux arbitrary MP4/WebM inputs. A general upload workflow should only be added with a
+reliable media-ingest layer; FFmpeg-WASM is not pulled in merely to make the demo appear complete.
 
-The browser loader tries the separately built SIMD128 artifact first and falls back to the scalar
-artifact. SIMD support is therefore a module-selection concern rather than pretending native-style
-runtime dispatch can make one SIMD-containing WASM binary universally loadable.
+[#browser-artifacts]
+== Scalar and SIMD128 artifacts
 
-Browser threads are not required for baseline correctness and are not part of the current validated
-artifact set.
+`build-wasm.sh` produces separate `avelune-scalar.wasm` and `avelune-simd128.wasm` modules. The
+loader prefers SIMD128 in `auto` mode and falls back to scalar if the SIMD module cannot be loaded.
+This is module selection, not a second codec backend.
 
-[#avl-range-and-buffering-rule]
-== Range and buffering rule
+[#browser-byte-sources]
+== Byte sources
 
-JavaScript remains responsible for HTTP Range scheduling and presentation. It fetches the fixed
-header, then the exact validated front-index length, then indexed epoch ranges. The Rust production
-container/parser handles interpretation and validation of those bytes.
+The player uses one range-source contract for HTTP and local files.
 
-The player processes one indexed epoch at a time and does not require decoding the entire file before
-playback. Reference-picture history remains bounded by the codec's four-reference limit. WebGPU is
-currently a presentation/experimental compute path and is not claimed as a validated codec backend.
+For HTTP, every media range must:
+
+* return status `206`;
+* return a parseable `Content-Range` matching the exact requested first and last byte;
+* remain consistent about total source size when supplied;
+* return the expected `Content-Length` when that header is present;
+* deliver exactly the indexed byte count, neither shorter nor longer.
+
+Local `Blob`/`File` playback uses `Blob.slice()` in bounded chunks and exercises the same epoch decode
+path without uploading the file.
+
+[#browser-generations]
+== Decode generations and seeking
+
+Starting a load or epoch decode creates a new decoder generation and invalidates the previous one.
+This check is intrinsic to the loader, in addition to `AbortSignal` transport cancellation. A stale
+source that ignores cancellation is therefore stopped before its next bytes can enter the reset WASM
+decoder.
+
+An epoch transaction is:
+
+. reset the canonical session for the expected indexed epoch ID;
+. stream arbitrary byte fragments into the decoder;
+. drain decoded outputs with presentation backpressure;
+. explicitly finalize input;
+. accept success only if the parser/session is complete and semantically valid.
+
+[#browser-presentation]
+== Presentation and buffering
+
+Decoded callbacks are awaited, so JavaScript does not need to collect an entire epoch before
+presentation. WebAudio scheduling is bounded and cancelled on pause/seek/reload. Canvas2D and WebGPU
+are presentation implementations only; they do not change codec semantics. WebGPU textures and
+pipelines are reused while dimensions remain unchanged.

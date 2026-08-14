@@ -3,37 +3,250 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 ---
 <BaseLayout title="Browser demo" mode="grid" current="demo">
-  <div class="demo-shell">
-    <header class="demo-header"><p class="eyebrow">BROWSER PRODUCTION INSTRUMENT</p><h1>Range-fetch and decode Avelune.</h1><p>Custom Draft Generation 1 <code>ALV1</code> video and <code>ALA1</code> audio decoded in WebAssembly by the production Rust container/codec backend, selecting SIMD128 when available; JavaScript only schedules HTTP ranges and presentation.</p></header>
+  <main class="demo-shell" id="drop-target">
+    <header class="demo-header">
+      <p class="eyebrow">BROWSER CODEC INSTRUMENT</p>
+      <h1>Decode Avelune in the browser.</h1>
+      <p>
+        Load a bundled example, an HTTP Range source, or a local <code>.avl</code> file.
+        The canonical Rust decoder runs in WebAssembly; JavaScript owns transport,
+        cancellation, scheduling, and Canvas/WebGPU presentation.
+      </p>
+    </header>
+
     <div class="instrument">
-      <section class="viewport" aria-label="Video viewport"><canvas id="c" width="640" height="360">Decoded Avelune video appears here.</canvas></section>
-      <section class="transport" aria-label="Player controls">
-        <div class="source-control"><label for="url">Media URL</label><input id="url" type="text" value="demo.avl" spellcheck="false" /><button id="load" type="button">Load stream</button></div>
-        <div class="play-control"><button id="play" type="button" disabled>Play / resume</button><label class="sr-only" for="seek">Seek position</label><input id="seek" type="range" min="0" max="1" step=".001" value="0" disabled /><output id="time" for="seek">0.00s</output></div>
-        <pre id="status" role="status" aria-live="polite">idle</pre>
+      <section class="viewport" aria-label="Video viewport">
+        <canvas id="c" width="640" height="360">Decoded Avelune video appears here.</canvas>
+        <div class="drop-message" aria-hidden="true">DROP .AVL FILE</div>
       </section>
+
+      <section class="transport" aria-label="Player controls">
+        <div class="load-grid">
+          <div class="control-group">
+            <label for="sample">Bundled example</label>
+            <div class="control-row">
+              <select id="sample">
+                <option value="demo.avl">A/V baseline · 320×180</option>
+                <option value="motion.avl">Motion / texture</option>
+                <option value="screen.avl">Screen / text content</option>
+              </select>
+              <button id="load-sample" type="button">Load</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label for="url">HTTP Range source</label>
+            <div class="control-row">
+              <input id="url" type="url" placeholder="https://…/video.avl" spellcheck="false" />
+              <button id="load-url" type="button">Load URL</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label for="file">Local file</label>
+            <div class="control-row file-row">
+              <input id="file" type="file" accept=".avl,application/octet-stream" />
+              <span class="hint">or drop it anywhere on the instrument</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="play-control">
+          <button id="play" type="button" disabled>Play</button>
+          <label class="sr-only" for="seek">Seek position</label>
+          <input id="seek" type="range" min="0" max="1" step=".001" value="0" disabled />
+          <output id="time" for="seek">0.00s</output>
+          <label class="compact-label" for="volume">VOL</label>
+          <input id="volume" class="volume" type="range" min="0" max="1" step=".01" value="1" />
+        </div>
+
+        <details class="advanced-controls">
+          <summary>Decoder / renderer controls</summary>
+          <div class="advanced-row">
+            <label for="wasm-artifact">WASM</label>
+            <select id="wasm-artifact">
+              <option value="auto">Auto</option>
+              <option value="simd128">SIMD128</option>
+              <option value="scalar">Scalar</option>
+            </select>
+            <label for="renderer-choice">Renderer</label>
+            <select id="renderer-choice">
+              <option value="auto">Auto</option>
+              <option value="webgpu">WebGPU</option>
+              <option value="canvas">Canvas 2D</option>
+            </select>
+          </div>
+        </details>
+
+
+        <details class="encoder-lab">
+          <summary>Local Y4M encoder lab</summary>
+          <p>
+            Encode an 8-bit 4:2:0 Y4M video entirely in this tab, then load the resulting
+            <code>.avl</code> into the same player. This intentionally does not pretend the browser
+            can robustly demux arbitrary MP4/WebM without another media stack.
+          </p>
+          <div class="encoder-grid">
+            <label for="encode-file">Y4M source</label>
+            <input id="encode-file" type="file" accept=".y4m,video/x-yuv4mpeg" />
+            <label for="encode-q">Q step</label>
+            <input id="encode-q" type="number" min="1" max="65535" value="96" inputmode="numeric" />
+            <label for="encode-preset">Preset</label>
+            <select id="encode-preset">
+              <option value="fast">Fast</option>
+              <option value="balanced" selected>Balanced</option>
+              <option value="quality">Quality</option>
+            </select>
+            <button id="encode-y4m" type="button">Encode + load</button>
+          </div>
+          <div class="encoder-result">
+            <span id="encode-status" role="status" aria-live="polite">No source selected.</span>
+            <a id="encode-download" hidden>Save encoded .avl</a>
+          </div>
+        </details>
+      </section>
+
       <aside class="inspector" aria-label="Stream inspector">
-        <header><span>INSPECTOR</span><span id="state-label">IDLE</span></header>
-        <section><h2>Format</h2><dl><div><dt>Video</dt><dd id="format-video">—</dd></div><div><dt>Audio</dt><dd id="format-audio">—</dd></div><div><dt>Renderer</dt><dd id="format-renderer">—</dd></div><div><dt>Dimensions</dt><dd id="format-dimensions">—</dd></div></dl></section>
-        <section><h2>Container</h2><dl><div><dt>Streams</dt><dd id="container-streams">—</dd></div><div><dt>Epochs</dt><dd id="container-epochs">—</dd></div><div><dt>Front index</dt><dd id="container-front">—</dd></div></dl></section>
-        <section><h2>Fetch / playback</h2><dl><div><dt>Epoch</dt><dd id="playback-epoch">—</dd></div><div><dt>Range</dt><dd id="playback-range">—</dd></div><div><dt>Time</dt><dd id="playback-time">0.00s</dd></div></dl></section>
+        <header>
+          <span>INSPECTOR</span>
+          <span id="state-label">IDLE</span>
+        </header>
+        <p id="state-detail" class="state-detail">No source loaded.</p>
+
+        <section>
+          <h2>Source</h2>
+          <dl>
+            <div><dt>Name</dt><dd id="source-name">—</dd></div>
+            <div><dt>Size</dt><dd id="source-size">—</dd></div>
+            <div><dt>WASM</dt><dd id="wasm-name">—</dd></div>
+            <div><dt>Renderer</dt><dd id="format-renderer">—</dd></div>
+          </dl>
+        </section>
+
+        <section>
+          <h2>Streams</h2>
+          <pre id="stream-list" class="stream-list">—</pre>
+          <dl>
+            <div><dt>Video</dt><dd id="format-video">—</dd></div>
+            <div><dt>Audio</dt><dd id="format-audio">—</dd></div>
+            <div><dt>Dimensions</dt><dd id="format-dimensions">—</dd></div>
+          </dl>
+        </section>
+
+        <section>
+          <h2>Container</h2>
+          <dl>
+            <div><dt>Streams</dt><dd id="container-streams">—</dd></div>
+            <div><dt>Epochs</dt><dd id="container-epochs">—</dd></div>
+            <div><dt>Front index</dt><dd id="container-front">—</dd></div>
+          </dl>
+        </section>
+
+        <section>
+          <h2>Playback</h2>
+          <dl>
+            <div><dt>Epoch</dt><dd id="playback-epoch">—</dd></div>
+            <div><dt>Frame</dt><dd id="playback-frame">—</dd></div>
+            <div><dt>Range</dt><dd id="playback-range">—</dd></div>
+            <div><dt>Time</dt><dd id="playback-time">0.00s</dd></div>
+          </dl>
+        </section>
+
+        <details class="event-panel">
+          <summary>Request / decoder log</summary>
+          <pre id="event-log" aria-live="polite"></pre>
+        </details>
       </aside>
     </div>
-  </div>
+  </main>
   <script type="module" src={`${base}/demo/player.js`}></script>
 </BaseLayout>
+
 <style>
   @layer page {
-    .demo-shell{width:min(calc(100% - 2rem),var(--shell));margin:auto;padding:4rem 0}
-    .demo-header{display:grid;grid-template-columns:1fr 2fr;gap:2rem;align-items:start;margin-bottom:2rem}
-    .demo-header h1{grid-column:2;margin:0;font-size:clamp(2.5rem,5vw,4.1rem);max-width:15ch}.demo-header>p:last-child{grid-column:2;max-width:65ch;color:var(--muted);margin:0}
-    .instrument{display:grid;grid-template-columns:minmax(0,3fr) minmax(240px,1fr);border-block:1px solid var(--rule)}
-    .viewport{display:grid;place-items:center;min-height:480px;background:#050505;border-right:1px solid var(--rule)}.viewport canvas{width:100%;height:auto}
-    .transport{grid-row:2;display:grid;gap:.75rem;padding:1rem 0;border-top:1px solid var(--rule);border-right:1px solid var(--rule)}
-    .source-control,.play-control{display:flex;gap:.65rem;align-items:center;padding-right:1rem}.source-control label{font:.68rem var(--font-mono);color:var(--muted)}
-    input,button{min-height:40px;border:1px solid var(--rule);border-radius:2px;background:var(--surface);color:var(--ink)}input[type=text]{min-width:0;flex:1;padding:.45rem .6rem;font-family:var(--font-mono)}button{padding:.4rem .8rem}button:not(:disabled):hover{border-color:var(--cool)}button:disabled{color:var(--muted)}input[type=range]{flex:1;accent-color:var(--cool)}output{min-width:5rem;font: .78rem var(--font-mono)}
-    #status{margin:0;padding:.5rem 1rem 0 0;white-space:pre-wrap;color:var(--muted);font-size:.68rem;background:none;border:0}
-    .inspector{grid-column:2;grid-row:1/3}.inspector>header{display:flex;justify-content:space-between;padding:.8rem;color:var(--muted);font:.65rem var(--font-mono)}#state-label{color:var(--warm)}.inspector section{padding:.85rem;border-top:1px solid var(--rule)}.inspector h2{margin:0 0 .65rem;color:var(--muted);font:.65rem var(--font-mono);letter-spacing:.08em;text-transform:uppercase}.inspector dl{margin:0}.inspector dl div{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;padding:.25rem 0}.inspector dt{color:var(--muted);font-size:.73rem}.inspector dd{margin:0;text-align:right;font:.7rem var(--font-mono);overflow-wrap:anywhere}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
-    @media(max-width:780px){.demo-header{display:block}.demo-header h1{margin:.6rem 0 1rem}.instrument{display:flex;flex-direction:column}.viewport{min-height:0;border-right:0}.transport{order:2;border-right:0}.inspector{order:3}.source-control{flex-wrap:wrap}.source-control label{width:100%}.source-control input{flex-basis:60%}}
+    .demo-shell { width:min(calc(100% - 2rem),var(--shell)); margin:auto; padding:4rem 0; }
+    .demo-header { display:grid; grid-template-columns:1fr 2fr; gap:2rem; align-items:start; margin-bottom:2rem; }
+    .demo-header h1 { grid-column:2; margin:0; font-size:clamp(2.5rem,5vw,4.1rem); max-width:15ch; }
+    .demo-header > p:last-child { grid-column:2; max-width:68ch; color:var(--muted); margin:0; }
+
+    .instrument { position:relative; display:grid; grid-template-columns:minmax(0,3fr) minmax(260px,1fr); border-block:1px solid var(--rule); }
+    .viewport { position:relative; display:grid; place-items:center; min-height:480px; overflow:hidden; background:#050505; border-right:1px solid var(--rule); }
+    .viewport canvas { width:100%; height:auto; max-height:70vh; object-fit:contain; }
+    .drop-message { position:absolute; inset:1rem; display:none; place-items:center; border:1px dashed var(--cool); background:rgba(17,18,17,.88); color:var(--cool); font:.72rem var(--font-mono); letter-spacing:.08em; }
+    .demo-shell[data-drop="true"] .drop-message { display:grid; }
+
+    .transport { grid-row:2; display:grid; gap:1rem; padding:1rem 1rem 1rem 0; border-top:1px solid var(--rule); border-right:1px solid var(--rule); }
+    .load-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.8rem 1rem; }
+    .control-group { min-width:0; }
+    .control-group > label, .compact-label { display:block; margin-bottom:.35rem; color:var(--muted); font:.66rem var(--font-mono); letter-spacing:.04em; text-transform:uppercase; }
+    .control-row { display:flex; min-width:0; gap:.5rem; align-items:center; }
+    .file-row { min-height:40px; }
+    .hint { color:var(--muted); font-size:.72rem; }
+
+    input, select, button { min-height:40px; border:1px solid var(--rule); border-radius:2px; background:var(--surface); color:var(--ink); }
+    input[type=url], select { min-width:0; flex:1; padding:.45rem .6rem; font-family:var(--font-mono); }
+    input[type=file] { width:100%; min-width:0; padding:.35rem; font:.72rem var(--font-mono); }
+    input[type=file]::file-selector-button { margin-right:.5rem; border:0; border-right:1px solid var(--rule); background:transparent; color:var(--ink); }
+    button { padding:.4rem .8rem; white-space:nowrap; }
+    button:not(:disabled):hover, select:hover, input:hover { border-color:var(--cool); }
+    button:disabled { color:var(--muted); }
+    button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline:2px solid var(--cool); outline-offset:2px; }
+
+    .play-control { display:grid; grid-template-columns:auto minmax(120px,1fr) auto auto minmax(70px,110px); gap:.65rem; align-items:center; border-top:1px solid var(--rule); padding-top:1rem; }
+    input[type=range] { width:100%; min-height:auto; accent-color:var(--cool); border:0; background:transparent; }
+    output { min-width:5rem; font:.78rem var(--font-mono); }
+    .compact-label { margin:0; }
+
+    .advanced-controls { border-top:1px solid var(--rule); padding-top:.75rem; }
+    .advanced-controls summary, .event-panel summary { cursor:pointer; color:var(--muted); font:.68rem var(--font-mono); }
+    .advanced-row { display:grid; grid-template-columns:auto minmax(110px,180px) auto minmax(110px,180px); gap:.5rem; align-items:center; margin-top:.75rem; }
+    .advanced-row label { color:var(--muted); font:.65rem var(--font-mono); }
+
+    .encoder-lab { border-top:1px solid var(--rule); padding-top:.75rem; }
+    .encoder-lab summary { cursor:pointer; color:var(--muted); font:.68rem var(--font-mono); }
+    .encoder-lab > p { max-width:72ch; margin:.75rem 0; color:var(--muted); font-size:.78rem; }
+    .encoder-grid { display:grid; grid-template-columns:auto minmax(0,1fr) auto minmax(90px,130px) auto minmax(110px,160px) auto; gap:.5rem; align-items:center; }
+    .encoder-grid > label { color:var(--muted); font:.65rem var(--font-mono); text-transform:uppercase; }
+    .encoder-grid input[type=number] { width:100%; padding:.45rem .6rem; font-family:var(--font-mono); }
+    .encoder-result { display:flex; justify-content:space-between; gap:1rem; margin-top:.65rem; color:var(--muted); font:.7rem var(--font-mono); }
+    .encoder-result a { color:var(--cool); }
+
+    .inspector { grid-column:2; grid-row:1/3; min-width:0; }
+    .inspector > header { display:flex; justify-content:space-between; padding:.8rem; color:var(--muted); font:.65rem var(--font-mono); }
+    #state-label { color:var(--warm); }
+    .state-detail { margin:0; padding:0 .8rem .8rem; color:var(--muted); font-size:.72rem; overflow-wrap:anywhere; }
+    .inspector section { padding:.85rem; border-top:1px solid var(--rule); }
+    .inspector h2 { margin:0 0 .65rem; color:var(--muted); font:.65rem var(--font-mono); letter-spacing:.08em; text-transform:uppercase; }
+    .inspector dl { margin:0; }
+    .inspector dl div { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.35fr); gap:.5rem; padding:.25rem 0; }
+    .inspector dt { color:var(--muted); font-size:.73rem; }
+    .inspector dd { margin:0; text-align:right; font:.7rem var(--font-mono); overflow-wrap:anywhere; }
+    .stream-list { margin:0 0 .6rem; padding:0 0 .6rem; white-space:pre-wrap; border-bottom:1px solid var(--rule); background:none; color:var(--ink); font:.68rem/1.55 var(--font-mono); }
+    .event-panel { border-top:1px solid var(--rule); padding:.85rem; }
+    #event-log { max-height:14rem; overflow:auto; margin:.75rem 0 0; padding:.65rem; border:1px solid var(--rule); background:#0b0c0b; color:var(--muted); white-space:pre-wrap; font:.63rem/1.5 var(--font-mono); }
+
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+
+    @media(max-width:900px) {
+      .instrument { grid-template-columns:minmax(0,1fr) 250px; }
+      .viewport { min-height:360px; }
+      .load-grid { grid-template-columns:1fr; }
+    }
+    @media(max-width:720px) {
+      .demo-shell { padding:2rem 0; }
+      .demo-header { display:block; }
+      .demo-header h1 { margin:.6rem 0 1rem; }
+      .instrument { display:flex; flex-direction:column; }
+      .viewport { min-height:0; border-right:0; }
+      .transport { order:2; border-right:0; padding-right:0; }
+      .inspector { order:3; }
+      .play-control { grid-template-columns:auto minmax(80px,1fr) auto; }
+      .play-control .compact-label, .play-control .volume { grid-row:2; }
+      .play-control .volume { grid-column:2/4; }
+      .advanced-row { grid-template-columns:auto 1fr; }
+      .encoder-grid { grid-template-columns:auto minmax(0,1fr); }
+      .encoder-grid button { grid-column:1/3; }
+      .encoder-result { flex-direction:column; }
+    }
   }
 </style>
