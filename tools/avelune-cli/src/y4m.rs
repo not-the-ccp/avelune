@@ -137,12 +137,26 @@ pub fn emit(y4m: &Y4m) -> Vec<u8> {
     out
 }
 
+/// Packs a validated frame rate into a Draft Generation 1 stream flags field.
+///
+/// Both components must be in `1..=65_535`; [`parse`] enforces this contract for
+/// Y4M input.
 pub fn fps_flags(n: u32, d: u32) -> u32 {
     debug_assert!(n <= u16::MAX.into() && d <= u16::MAX.into());
     (n << 16) | d
 }
-pub fn fps_from_flags(flags: u32) -> (u32, u32) {
-    ((flags >> 16).max(1), (flags & 65535).max(1))
+
+/// Unpacks a frame rate from a Draft Generation 1 stream flags field.
+///
+/// Returns an error if either the numerator or denominator is zero.
+pub fn fps_from_flags(flags: u32) -> Result<(u32, u32)> {
+    let (n, d) = (flags >> 16, flags & u32::from(u16::MAX));
+    if n == 0 || d == 0 {
+        return Err(CliError::message(
+            "video stream declares a zero frame-rate numerator or denominator",
+        ));
+    }
+    Ok((n, d))
 }
 
 #[cfg(test)]
@@ -165,5 +179,13 @@ mod tests {
             let input = format!("YUV4MPEG2 W2 H2 F30:1 Ip A1:1 C{chroma}\n");
             assert!(parse(input.as_bytes()).is_ok(), "rejected C{chroma}");
         }
+    }
+
+    #[test]
+    fn frame_rate_flags_reject_zero_components_and_round_trip() {
+        assert!(fps_from_flags(0).is_err());
+        assert!(fps_from_flags(fps_flags(30, 0)).is_err());
+        assert!(fps_from_flags(fps_flags(0, 1)).is_err());
+        assert_eq!(fps_from_flags(fps_flags(30, 1)).unwrap(), (30, 1));
     }
 }

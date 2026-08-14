@@ -29,12 +29,21 @@ pub fn write_all(path: &str, bytes: &[u8]) -> Result<()> {
     }
 }
 
+/// A uniquely reserved file inside a private temporary directory.
+///
+/// Dropping this value attempts to remove both the file and its containing
+/// directory. Cleanup failures are ignored.
 #[derive(Debug)]
 pub struct TempPath {
     dir: PathBuf,
     path: PathBuf,
 }
 impl TempPath {
+    /// Atomically reserves `name` in a new private temporary directory.
+    ///
+    /// On Unix, the directory is created with mode `0700`. The reserved file and
+    /// directory are automatically removed when the returned value is dropped;
+    /// cleanup failures are ignored.
     pub fn new(name: &str) -> Result<Self> {
         let base = std::env::temp_dir();
         for attempt in 0..64u32 {
@@ -69,6 +78,10 @@ impl TempPath {
             "could not reserve a unique temporary path",
         ))
     }
+    /// Returns the path of the reserved temporary file.
+    ///
+    /// The path remains owned by this value and is scheduled for best-effort
+    /// removal when the value is dropped.
     pub fn path(&self) -> &Path {
         &self.path
     }

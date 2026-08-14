@@ -358,17 +358,20 @@ pub fn decode(bytes: &[u8]) -> Result<DecodedMedia> {
         })?;
     }
     decoder.finish_input()?;
-    let video = video_desc.map(|s| {
-        let (fps_n, fps_d) = y4m::fps_from_flags(s.flags);
-        Y4m {
-            w: s.param0,
-            h: s.param1,
-            fps_n,
-            fps_d,
-            meta0: s.meta0,
-            frames: video_frames,
+    let video = match video_desc {
+        Some(s) => {
+            let (fps_n, fps_d) = y4m::fps_from_flags(s.flags)?;
+            Some(Y4m {
+                w: s.param0,
+                h: s.param1,
+                fps_n,
+                fps_d,
+                meta0: s.meta0,
+                frames: video_frames,
+            })
         }
-    });
+        None => None,
+    };
     let audio = match audio_desc {
         Some(s) => {
             let channels = u8::try_from(s.param1)
