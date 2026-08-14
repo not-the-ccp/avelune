@@ -11,6 +11,7 @@ if [[ $SKIP_WASM -eq 0 ]]; then ./scripts/build-wasm.sh; fi
 cargo doc -p avelune --no-deps --locked
 npm run build
 OUT=dist/site
+[[ ! -e "$OUT/project/agents" ]] || { echo 'internal AGENTS.md guidance must not be published' >&2; exit 1; }
 DOCROOT=${CARGO_TARGET_DIR:-target}/doc
 mkdir -p "$OUT/api/rust" "$OUT/demo"
 cp -a "$DOCROOT"/. "$OUT/api/rust/"
