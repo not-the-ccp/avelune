@@ -7,13 +7,19 @@ TMP=$(mktemp -d); trap 'git worktree remove --force "$TMP/base" >/dev/null 2>&1 
 git worktree add --detach "$TMP/base" "$BASE_SHA" >/dev/null
 CARGO_TARGET_DIR="$TMP/base-target" cargo build --manifest-path "$TMP/base/Cargo.toml" -p avelune-cli --release --locked
 CARGO_TARGET_DIR="$TMP/head-target" cargo build -p avelune-cli --release --locked
-base_cli="$TMP/base-target/release/avelune"; [[ -x "$base_cli" ]] || base_cli="$TMP/base-target/release/avelune.exe"
-if ! "$base_cli" --help 2>&1 | grep -q -- '--backend'; then
-  echo 'SKIP: base commit CLI predates the production --backend facade; base/head codec regression requires a production-capable base'
-  exit 0
+base_bin="$TMP/base-target/release/avelune"; [[ -x "$base_bin" ]] || base_bin="$TMP/base-target/release/avelune.exe"
+head_bin="$TMP/head-target/release/avelune"; [[ -x "$head_bin" ]] || head_bin="$TMP/head-target/release/avelune.exe"
+base_cli="$base_bin"
+# Historical bases may expose the old dual-backend CLI. Wrap only the historical binary so the
+# regression workload still targets its production implementation; the current CLI has no backend switch.
+if "$base_bin" --help 2>&1 | grep -q -- '--backend'; then
+  cat > "$TMP/base-wrapper" <<WRAP
+#!/usr/bin/env bash
+exec "$base_bin" --backend prod "\$@"
+WRAP
+  chmod +x "$TMP/base-wrapper"
+  base_cli="$TMP/base-wrapper"
 fi
-for side in base head; do
-  cli="$TMP/$side-target/release/avelune"; [[ -x "$cli" ]] || cli="$TMP/$side-target/release/avelune.exe"
-  python3 scripts/ci-media-regression.py --cli "$cli" --backend prod --repeats "${AVELUNE_CI_MEDIA_REPEATS:-2}" --out-json "$OUT/$side.json" --out-csv "$OUT/$side.csv"
-done
+python3 scripts/ci-media-regression.py --cli "$base_cli" --implementation legacy-production --repeats "${AVELUNE_CI_MEDIA_REPEATS:-2}" --out-json "$OUT/base.json" --out-csv "$OUT/base.csv"
+python3 scripts/ci-media-regression.py --cli "$head_bin" --implementation canonical --repeats "${AVELUNE_CI_MEDIA_REPEATS:-2}" --out-json "$OUT/head.json" --out-csv "$OUT/head.csv"
 python3 scripts/compare-ci-media.py "$OUT/base.json" "$OUT/head.json" --json "$OUT/comparison.json"

@@ -1,23 +1,31 @@
 # Avelune
 
-Avelune is an experimental, clean-slate audiovisual codec family and streaming-oriented container
-written in Rust. The repository is deliberately **spec-first** and ships a complete proof of concept:
-custom video, custom audio, its own indexed container, native tooling, a WASM decoder, and a browser
-demo that range-fetches and decodes Avelune media itself.
+Avelune is an experimental, clean-slate audiovisual codec family and indexed streaming container
+written in Rust. The repository is deliberately **spec-first** and contains a working proof of
+concept: custom video and audio codecs, an indexed container, native tooling, a canonical WASM
+decoder/video-encoder adapter, and a browser player that uses HTTP Range or local files.
 
 > **Status:** research / POC. Nothing is frozen. The software is `0.x`; `ALV1` and `ALA1` are Draft
 > Generation 1 format identifiers, not compatibility promises.
 
-## Why this repository exists
+## Architecture
 
-The goal is to explore a cleaner modern media stack while keeping three things separate:
+Avelune intentionally has one application implementation, not competing “reference” and
+“production” stacks:
 
-1. **normative format design** under [`spec/`](spec/);
-2. **readable reference/research implementations** under [`impl/`](impl/);
-3. **optimized production backends** under [`prod/`](prod/).
+- [`spec/`](spec/) is the normative Draft Generation 1 source.
+- [`crates/avelune`](crates/avelune/) is the canonical safe Rust implementation used by the CLI,
+  WASM binding, tests, and applications.
+- [`crates/avelune-kernels`](crates/avelune-kernels/) is the small audited unsafe/SIMD boundary.
+- [`crates/avelune-reference`](crates/avelune-reference/) is an **independent conformance oracle**,
+  not an application backend. It deliberately duplicates decode math so differential tests can
+  detect canonical implementation mistakes.
+- [`crates/avelune-wasm`](crates/avelune-wasm/) exposes the canonical incremental decoder and a video-only raw encoder to the
+  browser.
+- [`tools/`](tools/) contains the user CLI and development-only measurement tooling.
 
-If an implementation experiment disproves a codec assumption, the project revisits the codec design
-instead of quietly defining the format by whatever the Rust code happened to do.
+The canonical implementation is not normative: if implementation evidence exposes a format flaw,
+the design should be reconsidered rather than defining the format by accident.
 
 ## Current POC
 
@@ -28,61 +36,44 @@ instead of quietly defining the format by whatever the Rust code happened to do.
   mode.
 - **Avelune container** — CRC-protected packets, a front index, independently fetchable epochs, and
   incremental parsing suitable for HTTP Range playback.
-- **Rust API** — component crates plus the `avelune` facade crate.
-- **CLI** — encode/decode, inspect/verify, container maintenance, conformance, benchmark and fuzz-smoke
-  utilities; FFmpeg is used for foreign media formats rather than reimplementing existing codecs.
-- **Web** — production scalar/SIMD128 WASM streaming decoder and Range loader, reference WASM for
-  conformance, WebGPU YUV presentation, and experimental WebGPU compute-kernel prototypes.
-- **Conformance** — a source-separated scalar ALV1 decoder and generated expected-output vectors.
-
-## Reference and production implementations
-
-The readable crates under `impl/rust/crates/avelune-*-v1` remain the specification-facing
-reference/research implementations and conformance oracles. The optimized stateful backend under
-[`prod/`](prod/) owns its own Draft Generation 1 container/entropy/video/audio implementation, isolates
-low-level intrinsics in a small kernel crate, and supplies native and browser/WASM integration.
-
-The CLI exposes `--backend auto|prod|reference`; `auto` currently selects production for codec work,
-while the reference path remains available for diagnostics and cross-checking. This does not make
-production code normative, and it does not imply that the Draft Generation 1 codec design is mature.
-
-See [`docs/development/REFERENCE_IMPLEMENTATION.adoc`](docs/development/REFERENCE_IMPLEMENTATION.adoc)
-and [`prod/README.md`](prod/README.md).
+- **Canonical session decoder** — declared-stream validation, per-stream codec state, explicit epoch
+  reset/finalization, and arbitrary input fragmentation.
+- **CLI** — ordinary-media encode/decode through FFmpeg, inspect/verify, repair/reindex, raw Y4M and
+  PCM workflows, and completions.
+- **Browser** — scalar/SIMD128 WASM artifacts, exact Range validation, local-file playback,
+  cancellable decode generations, Canvas2D/WebGPU presentation, a local Y4M→Avelune encoder lab,
+  and a technical event inspector.
+- **Conformance** — independent scalar ALV1/ALA1 decoding plus differential/property/hostile-input
+  tests.
 
 ## Quick start
 
 Requirements:
 
-- Rust 1.97.1 or newer compatible toolchain;
-- FFmpeg/ffprobe for `encode`, `decode`, and `play` with ordinary media files;
-- Node.js 22.12 or newer with npm for the website build and automated browser/WASM range smoke test.
+- Rust 1.97.1;
+- FFmpeg/ffprobe for ordinary media `encode`, `decode`, and `play`;
+- Node.js 22.12+ with npm for the documentation site.
 
 ```sh
 cargo build --release --workspace
 ./target/release/avelune --help
 
-# Encode ordinary media through FFmpeg into Avelune.
 ./target/release/avelune encode input.mkv output.avl
-
-# Inspect and deeply verify a stream.
 ./target/release/avelune inspect output.avl
 ./target/release/avelune verify output.avl
-
-# Decode back through FFmpeg to a conventional file.
 ./target/release/avelune decode output.avl roundtrip.mkv
 ```
 
-For raw/reference workflows:
+Raw video workflows use 8-bit 4:2:0 Y4M:
 
 ```sh
-avelune raw encode-y4m input.y4m output.avl
+avelune raw encode-y4m input.y4m output.avl --q 96
 avelune raw decode-y4m output.avl decoded.y4m
 ```
 
-## Rust facade API
+## Rust API
 
-The Rust API is deliberately thin, experimental, and unfrozen while Avelune is `0.x`. Consume the
-facade directly from this repository when experimenting:
+The Rust API remains experimental and unfrozen while Avelune is `0.x`.
 
 ```toml
 [dependencies]
@@ -90,7 +81,7 @@ avelune = { git = "https://github.com/not-the-ccp/avelune", tag = "v0.1.1" }
 ```
 
 ```rust
-use avelune::audio::{encode, AudioError, EncodeOptions};
+use avelune::audio::v1::{encode, AudioError, EncodeOptions};
 
 fn encode_lossless() -> Result<Vec<u8>, AudioError> {
     encode(&[0_i16, 1000, -1000, 0], EncodeOptions {
@@ -102,21 +93,10 @@ fn encode_lossless() -> Result<Vec<u8>, AudioError> {
 }
 ```
 
-The component crates remain available for low-level format, decoder, and conformance work.
+Deep API documentation is generated for the canonical `avelune` crate. The oracle is development
+infrastructure, not an alternative public API surface.
 
-Generate shell completions with:
-
-```sh
-avelune completions bash > avelune.bash
-avelune completions zsh  > _avelune
-avelune completions fish > avelune.fish
-```
-
-See the full [CLI guide](docs/user/CLI.adoc).
-
-## Browser demo and documentation site
-
-Build the WASM module and Pages-ready site:
+## Browser demo and site
 
 ```sh
 npm ci
@@ -124,62 +104,55 @@ npm ci
 ./scripts/build-site.sh
 ```
 
-The generated site appears under `dist/site/` and contains:
+`build-wasm.sh` creates separate scalar and SIMD128 modules. The demo can load a bundled sample, an
+HTTP Range URL, or a local `.avl` file without uploading it. A deliberately narrow encoder lab can
+also encode local 8-bit 4:2:0 Y4M video in WASM and immediately load/save the resulting `.avl`;
+arbitrary MP4/WebM ingestion is not claimed without a proper demux/decode stack.
 
-- project/user/developer documentation;
-- the normative draft specs;
-- generated Rust API documentation;
-- the static Avelune browser demo.
-
-The repository includes GitHub Actions workflows for CI and GitHub Pages deployment.
+The Pages-ready site is written to `dist/site/`.
 
 ## Development and validation
 
-Contributions use a feature-branch and pull-request workflow. Never push directly to `main`; see
-[`CONTRIBUTING.md`](CONTRIBUTING.md) for the branch, validation, automated-review, and human-review
-rules.
-
 ```sh
 ./scripts/dev-check.sh
+./scripts/validate-release.sh
 ```
 
-That checks formatting, Clippy, unit/doc tests, API docs, JavaScript/Python/shell syntax, the WASM
-build when the target is installed, and specification/doc-site consistency.
+The fast gate covers formatting, warnings-as-errors Clippy, workspace tests, canonical rustdoc,
+script syntax, the unsafe boundary, CLI fixture decoding, WASM scalar/SIMD decoding, and adversarial
+Range/local-file tests when the WASM target is available. Site checks run when the exact npm
+dependency tree has been installed.
 
-The deeper codec validation harness remains available through `scripts/validate-v1.sh`; despite the
-historical name, it validates the current Draft Generation 1 POC rather than a frozen V1 release.
+The deeper release gate adds release-mode tests, instruction-selection checks, actual Chromium WASM
+execution when Chromium is available, format-design measurements, portability checks, and the
+implementation lab.
 
 ## Repository map
 
 ```text
-spec/        normative draft codec/container/conformance documents
-impl/rust/   safe Rust facade, reference codecs, reference decoder, CLI, WASM ABI
-prod/        safe production engine, audited SIMD kernels, WASM wrapper and benchmark lab
-docs/        user, architecture, browser, development, history, IPR notes
-web/         static browser player and experimental WebGPU kernels
-research/    prior-art notes, experiment results, rejected ideas
-scripts/     validation, site, WASM, benchmark and corpus tooling
-.github/     CI, Pages workflow and issue templates
+spec/                 normative Draft Generation documents
+crates/avelune/       canonical safe Rust codec/container/session implementation
+crates/avelune-kernels/ audited low-level SIMD/unsafe boundary
+crates/avelune-reference/ independent conformance oracle
+crates/avelune-wasm/  canonical browser ABI
+tools/                CLI and development measurement tools
+docs/                 user, architecture, browser, development, history, and IPR notes
+web/                  browser player, demo fixtures, and experimental WebGPU kernels
+research/             prior-art notes and format experiments
+scripts/              validation, site, WASM, benchmark, and regression tooling
+.github/              CI, depth testing, benchmark history, and Pages deployment
 ```
-
-## Versioning
-
-While the project is `0.x`, backwards-incompatible API and bitstream changes are allowed when they
-improve the design. Once a stable major line is deliberately declared, the intended rule is:
-**major = incompatible API/codec/container change; minor/patch remain compatible within that major**.
-See [`docs/development/VERSIONING.adoc`](docs/development/VERSIONING.adoc).
 
 ## Limitations
 
-ALV1 and especially lossy ALA1 remain behind mature production codecs in compression efficiency.
-Lossy ALA1 is experimental and not perceptually tuned; ordinary audio encoding defaults to lossless
-`q=1`.
-The draft baseline omits several higher-fidelity profiles. WebGPU compute is experimental. The code
-has not received a professional security or patent audit. See [`STATUS.md`](STATUS.md), benchmark
-reports, and [`docs/IPR-NOTES.adoc`](docs/IPR-NOTES.adoc).
+ALV1 and especially lossy ALA1 remain behind mature production codecs in compression efficiency (see the [Draft Gen 1 benchmark report](benchmarks/v1/REPORT.md)).
+Lossy ALA1 is experimental and not perceptually tuned; ordinary audio encoding defaults to `q=1`.
+Draft Generation 1 is intentionally unfrozen. The code has not received a professional
+security or patent audit, and no patent-freedom claim is made. See [`STATUS.md`](STATUS.md) and
+[`docs/IPR-NOTES.adoc`](docs/IPR-NOTES.adoc).
 
 ## License
 
 Avelune source code is dual-licensed under the MIT License or Apache License 2.0, at your option.
-Specification text and documentation are distributed with this repository under the same project
-license unless a file says otherwise.
+Specification text and documentation are distributed under the same project license unless a file
+says otherwise.

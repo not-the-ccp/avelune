@@ -26,7 +26,7 @@ jobs:
       - name: Development checks
         run: ./scripts/dev-check.sh
 
-  prod-portable-check:
+  portable-check:
     strategy:
       fail-fast: false
       matrix:
@@ -38,10 +38,10 @@ jobs:
         run: |
           rustup toolchain install 1.97.1 --profile minimal
           rustup default 1.97.1
-      - name: Compile and test portable production core
-        run: cargo test -p avelune-prod-kernels -p avelune-prod --locked
+      - name: Compile and test portable canonical core
+        run: cargo test -p avelune-kernels -p avelune --locked
 
-  prod-aarch64-check:
+  aarch64-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -49,12 +49,12 @@ jobs:
         run: |
           rustup toolchain install 1.97.1 --profile minimal --target aarch64-unknown-linux-gnu
           rustup default 1.97.1
-      - name: Cross-check production core and kernels
+      - name: Cross-check canonical core and kernels
         run: |
-          cargo check -p avelune-prod-kernels --target aarch64-unknown-linux-gnu --locked
-          cargo check -p avelune-prod --target aarch64-unknown-linux-gnu --locked
+          cargo check -p avelune-kernels --target aarch64-unknown-linux-gnu --locked
+          cargo check -p avelune --target aarch64-unknown-linux-gnu --locked
 
-  prod-regression:
+  codec-regression:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:

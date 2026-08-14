@@ -14,17 +14,16 @@ jobs:
         run: rustup toolchain install 1.97.1 --profile minimal && rustup default 1.97.1
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - name: Build production CLI
+      - name: Build canonical CLI
         run: cargo build -p avelune-cli --release --locked
       - name: Deterministic multi-rate history artifacts
         run: |
           mkdir -p results/history
           for q in 1 48 96 192; do
-            python3 scripts/ci-media-regression.py --cli target/release/avelune --backend prod --q "$q" --repeats 5 --out-json "results/history/prod-q${q}.json" --out-csv "results/history/prod-q${q}.csv"
-            python3 scripts/ci-media-regression.py --cli target/release/avelune --backend reference --q "$q" --repeats 3 --out-json "results/history/reference-q${q}.json" --out-csv "results/history/reference-q${q}.csv"
+            python3 scripts/ci-media-regression.py --cli target/release/avelune --q "$q" --repeats 5 --out-json "results/history/canonical-q${q}.json" --out-csv "results/history/canonical-q${q}.csv"
           done
-      - name: Production lab
-        run: cargo run -p avelune-prod-lab --release --locked -- --scale 5 --json results/history/prod-lab.json --csv results/history/prod-lab.csv
+      - name: Implementation lab
+        run: cargo run -p avelune-lab --release --locked -- --scale 5 --json results/history/canonical-lab.json --csv results/history/canonical-lab.csv
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: codec-benchmark-${{ github.sha }}

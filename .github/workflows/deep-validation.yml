@@ -1,4 +1,4 @@
-name: Draft codec validation
+name: Release-depth codec validation
 on:
   workflow_dispatch:
   schedule:
@@ -20,10 +20,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Check FFmpeg and Node
         run: ffmpeg -version | head -1 && node --version
-      - name: Deep Draft Generation 1 validation
-        run: ./scripts/validate-draft.sh
-      - name: Production backend validation
-        run: ./scripts/validate-prod.sh
+      - name: Release-depth validation
+        run: ./scripts/validate-release.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:

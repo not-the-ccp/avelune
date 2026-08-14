@@ -1,0 +1,46 @@
+= Independent conformance oracle
+:page-type: development-guide
+:page-status: current
+:summary: Why Avelune keeps one independent decoder oracle and how its boundary is protected.
+:nav-order: 70
+
+[#oracle-purpose]
+== Purpose
+
+`crates/avelune-reference` is development infrastructure, not an application backend. Applications,
+the CLI, WASM, and browser integrations use the canonical `avelune` crate.
+
+The oracle deliberately reimplements Draft Generation 1 parsing/reconstruction math so differential
+tests can detect errors in the canonical implementation. If both sides call the same codec helper,
+agreement is much weaker evidence.
+
+[#oracle-scope]
+== Scope
+
+The crate contains:
+
+* independent bitstream/container parsing used by conformance work;
+* an independent ALA1 encoder/decoder;
+* one scalar ALV1 decoder oracle;
+* one simple ALV1 encoder used for reverse-direction differential tests.
+
+It intentionally does not contain a second application session stack, SIMD/runtime dispatch,
+threading policy, browser integration, or CLI backend selection.
+
+[#oracle-independence]
+== Independence rules
+
+* The canonical `avelune` crate must not depend on `avelune-reference`.
+* Codec reconstruction helpers must not be shared between canonical and oracle implementations.
+* Tests may convert owned frames between the two representations at their boundary.
+* Do not add another redundant ALV1 decoder merely to increase implementation count. A new oracle is
+  justified only by a genuinely independent verification strategy.
+* Keep the oracle simple enough to audit against the normative specification; performance is not its
+  purpose.
+
+[#oracle-format-feedback]
+== Format feedback
+
+If canonical and oracle implementations disagree, determine which behavior follows the normative
+source. If implementation experience exposes a specification flaw, preserve the current semantics
+while investigating it separately rather than silently making either implementation normative.

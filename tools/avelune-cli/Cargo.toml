@@ -1,0 +1,18 @@
+[package]
+name = "avelune-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Command-line tools for Avelune"
+[[bin]]
+name = "avelune"
+path = "src/main.rs"
+doc = false
+[dependencies]
+avelune = { path = "../../crates/avelune" }
+clap = { version = "4.6.6", features = ["derive", "color", "help", "usage", "error-context", "suggestions"] }
+clap_complete = "4.6.9"
+[lints]
+workspace = true
