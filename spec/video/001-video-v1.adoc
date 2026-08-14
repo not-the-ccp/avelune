@@ -10,11 +10,11 @@
 *Draft status:* experimental, unfrozen, and subject to incompatible change while the software is `0.x`. `V1`/`ALV1`/`ALA1` refer to Draft Generation 1, not a stable 1.0 compatibility promise.
 ====
 
-Status: *normative draft for Draft Generation 1*. It defines the current reference-decoder contract, but compatibility is not frozen.
-
 ALV1 V1 is an 8-bit planar 4:2:0 codec. Width and height MUST be nonzero, even, no greater than 8192 each, and `width*height <= 8192^2`. Chroma dimensions are exactly `width/2` by `height/2`.
 
 The specification defines reconstruction only. Motion search, rate control, scene-cut detection, palette selection thresholds, reference search depth, presets, and entropy-layout choice are encoder policy.
+
+ALV1 uses the entropy blocks and canonical integers defined by xref:../common/001-entropy-v1.adoc#entropy-block[common integer and entropy coding]. The xref:../container/001-container-v1.adoc#avl-epoch-semantics[container epoch rules] bound its reference lifetime.
 
 [#alv1-frame-packet]
 == Frame packet

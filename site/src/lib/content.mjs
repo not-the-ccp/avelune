@@ -19,22 +19,17 @@ function walk(directory) {
 /** Return the stable publication route for an authoritative source file. */
 export function sourceRoute(kind, relativePath) {
   const source = relativePath.replaceAll("\\", "/").replace(/^\.\//, "");
-  const special = {
-    "spec/001-v1-baseline-profile.adoc": "/spec/baseline/",
-    "spec/README.adoc": "/spec/overview/",
-    "spec/CHANGELOG.adoc": "/spec/changelog/",
-    "spec/video/001-video-v1.adoc": "/spec/video/alv1/",
-    "spec/audio/001-audio-v1.adoc": "/spec/audio/ala1/",
-    "spec/common/001-entropy-v1.adoc": "/spec/common/entropy/",
-    "spec/container/001-container-v1.adoc": "/spec/container/avl/",
-    "spec/conformance/001-v1.adoc": "/spec/conformance/generation-1/",
-    "spec/video/000-video-candidate.adoc": "/spec/history/video-candidate/",
-    "spec/audio/000-audio-candidate.adoc": "/spec/history/audio-candidate/",
-    "spec/container/000-container-candidate.adoc": "/spec/history/container-candidate/",
-    "spec/conformance/000-requirements.adoc": "/spec/history/conformance-candidate/",
-    "docs/user/CLI.adoc": "/docs/cli/",
-  };
-  if (special[source]) return special[source];
+  if (source === "docs/user/CLI.adoc") return "/docs/cli/";
+  if (source === "spec/README.adoc") return "/spec/overview/";
+  if (source === "spec/CHANGELOG.adoc") return "/spec/changelog/";
+  if (source === "spec/001-v1-baseline-profile.adoc") return "/spec/baseline/";
+  const specDocument = source.match(/^spec\/(video|audio|container|common|conformance)\/(00[01])-(.+)\.adoc$/);
+  if (specDocument) {
+    const [, area, generation, name] = specDocument;
+    if (generation === "000") return `/spec/history/${name === "requirements" ? `${area}-candidate` : name}/`;
+    const currentNames = { video: "alv1", audio: "ala1", container: "avl", common: "entropy", conformance: "generation-1" };
+    return `/spec/${area}/${currentNames[area]}/`;
+  }
   const root = `${kind}/`;
   const remainder = source.startsWith(root) ? source.slice(root.length) : source;
   const slug = remainder.replace(/\.adoc$/, "").replaceAll("_", "-").toLowerCase();
@@ -104,7 +99,6 @@ async function loadDocument(file, kind) {
     base_dir: repositoryRoot,
     sourcemap: true,
     attributes: {
-      sectanchors: true,
       "source-highlighter": "highlight.js",
     },
   });
@@ -133,5 +127,10 @@ export async function loadDocuments(kind) {
   const documents = await Promise.all(walk(root)
     .filter((file) => file.endsWith(".adoc"))
     .map((file) => loadDocument(file, kind)));
+  const seenRoutes = new Map();
+  for (const document of documents) {
+    if (seenRoutes.has(document.route)) throw new Error(`Duplicate publication route ${document.route}: ${seenRoutes.get(document.route)} and ${document.sourcePath}`);
+    seenRoutes.set(document.route, document.sourcePath);
+  }
   return documents.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
 }

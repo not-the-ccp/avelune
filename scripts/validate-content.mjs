@@ -255,6 +255,16 @@ for (const document of documents.filter((candidate) => candidate.attributes.get(
 validateReferences(documents, errors);
 await Promise.all(documents.map((document) => validateAsciidoctor(document, errors)));
 
+const { sourceRoute } = await import("../site/src/lib/content.mjs");
+const publicationRoutes = new Map();
+for (const document of documents) {
+  const kind = document.sourcePath.split("/", 1)[0];
+  const route = sourceRoute(kind, document.sourcePath);
+  const existing = publicationRoutes.get(route);
+  if (existing) errors.push(`${document.sourcePath}: publication route ${route} is already assigned to ${existing}`);
+  else publicationRoutes.set(route, document.sourcePath);
+}
+
 if (errors.length) {
   for (const error of errors) console.error(`content validation: ${error}`);
   console.error(`content validation FAILED (${errors.length} error${errors.length === 1 ? "" : "s"})`);

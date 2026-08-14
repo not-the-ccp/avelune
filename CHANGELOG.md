@@ -7,6 +7,10 @@ may be incompatible until a stable major line is explicitly declared.
 
 ### Added
 
+- Added full-text documentation search, sitemap/robots metadata, canonical and social metadata,
+  responsive publication navigation, mobile tables of contents, and previous/next reading links.
+- Added generated-site semantic, link, fragment, responsive-overflow, keyboard, accessibility-tree,
+  theme, print, search, and bundled-player browser checks to the regular development gate.
 - Added one independent `avelune-reference` conformance oracle, with a scalar ALV1 decoder and a
   simple independent encoder used only for differential testing.
 - Added stream-aware canonical decode sessions with per-stream codec state, explicit input
@@ -17,6 +21,15 @@ may be incompatible until a stable major line is explicitly declared.
 
 ### Changed
 
+- Reworked the Pages information architecture, responsive layout, typography, controls, landing
+  page, documentation/specification indexes, API entry point, demo, and error page around clearer
+  task-based paths and a consistent content hierarchy.
+- Restructured Draft Generation 1 documentation with explicit status, conventions, reading order,
+  stable anchors, cross-references, and more complete first-file CLI guidance.
+- Removed obsolete entropy mode `1`; Draft Generation 1 decoders now accept only raw mode `0` and
+  canonical Huffman mode `2`, with all other mode values rejected as invalid input.
+- Corrected the independent-encoder interoperability lab to compare decoded reconstruction rather
+  than requiring byte-identical packets from encoders whose policy choices may legitimately differ.
 - Replaced the parallel reference/production application stacks with one canonical `avelune`
   implementation. The workspace now has six intentional packages: the canonical library, kernel
   boundary, reference oracle, WASM adapter, CLI, and lab tooling.

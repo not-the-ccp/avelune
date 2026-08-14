@@ -18,11 +18,12 @@ class SiteLinkCheckerTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
         (root / "docs" / "guide").mkdir(parents=True)
+        head = '<head><meta name="description" content="Test"><link rel="canonical" href="https://example.test/"></head>'
         (root / "index.html").write_text(
-            '<a id="home"></a><a href="/avelune/docs/guide/#target">guide</a><a href="#home">home</a>',
+            f'<html lang="en">{head}<body><main><h1>Home</h1><a id="home"></a><a href="/avelune/docs/guide/#target">guide</a><a href="#home">home</a></main></body></html>',
             encoding="utf-8",
         )
-        (root / "docs" / "guide" / "index.html").write_text(f'<h1 id="{fragment}">Guide</h1>', encoding="utf-8")
+        (root / "docs" / "guide" / "index.html").write_text(f'<html lang="en">{head}<body><main><h1 id="{fragment}">Guide</h1></main></body></html>', encoding="utf-8")
         return root
 
     def run_checker(self, root: Path) -> subprocess.CompletedProcess[str]:

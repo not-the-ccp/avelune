@@ -30,7 +30,7 @@ Prose is 16px with a generous line height and a maximum reading measure of rough
 
 The main landing shell is at most 1220px. The 56px opaque header aligns its wordmark, generation state, and navigation to that shell. Current navigation uses type color and a thin rule, never a pill or filled tab.
 
-Publication pages use a left section navigation, centered reading column, and right on-page outline. The right outline disappears first; on narrow screens, the left navigation becomes a compact overview link above the document. Sticky regions leave anchor and focus targets unobscured.
+Publication pages use a left collection navigation, centered reading column, and right on-page outline. The right outline disappears first; on narrow screens, both collection navigation and the on-page outline remain available as native disclosure controls above the document. Current and historical specification material occupy separate navigation groups. Sticky regions leave anchor and focus targets unobscured.
 
 Spacing should reveal hierarchy without wrapping every group in a surface. A bordered rectangle represents a real technical object such as a plane map, byte structure, source listing, video viewport, control, or inspector group.
 
@@ -46,7 +46,7 @@ The homepage must remain purpose-built. It is not generated from `README.md`, an
 
 Publication headings, metadata, source provenance, code, tables, admonitions, and navigation use the shared rules in `content.css`. Normative pages identify their draft status in text. Historical pages use an explicit historical/non-normative label and a double warm rule so the distinction survives without color.
 
-Tables scroll horizontally rather than breaking the viewport. Code listings use a nearly square ruled surface. Admonitions use horizontal rules and a textual type label rather than a rounded callout card. Specification print output removes site navigation and preserves readable source content.
+Tables scroll horizontally rather than breaking the viewport. Code listings use a nearly square ruled surface. Admonitions use horizontal rules and a textual type label rather than a rounded callout card. Publication pages include collection breadcrumbs, authoritative-source provenance, and previous/next document links. Specification print output removes site navigation and preserves readable source content.
 
 [#style-demo]
 == Browser instrument
@@ -68,7 +68,7 @@ Target WCAG 2.2 AA. Preserve semantic landmarks and heading order, a skip link, 
 [#style-components]
 == Representative components
 
-Primary links may use a thin rectangular outline and arrow. Secondary paths remain ordinary underlined text. Document indexes are ruled rows with title, factual summary, and type/status metadata. Technical profile and inspector groups may use borders because they represent actual data structures.
+Primary links may use a thin rectangular outline and arrow. Secondary paths remain ordinary underlined text. Document indexes are ruled rows with title, factual summary, and type/status metadata. Technical profile and inspector groups may use borders because they represent actual data structures. Site search is a dedicated, restrained publication page over documentation, specification, and project titles/summaries; it does not index navigation chrome, demo controls, or rustdoc internals.
 
 Before adding a local component variant, check whether the shared token, layout, content, or component primitive is missing. Fix the shared system when the same problem appears in multiple places.
 

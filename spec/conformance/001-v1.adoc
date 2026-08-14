@@ -10,8 +10,6 @@
 *Draft status:* experimental, unfrozen, and subject to incompatible change while the software is `0.x`. `V1`/`ALV1`/`ALA1` refer to Draft Generation 1, not a stable 1.0 compatibility promise.
 ====
 
-Status: *normative*.
-
 A V1 decoder is conforming when it implements the normative container, common entropy, ALV1, and/or ALA1 specifications for the profiles it claims and satisfies the corresponding vectors.
 
 [#conformance-general]
@@ -47,4 +45,4 @@ The conformance package includes a deliberately CRC-corrupted file which MUST be
 [#conformance-reference-implementations]
 == Reference implementations
 
-The optimized Rust decoder and the separate scalar `avelune-video-ref-v1` decoder are informative implementations. Neither source tree is normative. The conformance generator checks production-encoder ALV1 output through both reconstruction implementations before publishing vectors.
+The canonical Rust decoder and the independent scalar decoder in `avelune-reference` are informative implementations. Neither source tree is normative. Differential tests check canonical-encoder ALV1 output through both reconstruction implementations.

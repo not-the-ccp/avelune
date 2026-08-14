@@ -454,13 +454,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let canonical_encoded = video::encode(1, &f, &[], opts)?;
     let ref_encoded = ref_video_encoder::encode(1, &rf, &[], ropts)?;
-    if canonical_encoded.packet != ref_encoded.packet {
-        return Err("canonical/reference baseline encoder packet mismatch".into());
-    }
     let (_, ind, _) = ref_video_decoder::decode(&canonical_encoded.packet, &[])?;
     let expected = ref_decoder_frame(&canonical_encoded.reconstructed);
     if ind != expected {
         return Err("independent decoder mismatch before benchmark".into());
+    }
+    let (_, canonical_from_reference, _) = video::decode(&ref_encoded.packet, &[])?;
+    if canonical_from_reference.y() != ref_encoded.reconstructed.y
+        || canonical_from_reference.u() != ref_encoded.reconstructed.u
+        || canonical_from_reference.v() != ref_encoded.reconstructed.v
+    {
+        return Err("canonical decoder mismatch on independent encoder output".into());
     }
     let video_iters = scale.max(1);
     let single_scalar = Config {

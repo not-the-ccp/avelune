@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { marked } from "marked";
+import { sourceRoute } from "./content.mjs";
 
 const rootDocuments = {
   status: { file: "STATUS.md", title: "Project status", summary: "Implemented scope, interpretation, and known limitations." },
@@ -10,12 +11,6 @@ const rootDocuments = {
 };
 
 const sourceRoutes = new Map([
-  ["docs/user/CLI.adoc", "/docs/cli/"],
-  ["docs/development/VERSIONING.adoc", "/docs/development/versioning/"],
-  ["docs/development/REFERENCE_ORACLE.adoc", "/docs/development/reference-oracle/"],
-  ["docs/IPR-NOTES.adoc", "/docs/ipr-notes/"],
-  ["spec/", "/spec/"],
-  ["spec/README.adoc", "/spec/overview/"],
   ["STATUS.md", "/project/status/"],
   ["CONTRIBUTING.md", "/project/contributing/"],
   ["SECURITY.md", "/project/security/"],
@@ -29,7 +24,8 @@ const repositorySourceUrls = new Map([
 function canonicalLink(href) {
   if (!href || /^(?:[a-z]+:|#)/i.test(href)) return href;
   const [target, fragment = ""] = href.split("#", 2);
-  const route = sourceRoutes.get(target);
+  const sourceKind = target.match(/^(docs|spec)\/.+\.adoc$/)?.[1];
+  const route = sourceRoutes.get(target) || (target === "spec/" ? "/spec/" : sourceKind ? sourceRoute(sourceKind, target) : null);
   if (route) return `${import.meta.env.BASE_URL.replace(/\/$/, "")}${route}${fragment ? `#${fragment}` : ""}`;
   const sourceUrl = repositorySourceUrls.get(target);
   if (sourceUrl) return `${sourceUrl}${fragment ? `#${fragment}` : ""}`;

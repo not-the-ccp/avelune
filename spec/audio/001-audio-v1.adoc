@@ -10,9 +10,9 @@
 *Draft status:* experimental, unfrozen, and subject to incompatible change while the software is `0.x`. `V1`/`ALV1`/`ALA1` refer to Draft Generation 1, not a stable 1.0 compatibility promise.
 ====
 
-Status: *normative draft for Draft Generation 1*. It defines the current reference-decoder contract, but compatibility is not frozen.
-
 ALA1 is a reversible-lifting transform audio codec with scalar quantization. `qstep=1` is mathematically lossless. V1 Baseline interoperability requires 48 kHz mono or stereo; the packet syntax itself permits 1–8 channels and sample rates from 8 kHz through 384 kHz.
+
+The entropy payload uses xref:../common/001-entropy-v1.adoc#entropy-block[the shared entropy-block syntax]. ALA1 packets are carried in xref:../container/001-container-v1.adoc#avl-packet[AVL packet envelopes].
 
 [#ala1-packet]
 == Packet

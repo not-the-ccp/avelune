@@ -3,8 +3,19 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 ---
 <BaseLayout title="Rust API reference" current="api">
-  <div class="index-shell">
-    <header class="index-header"><p class="eyebrow">REFERENCE IMPLEMENTATION · RUST</p><h1>Native API documentation</h1><p class="index-summary">Rustdoc remains the authoritative deep API reference. Start with the thin <code>avelune</code> facade; component crates expose the experimental codec, container, and WASM surfaces.</p></header>
-    <p><a class="button-link" href={`${base}/api/rust/avelune/`}>Open avelune rustdoc</a></p>
+  <div class="index-shell api-index">
+    <header class="index-header"><p class="eyebrow">CANONICAL IMPLEMENTATION · RUST</p><h1>Rust API reference</h1><p class="index-summary">Native rustdoc documents the canonical <code>avelune</code> facade. It is an experimental software API, not the normative format definition.</p></header>
+    <section aria-labelledby="api-start"><h2 id="api-start">Start with the facade</h2><p>The facade exposes audio, video, container, session, and threading modules through one application-facing crate. The independent conformance oracle is deliberately not an alternative runtime API.</p><a class="button-link" href={`${base}/api/rust/avelune/`}>Open native rustdoc</a></section>
+    <nav class="api-links" aria-label="Related documentation"><a href={`${base}/docs/cli/`}><strong>CLI guide</strong><span>Encode, inspect, verify, and decode files.</span></a><a href={`${base}/spec/`}><strong>Format specification</strong><span>Read the authoritative decoded semantics.</span></a><a href={`${base}/docs/development/reference-oracle/`}><strong>Conformance boundary</strong><span>Understand why the oracle remains independent.</span></a></nav>
   </div>
 </BaseLayout>
+<style>@layer page {
+  .api-index section { max-width:68ch; margin-top:3rem; }
+  .api-index section h2 { margin-bottom:.5rem; }
+  .api-index section p { color:var(--muted); }
+  .api-links { display:grid; grid-template-columns:repeat(3,1fr); margin-top:4rem; border-block:1px solid var(--rule); }
+  .api-links a { display:grid; gap:.35rem; padding:1rem; color:var(--ink); text-decoration:none; }
+  .api-links a+a { border-left:1px solid var(--rule); }
+  .api-links span { color:var(--muted); font-size:.84rem; }
+  @media(max-width:650px){.api-links{grid-template-columns:1fr}.api-links a+a{border-left:0;border-top:1px solid var(--rule)}}
+}</style>

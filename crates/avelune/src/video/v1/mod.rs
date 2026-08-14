@@ -22,7 +22,7 @@ use crate::bitstream::v1::{
 
 /// Four-byte packet magic for the current draft video generation.
 pub const CODEC_MAGIC: [u8; 4] = *b"ALV1";
-/// Maximum luma-pixel count accepted by the reference implementation.
+/// Maximum luma-pixel count accepted by the canonical implementation.
 pub const MAX_PIXELS: u64 = 8192 * 8192;
 /// Transform/prediction block edge length in samples.
 pub const BLOCK: usize = 8;

@@ -14,9 +14,22 @@ conformance tests.
 Run `avelune <command> --help` for the authoritative option list.
 
 [#cli-media-workflow]
-== Ordinary media
+== Install and encode a first file
 
-Avelune deliberately does not implement foreign H.264/AV1/AAC/etc. demuxing and decoding. Ordinary
+Build the command-line application from the repository:
+
+[source,sh]
+----
+cargo build --release -p avelune-cli
+./target/release/avelune --help
+----
+
+Rust 1.97.1 is the reference toolchain. Ordinary media workflows also require `ffmpeg`, `ffprobe`,
+and `ffplay` on `PATH`.
+
+Encode, validate, and decode a first file:
+
+Avelune deliberately does not implement foreign H.264/AV1/AAC/etc. demuxing and decoding. These ordinary
 `encode`, `decode`, and `play` use FFmpeg/ffprobe/ffplay at that boundary.
 
 [source,sh]
