@@ -46,8 +46,7 @@ function parseY4m(bytes) {
   }
   if (!frames.length) throw Error('Y4M input contains no frames');
   const chromaLocation = chroma === '420mpeg2' ? 1 : chroma === '420jpeg' ? 2 : 0;
-  const meta0 = (fullRange ? (1 << 12) : 0) | (chromaLocation << 13);
-  return {width, height, fpsN, fpsD, meta0, frames};
+  return {width, height, fpsN, fpsD, chromaLocation, fullRange, frames};
 }
 
 self.addEventListener('message', async event => {
@@ -66,7 +65,8 @@ self.addEventListener('message', async event => {
       qstep,
       preset,
       epochFrames,
-      meta0: y4m.meta0,
+      chromaLocation: y4m.chromaLocation,
+      fullRange: y4m.fullRange,
     }, {artifact});
     let lastProgressReport = performance.now();
     for (let i = 0; i < y4m.frames.length; i++) {

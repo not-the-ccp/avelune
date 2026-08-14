@@ -367,17 +367,19 @@ export async function createAveluneDecoder({artifact = 'auto', simdUrl = DEFAULT
 
 
 export class AveluneVideoEncoder {
-  constructor(instance, artifact, {width, height, fpsN, fpsD = 1, qstep = 96, preset = 'balanced', epochFrames = 60, meta0 = 0}) {
+  constructor(instance, artifact, {width, height, fpsN, fpsD = 1, qstep = 96, preset = 'balanced', epochFrames = 60, chromaLocation = 0, fullRange = false}) {
     this.instance = instance;
     this.ex = instance.exports;
     this.artifact = artifact;
     const presetId = ({fast: 0, balanced: 1, quality: 2})[preset];
     if (presetId === undefined) throw Error(`unknown encoder preset: ${preset}`);
-    for (const [label, value] of Object.entries({width, height, fpsN, fpsD, qstep, epochFrames, meta0})) {
+    for (const [label, value] of Object.entries({width, height, fpsN, fpsD, qstep, epochFrames, chromaLocation})) {
       if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff_ffff) throw Error(`${label} must fit an unsigned 32-bit integer`);
     }
     if (!fpsN || !fpsD || fpsN > 0xffff || fpsD > 0xffff) throw Error('frame-rate numerator and denominator must be in 1..=65535');
     const fpsFlags = ((fpsN << 16) | fpsD) >>> 0;
+    const meta0 = this.ex.video_encoder_pack_meta0(chromaLocation, fullRange ? 1 : 0);
+    if (meta0 === 0xffff_ffff) throw Error(`unknown chroma location: ${chromaLocation}`);
     this.handle = this.ex.video_encoder_create(width, height, fpsFlags, qstep, presetId, epochFrames, meta0);
     if (!this.handle) throw Error(encoderCreateError(this.ex));
     this.expectedFrameBytes = this.ex.video_encoder_frame_len(this.handle);

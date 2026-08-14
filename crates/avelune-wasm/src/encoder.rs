@@ -1,6 +1,7 @@
 use avelune::{
     container::v1::{
-        self as container, Packet, PacketKind, StreamDesc, StreamKind, TIMEBASE, VideoMeta,
+        self as container, ChromaLocation, Packet, PacketKind, StreamDesc, StreamKind, TIMEBASE,
+        VideoMeta,
     },
     limits::Limits,
     video::v1::{EncodeOptions, EncoderPreset, Frame420, VideoEncoder},
@@ -248,6 +249,25 @@ fn with_encoder<R>(handle: u32, default: R, f: impl FnOnce(&mut VideoEncoderStat
     })
 }
 
+/// Packs chroma location (`0` unspecified, `1` left, `2` center) and a full-range flag into the
+/// canonical Draft Generation 1 video metadata field. Returns `u32::MAX` for an unknown chroma
+/// location.
+#[unsafe(no_mangle)]
+pub extern "C" fn video_encoder_pack_meta0(chroma_location: u32, full_range: u32) -> u32 {
+    let chroma = match chroma_location {
+        0 => ChromaLocation::Unspecified,
+        1 => ChromaLocation::Left,
+        2 => ChromaLocation::Center,
+        _ => return u32::MAX,
+    };
+    VideoMeta {
+        chroma,
+        full_range: full_range != 0,
+        ..VideoMeta::default()
+    }
+    .pack()
+}
+
 /// Creates a video-only Draft Gen 1 encoder. Preset is 0=fast, 1=balanced, 2=quality.
 #[unsafe(no_mangle)]
 pub extern "C" fn video_encoder_create(
@@ -401,4 +421,19 @@ pub extern "C" fn video_encoder_last_error_len(handle: u32) -> u32 {
     with_encoder(handle, 0, |encoder| {
         encoder.error.len().try_into().unwrap_or(0)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::video_encoder_pack_meta0;
+
+    #[test]
+    fn packs_browser_video_metadata_canonically() {
+        assert_eq!(video_encoder_pack_meta0(0, 0), 0);
+        assert_eq!(video_encoder_pack_meta0(1, 0), 1 << 13);
+        assert_eq!(video_encoder_pack_meta0(2, 0), 2 << 13);
+        assert_eq!(video_encoder_pack_meta0(0, 1), 1 << 12);
+        assert_eq!(video_encoder_pack_meta0(2, 1), (1 << 12) | (2 << 13));
+        assert_eq!(video_encoder_pack_meta0(3, 0), u32::MAX);
+    }
 }
