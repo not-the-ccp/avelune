@@ -62,8 +62,8 @@ fuzz_target!(|data: &[u8]| {
         max_refs: 4,
         ..Default::default()
     };
-    let mut enc = video::VideoEncodereference::new(opt);
-    let mut prod = video::VideoDecodereference::new();
+    let mut enc = video::VideoEncoder::new(opt);
+    let mut prod = video::VideoDecoder::new();
     let e1 = enc.encode(1, &f).unwrap();
     let (_, pd1, _) = prod.decode(&e1.packet).unwrap();
     let (_, rd1, _) = reference::decode(&e1.packet, &[]).unwrap();

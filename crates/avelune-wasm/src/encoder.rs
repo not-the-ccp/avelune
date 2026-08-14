@@ -30,6 +30,7 @@ struct VideoEncoderState {
     epoch_id: u32,
     pending: Vec<EncodedFrame>,
     epochs: Vec<(u32, u64, u32, Vec<u8>)>,
+    frame_bytes: usize,
     input: Vec<u8>,
     output: Vec<u8>,
     finished: bool,
@@ -99,6 +100,7 @@ impl VideoEncoderState {
             epoch_id: 0,
             pending: Vec::new(),
             epochs: Vec::new(),
+            frame_bytes,
             input: vec![0; frame_bytes],
             output: Vec::new(),
             finished: false,
@@ -119,8 +121,13 @@ impl VideoEncoderState {
             self.finish_epoch()?;
         }
         let input = std::mem::take(&mut self.input);
-        let frame = Frame420::from_tightly_packed(self.width, self.height, input)
-            .map_err(|e| e.to_string())?;
+        let frame = match Frame420::from_tightly_packed(self.width, self.height, input) {
+            Ok(frame) => frame,
+            Err(error) => {
+                self.input = vec![0; self.frame_bytes];
+                return Err(error.to_string());
+            }
+        };
         let frame_id = self.frame_index;
         let encoded = self.encoder.encode_shared(frame_id, &frame);
         self.input = frame.into_tightly_packed();

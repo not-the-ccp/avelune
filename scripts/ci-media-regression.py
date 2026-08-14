@@ -129,6 +129,8 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=2)
     parser.add_argument("--implementation", default="canonical")
     args = parser.parse_args()
+    if args.repeats <= 0:
+        parser.error("--repeats must be greater than zero")
 
     cli = Path(args.cli).resolve()
     rows: list[dict[str, object]] = []

@@ -62,58 +62,6 @@ pub(super) fn plane<'a>(frame: &'a Frame420, p: usize) -> &'a [u8] {
     }
 }
 
-pub(super) fn intra_sample(
-    recon: &[u8],
-    w: usize,
-    h: usize,
-    bx: usize,
-    by: usize,
-    x: usize,
-    y: usize,
-    mode: u8,
-) -> u8 {
-    match mode {
-        1 => {
-            if bx > 0 {
-                recon[(by + y).min(h - 1) * w + bx - 1]
-            } else {
-                128
-            }
-        }
-        2 => {
-            if by > 0 {
-                recon[(by - 1) * w + (bx + x).min(w - 1)]
-            } else {
-                128
-            }
-        }
-        _ => {
-            let mut sum = 0u32;
-            let mut n = 0u32;
-            if by > 0 {
-                for xx in 0..BLOCK {
-                    if bx + xx < w {
-                        sum += u32::from(recon[(by - 1) * w + bx + xx]);
-                        n += 1
-                    }
-                }
-            }
-            if bx > 0 {
-                for yy in 0..BLOCK {
-                    if by + yy < h {
-                        sum += u32::from(recon[(by + yy) * w + bx - 1]);
-                        n += 1
-                    }
-                }
-            }
-            if n == 0 {
-                128
-            } else {
-                ((sum + n / 2) / n) as u8
-            }
-        }
-    }
-}
 pub(super) fn intra_prediction_block(
     recon: &[u8],
     w: usize,

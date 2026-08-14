@@ -78,33 +78,6 @@ struct ResidualEval {
     raw_rate: usize,
 }
 
-fn prediction_sample(
-    recon: &[u8],
-    refs: &[&[u8]],
-    w: usize,
-    h: usize,
-    bx: usize,
-    by: usize,
-    x: usize,
-    y: usize,
-    mode: u8,
-    ref_idx: usize,
-    dx2: i32,
-    dy2: i32,
-) -> u8 {
-    if mode == 3 {
-        sample_half(
-            refs[ref_idx],
-            w,
-            h,
-            ((bx + x) as i32) * 2 + dx2,
-            ((by + y) as i32) * 2 + dy2,
-        )
-    } else {
-        intra_sample(recon, w, h, bx, by, x, y, mode)
-    }
-}
-
 fn evaluate_residual_candidate(
     src: &[u8],
     recon: &[u8],
@@ -143,7 +116,13 @@ fn evaluate_residual_candidate(
             } else if let Some(block) = &intra_prediction {
                 block[i]
             } else {
-                prediction_sample(recon, refs, w, h, bx, by, x, y, mode, ref_idx, dx2, dy2)
+                sample_half(
+                    refs[ref_idx],
+                    w,
+                    h,
+                    ((bx + x) as i32) * 2 + dx2,
+                    ((by + y) as i32) * 2 + dy2,
+                )
             };
             prediction[i] = pred;
             residual[i] = i32::from(src[(by + y) * w + bx + x]) - i32::from(pred);
@@ -675,14 +654,14 @@ pub(super) fn encode_with_threads(
             SerializedBlocks::Split { control, data } => (control, data),
             SerializedBlocks::Single(_) => unreachable!(),
         };
-        let single = entropy_compress(&single_raw);
-        let cc = entropy_compress(&control);
-        let dc = entropy_compress(&data);
-        if 4 + single.len() <= 8 + cc.len() + dc.len() {
+        if 4 + single_raw.len() <= 8 + control.len() + data.len() {
+            let single = entropy_compress(&single_raw);
             out.push(0);
             out.extend((single.len() as u32).to_le_bytes());
             out.extend(single);
         } else {
+            let cc = entropy_compress(&control);
+            let dc = entropy_compress(&data);
             out.push(1);
             out.extend((cc.len() as u32).to_le_bytes());
             out.extend(cc);
