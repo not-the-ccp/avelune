@@ -1,94 +1,43 @@
 # AGENTS.md
 
-## Goal
+## Repository invariants
 
-Keep Avelune's draft spec, reference implementation, conformance tests, docs, and demo coherent.
-Prefer small, well-validated changes over speculative rewrites.
+- `spec/` is authoritative for Draft Generation 1 semantics. Implementation code is not normative.
+- `crates/avelune` is the one canonical application implementation.
+- `crates/avelune-reference` is an independent conformance oracle, not a second runtime backend.
+  Do not make the canonical crate depend on it or share codec reconstruction helpers with it.
+- Unsafe Rust and architecture intrinsics belong only in `crates/avelune-kernels` unless a reviewed
+  architectural change explicitly establishes another trust boundary.
+- CLI, WASM, verification, and browser integrations should consume the same canonical
+  container/session semantics rather than reimplement stream routing or epoch validation.
+- Do not preserve obsolete architecture through compatibility aliases inside this young `0.x` tree.
 
-## Authority and boundaries
+If implementation evidence disproves a format assumption, record the evidence and revisit the
+format. Do not silently change normative meaning during implementation cleanup.
 
-- `spec/` defines decoded semantics. Rust code is not normative.
-- `impl/rust/` is a reference/research implementation. Do **not** turn it into the production backend
-  unless a task explicitly asks for that.
-- `prod/` is the placeholder for optimized implementations.
-- Draft formats and APIs are intentionally unstable. Do not preserve compatibility at the expense of
-  a better design unless the task says compatibility matters.
-- For review/diagnosis tasks, inspect and report; do not implement unrelated changes.
-- For build/fix/change tasks, make in-scope local edits and run non-destructive validation without
-  asking first. Ask before destructive actions, external writes, releases, or material scope expansion.
-
-## Before editing
-
-Read only the files relevant to the task. Usually start with `README.md`, `STATUS.md`, the affected
-`spec/` document, and the crate/module being changed. Do not load the whole repository into context
-without a reason.
-
-## Required workflow
-
-1. Identify whether the change affects spec, encoder policy, reference implementation, tooling, docs,
-   or production-backend plans.
-2. Keep normative rules separate from encoder heuristics and implementation details.
-3. Add or update the smallest useful test first when behavior is easy to pin down.
-4. Make the change.
-5. Run the relevant narrow tests, then `./scripts/dev-check.sh` for repository-wide changes.
-6. Update docs/changelog when public behavior, syntax, API, or workflow changed.
-
-## Branch and review policy
-
-All normal changes use a feature branch and pull request:
-
-1. Update local `main`, then create a focused feature branch.
-2. Make small, coherent commits at meaningful milestones; do not wait until the entire task is
-   finished to commit. Validate each milestone when practical.
-3. Push only the feature branch and open a pull request targeting `main`.
-4. Wait for CI and automated review. Resolve every CodeRabbit comment or piece of feedback, either by
-   changing the code or by explaining why the suggestion does not apply.
-5. Stop and wait for review after opening the pull request. Do not merge the pull request, push to
-   `main`, force-push `main`, or bypass the review process unless the maintainer explicitly directs
-   that action.
-
-CI plus CodeRabbit review is the normal gate for ordinary changes. If CodeRabbit does not run or is
-unavailable, request human review as the fallback. Still request explicit human review for large,
-security-sensitive, architectural, release, or spec/format changes. Small typo-like fixes follow the
-same pull-request workflow because the repository policy does not permit direct pushes to `main`.
-
-If implementation evidence disproves a format assumption, record the evidence and revisit the codec
-or container design. Do not patch the spec merely to match an implementation accident.
-
-## Validation commands
+## Validation
 
 ```sh
 ./scripts/dev-check.sh
-./scripts/build-site.sh
+./scripts/validate-release.sh
 ```
 
-For format changes, also regenerate and cross-check conformance vectors. For browser/container work,
-run the HTTP Range/WASM smoke test. Treat skipped environment-dependent checks as skips, not passes.
+Treat environment-dependent skipped checks as skips, never passes. For browser/container changes,
+exercise the adversarial Range/local-file smoke. For oracle changes, preserve implementation
+independence and run differential tests.
 
 ## Code rules
 
-- Rust 1.97+, edition 2024.
-- Safe Rust in normative/reference crates unless a future task explicitly establishes an audited
-  exception elsewhere.
+- Rust 1.97.1, edition 2024.
 - Keep hostile-input bounds explicit.
-- Avoid new dependencies unless they materially simplify a public surface or validation burden.
-- Public Rust items need useful rustdoc; examples should compile where practical.
-- Do not add benchmark-only optimizations to the reference implementation.
+- Avoid dependencies that do not materially simplify a real boundary.
+- Public Rust items need useful rustdoc.
 - Do not claim compression, quality, performance, patent status, or browser support beyond measured
   evidence.
+- Prefer deleting duplicate paths over formalizing them behind abstractions.
 
-## Documentation rules
+## Documentation
 
-Lead with current status and limitations. Clearly label draft/non-normative material. Keep links and
-commands runnable. The Pages site is generated by `scripts/build-site.sh`; do not hand-edit generated
-`dist/site/` output.
-
-For work affecting `docs/`, `spec/`, public Pages, or browser-demo presentation, read and follow
-`docs/development/DOCUMENT_AUTHORING.adoc` and `docs/development/WEB_STYLE.adoc` as applicable. Update
-those guides when intentionally changing the shared authoring or design system.
-
-## Agent-prompt note
-
-This file is intentionally lean: outcome, hard constraints, autonomy boundaries, validation, and
-project-specific failure modes are more useful to current GPT-5.6-class coding agents than repeated
-process instructions. Keep it that way when updating it.
+For `docs/`, `spec/`, Pages, or demo presentation, follow
+`docs/development/DOCUMENT_AUTHORING.adoc` and `docs/development/WEB_STYLE.adoc` as applicable.
+Keep this file lean; do not duplicate those guides here.

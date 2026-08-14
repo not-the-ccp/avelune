@@ -1,18 +1,12 @@
 [workspace]
 resolver = "3"
 members = [
-  "impl/rust/crates/avelune",
-  "impl/rust/crates/avelune-bitstream",
-  "impl/rust/crates/avelune-container-v1",
-  "impl/rust/crates/avelune-video-v1",
-  "impl/rust/crates/avelune-video-ref-v1",
-  "impl/rust/crates/avelune-audio-v1",
-  "impl/rust/crates/avelune-wasm-v1",
-  "impl/rust/tools/avelune-v1",
-  "prod/rust",
-  "prod/rust/kernels",
-  "prod/rust/wasm",
-  "prod/rust/lab",
+  "crates/avelune",
+  "crates/avelune-kernels",
+  "crates/avelune-reference",
+  "crates/avelune-wasm",
+  "tools/avelune-cli",
+  "tools/avelune-lab",
 ]
 
 [workspace.package]
