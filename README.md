@@ -146,8 +146,8 @@ scripts/              validation, site, WASM, benchmark, and regression tooling
 ## Limitations
 
 ALV1 and especially lossy ALA1 remain behind mature production codecs in compression efficiency (see the [Draft Gen 1 benchmark report](benchmarks/v1/REPORT.md)).
-Lossy ALA1 is experimental and not perceptually tuned; ordinary audio encoding defaults to lossless
-`q=1`. Draft Generation 1 is intentionally unfrozen. The code has not received a professional
+Lossy ALA1 is experimental and not perceptually tuned; ordinary audio encoding defaults to `q=1`.
+Draft Generation 1 is intentionally unfrozen. The code has not received a professional
 security or patent audit, and no patent-freedom claim is made. See [`STATUS.md`](STATUS.md) and
 [`docs/IPR-NOTES.adoc`](docs/IPR-NOTES.adoc).
 

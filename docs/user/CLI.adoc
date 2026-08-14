@@ -28,7 +28,7 @@ avelune decode output.avl roundtrip.mkv
 
 Useful encode options include `--seconds`, `--size`, `--video-q`, `--audio-q`, `--epoch`, and
 `--preset fast|balanced|quality`. Quantizer values are experimental codec knobs, not CRF values or
-bitrate targets. Ordinary audio encoding defaults to mathematically lossless `q=1`.
+bitrate targets. Ordinary audio encoding defaults to `q=1`.
 
 [#cli-playback]
 == Playback

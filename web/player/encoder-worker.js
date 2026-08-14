@@ -68,9 +68,14 @@ self.addEventListener('message', async event => {
       epochFrames,
       meta0: y4m.meta0,
     }, {artifact});
+    let lastProgressReport = performance.now();
     for (let i = 0; i < y4m.frames.length; i++) {
       encoder.pushFrame(y4m.frames[i]);
-      self.postMessage({type: 'progress', done: i + 1, total: y4m.frames.length});
+      const now = performance.now();
+      if (now - lastProgressReport >= 100 || i + 1 === y4m.frames.length) {
+        lastProgressReport = now;
+        self.postMessage({type: 'progress', done: i + 1, total: y4m.frames.length});
+      }
     }
     const encoded = encoder.finish();
     self.postMessage(
