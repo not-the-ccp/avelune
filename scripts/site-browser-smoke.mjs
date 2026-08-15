@@ -39,8 +39,10 @@ const origin = `http://127.0.0.1:${server.address().port}`;
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'avelune-site-chrome-'));
 const groupedProcess = process.platform !== 'win32';
 // `--remote-debugging-port=0` makes Chromium publish its chosen ephemeral port in the profile;
-// a guessed fixed port is what made the CI run fail the DevTools connect.
-const child = spawn(chromium, ['--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'], {stdio:['ignore','ignore','pipe'],detached:groupedProcess});
+// a guessed fixed port is what made the first CI run fail the DevTools connect. A cold or
+// CPU-contended runner can take well over ten seconds to start the browser, so the poll window
+// below is generous and proven at the CI scale.
+const child = spawn(chromium, ['--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--no-first-run','--no-default-browser-check','--disable-extensions','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'], {stdio:['ignore','ignore','pipe'],detached:groupedProcess});
 // Keep Chromium diagnostics so a failed startup reports the actual error instead of a bare timeout.
 let chromiumErrors = '';
 child.stderr.on('data', chunk => { chromiumErrors = (chromiumErrors + chunk).slice(-8192); });
@@ -51,9 +53,10 @@ function chromiumFailure(prefix) {
   const detail = chromiumErrors.trim() || 'no stderr captured';
   return exit === null ? Error(`${prefix}: ${detail}`) : Error(`${prefix} (Chromium exited with ${exit}): ${detail}`);
 }
+const startupWindowAttempts = 600; // 600 * 50ms = 30s, matching Puppeteer's browser-launch budget.
 async function devtoolsPort() {
   const portFile = path.join(profile, 'DevToolsActivePort');
-  for (let attempt=0; attempt<200; attempt++) {
+  for (let attempt=0; attempt<startupWindowAttempts; attempt++) {
     if (child.exitCode !== null || child.signalCode !== null) break;
     try {
       const port = Number(fs.readFileSync(portFile, 'utf8').split('\n', 1)[0]);
@@ -61,16 +64,16 @@ async function devtoolsPort() {
     } catch {}
     await delay(50);
   }
-  throw chromiumFailure(`Chromium did not publish a DevTools port in ${portFile}`);
+  throw chromiumFailure(`Chromium did not publish a DevTools port in ${portFile} within 30s`);
 }
 async function pageTarget() {
   const debugPort = await devtoolsPort();
-  for (let attempt=0; attempt<200; attempt++) {
+  for (let attempt=0; attempt<startupWindowAttempts; attempt++) {
     if (child.exitCode !== null || child.signalCode !== null) break;
     try { const pages = await (await fetch(`http://127.0.0.1:${debugPort}/json/list`)).json(); const page = pages.find(item => item.type === 'page'); if (page) return page; } catch {}
     await delay(50);
   }
-  throw chromiumFailure(`Chromium DevTools target unavailable on port ${debugPort}`);
+  throw chromiumFailure(`Chromium DevTools target unavailable on port ${debugPort} within 30s`);
 }
 
 let ws;
