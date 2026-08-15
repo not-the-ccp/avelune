@@ -6,6 +6,7 @@
   .index-header { max-width: 760px; padding-bottom: 2rem; border-bottom: 1px solid var(--rule); }
   .index-header h1 { margin: .6rem 0 1rem; font-size: clamp(2.6rem, 6vw, 4rem); }
   .index-summary { color: var(--muted); font-size: 1.08rem; }
+  .index-status { margin: 1.25rem 0 0; color: var(--warm); font: .72rem/1.5 var(--font-mono); }
   .document-list { margin: 2rem 0 0; padding: 0; list-style: none; }
   .document-list li { display: grid; grid-template-columns: minmax(11rem, 1fr) 2fr auto; gap: 1rem; padding: .9rem 0; border-bottom: 1px solid var(--rule); align-items: baseline; }
   .document-list a { color: var(--ink); font-weight: 500; }

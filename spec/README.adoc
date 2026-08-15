@@ -4,21 +4,32 @@
 :summary: Index of Avelune Draft Generation 1 specification documents, historical experiments, and change discipline.
 :nav-order: 10
 
-*Status:* *experimental and unfrozen.*
-
-The normative draft documents in this directory define current decoded behavior. They are the source of truth when they disagree with the reference implementation. The project is still `0.x`, so syntax, identifiers, constraints, and decoded semantics may change incompatibly when evidence supports a better design.
+The normative draft documents in this directory define current decoded behavior. They are the source of truth when they disagree with an implementation. The project is still `0.x`, so syntax, identifiers, constraints, and decoded semantics may change incompatibly when evidence supports a better design.
 
 `ALV1` and `ALA1` mean *Draft Generation 1*. They do not mean the format has reached stable 1.0.
 
 [#spec-current-normative-draft]
-== Current normative draft
+== Reading order
 
-* xref:001-v1-baseline-profile.adoc#baseline-video[001-v1-baseline-profile.adoc] — common baseline/profile boundaries;
-* xref:common/001-entropy-v1.adoc#entropy-canonical-unsigned-varint[common/001-entropy-v1.adoc] — canonical varints and static rANS;
-* xref:container/001-container-v1.adoc#avl-fixed-file-header[container/001-container-v1.adoc] — file/front-index/packet syntax;
-* xref:video/001-video-v1.adoc#alv1-frame-packet[video/001-video-v1.adoc] — ALV1 decoded semantics;
-* xref:audio/001-audio-v1.adoc#ala1-packet[audio/001-audio-v1.adoc] — ALA1 decoded semantics;
-* xref:conformance/001-v1.adoc#conformance-general[conformance/001-v1.adoc] — decoder/conformance expectations.
+. Start with the xref:001-v1-baseline-profile.adoc#baseline-video[Baseline profile] to understand the interoperability boundary.
+. Read xref:common/001-entropy-v1.adoc#entropy-canonical-unsigned-varint[common integer and entropy coding], which is shared by both media codecs.
+. Use the xref:video/001-video-v1.adoc#alv1-frame-packet[ALV1 video] and xref:audio/001-audio-v1.adoc#ala1-packet[ALA1 audio] documents for decoded media semantics.
+. Use the xref:container/001-container-v1.adoc#avl-fixed-file-header[AVL container] document for stream descriptors, packets, epochs, and byte-range access.
+. Finish with the xref:conformance/001-v1.adoc#conformance-general[conformance requirements] when implementing or validating a decoder.
+
+[#spec-normative-language]
+== Normative language and conventions
+
+The key words *MUST*, *MUST NOT*, *SHOULD*, *SHOULD NOT*, and *MAY* express requirement strength.
+All byte offsets and ranges are zero-based. Half-open ranges use `[start,end)` notation. Fixed-width
+integers are little-endian unless a structure explicitly says otherwise. Mathematical `floor`,
+division, and modulo behavior is stated explicitly where host-language integer behavior could differ.
+
+The specification defines accepted syntax and decoded results. Encoder search, rate control, preset
+behavior, and other choices that do not affect conformance are non-normative unless explicitly stated.
+
+[#spec-document-status]
+== Document status
 
 Files prefixed `000-` are historical experiments and are non-normative.
 

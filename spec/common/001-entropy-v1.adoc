@@ -10,8 +10,6 @@
 *Draft status:* experimental, unfrozen, and subject to incompatible change while the software is `0.x`. `V1`/`ALV1`/`ALA1` refer to Draft Generation 1, not a stable 1.0 compatibility promise.
 ====
 
-Status: *normative draft for Draft Generation 1*. It defines the current entropy contract, but compatibility is not frozen.
-
 This document defines byte-level primitives used by ALV1 video and ALA1 audio. Encoder model-selection heuristics are non-normative; decoding is normative.
 
 [#entropy-integer-byte-order]
@@ -31,7 +29,7 @@ Signed 32-bit values use ZigZag mapping:
 [#entropy-block]
 == Entropy block
 
-A V1-conforming encoder emits mode 0 or mode 2. Mode 1 exists only for decoding pre-release development material and is not part of the V1 conformance surface.
+A conforming entropy block uses mode 0 or mode 2. All other mode values are invalid.
 
 [#entropy-mode-raw]
 === Mode 0 — raw

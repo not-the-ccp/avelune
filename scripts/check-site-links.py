@@ -14,15 +14,40 @@ SKIPPED_SCHEMES = {"data", "javascript", "mailto", "tel"}
 
 
 class LinkParser(HTMLParser):
+    """Collect links, anchors, and semantic HTML facts from one generated page."""
+
     def __init__(self) -> None:
         super().__init__()
         self.links: list[str] = []
         self.anchors: set[str] = set()
+        self.duplicate_anchors: set[str] = set()
+        self.counts: dict[str, int] = {}
+        self.lang: str | None = None
+        self.has_description = False
+        self.has_canonical = False
+        self.control_ids: set[str] = set()
+        self.label_targets: set[str] = set()
+        self.images_without_alt = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = dict(attrs)
+        self.counts[tag] = self.counts.get(tag, 0) + 1
+        if tag == "html":
+            self.lang = values.get("lang")
+        if tag == "meta" and values.get("name") == "description" and values.get("content"):
+            self.has_description = True
+        if tag == "link" and values.get("rel") == "canonical" and values.get("href"):
+            self.has_canonical = True
+        if tag == "label" and values.get("for"):
+            self.label_targets.add(values["for"])
+        if tag in {"input", "select", "textarea"} and values.get("id") and values.get("type") != "hidden":
+            self.control_ids.add(values["id"])
+        if tag == "img" and "alt" not in values:
+            self.images_without_alt += 1
         anchor = values.get("id") or (values.get("name") if tag == "a" else None)
         if anchor:
+            if anchor in self.anchors:
+                self.duplicate_anchors.add(anchor)
             self.anchors.add(anchor)
         if tag not in RESOURCE_TAGS:
             return
@@ -33,6 +58,7 @@ class LinkParser(HTMLParser):
 
 
 def parse_html(path: Path) -> LinkParser:
+    """Parse one generated HTML file into a populated :class:`LinkParser`."""
     parser = LinkParser()
     parser.feed(path.read_text(encoding="utf-8", errors="replace"))
     return parser
@@ -61,6 +87,7 @@ def is_rustdoc(root: Path, path: Path) -> bool:
 
 
 def main() -> int:
+    """Check every generated page for missing files, fragments, and semantic issues."""
     root = Path(sys.argv[1] if len(sys.argv) > 1 else "dist/site").resolve()
     site_base = sys.argv[2] if len(sys.argv) > 2 else "/avelune"
     if not root.is_dir():
@@ -68,12 +95,30 @@ def main() -> int:
         return 2
 
     missing: list[tuple[Path, str, str]] = []
+    semantic: list[tuple[Path, str]] = []
     parsers: dict[Path, LinkParser] = {}
     checked = 0
     for html in root.rglob("*.html"):
         if is_rustdoc(root, html):
             continue
         parser = parse_html(html)
+        relative_html = html.relative_to(root)
+        if parser.lang != "en":
+            semantic.append((relative_html, "document language must be en"))
+        if parser.counts.get("main") != 1:
+            semantic.append((relative_html, "document must contain exactly one main landmark"))
+        if parser.counts.get("h1") != 1:
+            semantic.append((relative_html, "document must contain exactly one h1"))
+        if not parser.has_description:
+            semantic.append((relative_html, "document is missing a meta description"))
+        if not parser.has_canonical:
+            semantic.append((relative_html, "document is missing a canonical link"))
+        for anchor in sorted(parser.duplicate_anchors):
+            semantic.append((relative_html, f"duplicate id/name: {anchor}"))
+        for control in sorted(parser.control_ids - parser.label_targets):
+            semantic.append((relative_html, f"form control has no explicit label: {control}"))
+        if parser.images_without_alt:
+            semantic.append((relative_html, f"{parser.images_without_alt} image(s) missing alt"))
         parsers[html.resolve()] = parser
         for link in parser.links:
             url = urlsplit(link)
@@ -92,10 +137,12 @@ def main() -> int:
                     missing.append((html.relative_to(root), link, "fragment"))
             checked += 1
 
-    if missing:
+    if missing or semantic:
         for source, link, kind in missing:
             print(f"missing local {kind}: {source} -> {link}", file=sys.stderr)
-        print(f"site link check FAILED ({len(missing)} missing)", file=sys.stderr)
+        for source, problem in semantic:
+            print(f"site semantic error: {source} -> {problem}", file=sys.stderr)
+        print(f"site check FAILED ({len(missing)} missing link/fragment, {len(semantic)} semantic)", file=sys.stderr)
         return 1
 
     print(f"site local-link check PASS ({checked} references)")

@@ -10,9 +10,9 @@
 *Draft status:* experimental, unfrozen, and subject to incompatible change while the software is `0.x`. `V1`/`ALV1`/`ALA1` refer to Draft Generation 1, not a stable 1.0 compatibility promise.
 ====
 
-Status: *normative profile definition*.
-
 The current Draft Generation 1 baseline intentionally has a bounded surface rather than untested feature flags. It is an interoperability target for this POC, not a compatibility freeze.
+
+The shared syntax is defined by xref:common/001-entropy-v1.adoc#entropy-integer-byte-order[common integer and entropy coding]. Media packets are carried by the xref:container/001-container-v1.adoc#avl-packet[AVL packet envelope].
 
 [#baseline-video]
 == Video

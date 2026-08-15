@@ -13,18 +13,42 @@ conformance tests.
 
 Run `avelune <command> --help` for the authoritative option list.
 
-[#cli-media-workflow]
-== Ordinary media
+[NOTE]
+====
+*Draft status:* `ALV1` and `ALA1` are Draft Generation 1 formats: experimental, unfrozen, and
+subject to incompatible change while the software is `0.x`. This guide is non-normative; the
+specification files under `spec/` are authoritative.
+====
 
 Avelune deliberately does not implement foreign H.264/AV1/AAC/etc. demuxing and decoding. Ordinary
-`encode`, `decode`, and `play` use FFmpeg/ffprobe/ffplay at that boundary.
+`encode`, `decode`, and `play` commands use FFmpeg/ffprobe/ffplay at that boundary, so those
+executables must be available on `PATH`.
+
+[#cli-media-workflow]
+== Install and encode a first file
+
+Build the command-line application from the repository:
 
 [source,sh]
 ----
-avelune encode input.mkv output.avl
-avelune verify output.avl
-avelune decode output.avl roundtrip.mkv
+cargo build --release -p avelune-cli
+./target/release/avelune --help
 ----
+
+Rust 1.97.1 is the reference toolchain. Ordinary media workflows also require `ffmpeg`, `ffprobe`,
+and `ffplay` on `PATH`.
+
+Encode, validate, and decode a first file with the repository-built executable:
+
+[source,sh]
+----
+./target/release/avelune encode input.mkv output.avl
+./target/release/avelune verify output.avl
+./target/release/avelune decode output.avl roundtrip.mkv
+----
+
+The examples below call the built binary as `avelune`; substitute `./target/release/avelune` when
+running from the repository check-out.
 
 Useful encode options include `--seconds`, `--size`, `--video-q`, `--audio-q`, `--epoch`, and
 `--preset fast|balanced|quality`. Quantizer values are experimental codec knobs, not CRF values or

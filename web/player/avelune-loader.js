@@ -41,7 +41,7 @@ function parseContentRange(value) {
 }
 
 export class HttpRangeSource {
-  constructor(url, {fetchImpl = fetch} = {}) {
+  constructor(url, {fetchImpl = globalThis.fetch.bind(globalThis)} = {}) {
     this.url = url;
     this.fetchImpl = fetchImpl;
     this.label = url;

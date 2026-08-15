@@ -9,6 +9,8 @@
     --ink: #181918;
     --muted: #626762;
     --rule: #c8c7c0;
+    --rule-soft: #dedcd4;
+    --control-rule: #747871;
     --cool: #426d78;
     --warm: #874f45;
     --luma: #6c6a60;
@@ -25,6 +27,8 @@
     --ink: #eeeeea;
     --muted: #a4a7a1;
     --rule: #383c38;
+    --rule-soft: #292c29;
+    --control-rule: #686d66;
     --cool: #79b8c8;
     --warm: #c07869;
     --luma: #d9d7cb;
@@ -39,6 +43,8 @@
       --ink: #e8e7e0;
       --muted: #a4a69e;
       --rule: #3b3e38;
+      --rule-soft: #2b2e2a;
+      --control-rule: #6b7069;
       --cool: #86bac6;
       --warm: #c47b6d;
       --luma: #d3d0c3;
