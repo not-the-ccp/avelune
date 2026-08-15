@@ -100,6 +100,36 @@ try {
   finally { encoderRoundtripDecoder.destroy(); }
   if (encoderRoundtrip.video !== 5 || encoderRoundtrip.audio !== 0) throw Error('browser encoder wrapper roundtrip failed');
 
+  // Arbitrarily fragmented complete ranges must decode identically to contiguous reads.
+  class FragmentedSource {
+    async *streamRange(first, length) {
+      const start = Number(first), total = Number(length);
+      const steps = [7, 1, 63, 4093, 2, 61, 8191, 1];
+      let cursor = 0, ci = 0;
+      while (cursor < total) {
+        const n = Math.min(steps[ci % steps.length], total - cursor);
+        yield media.slice(start + cursor, start + cursor + n);
+        cursor += n; ci += 1;
+      }
+    }
+    async readRange(first, length, options = {}) {
+      const out = new Uint8Array(Number(length));
+      let offset = 0;
+      for await (const chunk of this.streamRange(first, length, options)) {
+        out.set(chunk, offset);
+        offset += chunk.length;
+      }
+      return out;
+    }
+  }
+  const fragmentedDecoder = await createAveluneDecoder({artifact: 'simd128', simdUrl: `${base}/simd.wasm`});
+  let fragmented;
+  try { fragmented = await decodeAll(fragmentedDecoder, new FragmentedSource()); }
+  finally { fragmentedDecoder.destroy(); }
+  if (fragmented.video !== httpResult.video || fragmented.audio !== httpResult.audio) {
+    throw Error(`fragmented range mismatch ${fragmented.video}/${fragmented.audio} vs ${httpResult.video}/${httpResult.audio}`);
+  }
+
   // HTTP contract checks are independent of codec parsing.
   const wrongRange = new HttpRangeSource('memory://bad', {fetchImpl: async () => new Response(new Uint8Array(8), {
     status: 206,
@@ -166,6 +196,7 @@ try {
     http: {video: httpResult.video, audio: httpResult.audio, epochs: httpResult.index.epochs.length},
     blob: {video: blobResult.video, audio: blobResult.audio},
     encoder: {bytes: browserEncoded.length, video: encoderRoundtrip.video},
+    fragmented: {video: fragmented.video, audio: fragmented.audio, steps: ['7','1','63','4093','2','61','8191','1']},
     mediaRangeRequests: requests.filter(r => r.url === '/demo.avl').length,
     adversarial: ['content-range', 'short-range', 'long-range', 'truncated-epoch', 'wrong-epoch', 'stale-generation'],
     adversarialArtifacts,
