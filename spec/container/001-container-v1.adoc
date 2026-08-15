@@ -10,9 +10,9 @@
 *Draft status:* experimental, unfrozen, and subject to incompatible change while the software is `0.x`. `V1`/`ALV1`/`ALA1` refer to Draft Generation 1, not a stable 1.0 compatibility promise.
 ====
 
-Status: *normative draft for Draft Generation 1*. It defines the current container contract, but compatibility is not frozen.
-
 The Draft Generation 1 container is front-indexed for HTTP byte-range access. All fixed-width integers are little-endian. CRC is CRC-32C (Castagnoli), initialized and finalized by bitwise complement; polynomial in reflected form `0x82f63b78`.
+
+The Baseline media payloads are defined by xref:../video/001-video-v1.adoc#alv1-frame-packet[ALV1 video] and xref:../audio/001-audio-v1.adoc#ala1-packet[ALA1 audio].
 
 [#avl-fixed-file-header]
 == Fixed file header — 32 bytes
@@ -115,7 +115,7 @@ Each packet is:
 then    CRC32C(payload) u32
 ----
 
-Kinds: 1 EpochStart, 2 VideoFrame, 3 AudioFrame, 4 Metadata. A V1 decoder MUST bound packet allocation before reading payload; the reference implementation default maximum is 128 MiB.
+Kinds: 1 EpochStart, 2 VideoFrame, 3 AudioFrame, 4 Metadata. A V1 decoder MUST bound packet allocation before reading payload; the canonical implementation default maximum is 128 MiB.
 
 [#avl-epoch-semantics]
 == Epoch semantics

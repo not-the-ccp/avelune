@@ -11,6 +11,8 @@ The `ALV1`, `ALA1`, and current container documents are *unfrozen normative draf
 
 Encoder heuristics are non-normative. Search strategies, presets, rate control, scene-cut policy, and other encoder decisions may change without a format-generation change as long as emitted streams conform to the current draft.
 
+* Removed obsolete entropy mode 1. Draft Generation 1 accepts only raw mode 0 and canonical-uvarint static-rANS mode 2; canonical and independent decoders reject every other mode.
+
 [#changelog-publishing-cleanup-2026-08-10]
 === 2026-08-10 publishing cleanup
 

@@ -23,6 +23,7 @@ node --check scripts/browser-loader-smoke.mjs
 node --check scripts/wasm-smoke.mjs
 node --check scripts/wasm-encoder-smoke.mjs
 node --check scripts/chromium-wasm-smoke.mjs
+node --check scripts/site-browser-smoke.mjs
 node --check scripts/validate-content.mjs
 python3 -m py_compile scripts/benchmark-real.py scripts/benchmark-real-audio.py scripts/benchmark-xiph.py scripts/check-site-links.py scripts/format-experiments.py scripts/encoder-curves.py scripts/ci-media-regression.py scripts/compare-ci-media.py scripts/test-ci-regression-tools.py scripts/generate-demo-fixtures.py
 python3 scripts/test-ci-regression-tools.py
@@ -58,6 +59,7 @@ if [[ -x node_modules/.bin/astro ]]; then
   npm run check:content
   ./scripts/build-site.sh --skip-wasm
   python3 scripts/check-site-links.py dist/site
+  node scripts/site-browser-smoke.mjs dist/site
 else
   echo 'SKIP: npm dependency tree is not installed; run npm ci explicitly'
 fi

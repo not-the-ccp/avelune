@@ -6,6 +6,7 @@
 
 Avelune treats tests as evidence about meaningful codec properties, not as a line-counting exercise. A test should normally protect a format invariant, an implementation-independence contract, a state-machine property, a resource boundary, or a measured rate/quality/performance property.
 
+[#testing-evidence-layers]
 == Evidence layers
 
 . *Normative unit and differential tests* cover syntax, reconstruction, resource limits, and exact agreement between the canonical implementation and the independent Draft Generation 1 oracle.
@@ -20,20 +21,24 @@ Avelune treats tests as evidence about meaningful codec properties, not as a lin
 . *Scheduled benchmark history* records machine-readable JSON/CSV at multiple quantizers plus the implementation lab. Plotting and analysis are downstream concerns rather than part of the codec runtime.
 . *Heterogeneous external media* is an additional evidence tier, not a definition of the real world. Generated edge cases, adversarial inputs, fuzzing, and normative tests remain independent acceptance constraints.
 
+[#testing-ci-depth]
 == PR versus scheduled CI
 
 PR CI must remain fast enough that developers do not routinely skip it. Stable Rust property/metamorphic/mutation tests and a small deterministic media comparison therefore run on PRs. Nightly fuzzing, sanitizers, long soak tests, and repeated benchmark history are scheduled or manually triggered.
 
+[#testing-performance-policy]
 == Performance regression policy
 
 Deterministic properties such as output size and decoded quality can be compared tightly. Wall-clock measurements are noisy on shared CI hardware, so PR timing gates only reject large same-runner regressions. Raw samples and medians are retained in artifacts so scheduled or dedicated hardware can apply stricter statistical analysis later.
 
 A size increase is not automatically a failure if it buys a meaningful quality gain, and a quality loss is not automatically a failure if it buys a meaningful rate reduction. CI records both instead of optimizing a single number.
 
+[#testing-coverage]
 == Coverage is diagnostic
 
 Coverage reports may be generated to find unexercised code, especially in parsing/error paths and unsafe kernels. A high coverage percentage is not an acceptance criterion and should not motivate trivial tests.
 
+[#testing-platform-honesty]
 == Platform honesty
 
 A configured CI job is not a locally executed pass. AArch64, Windows/macOS, i686, sanitizers, and scheduled `cargo-fuzz` results must be reported separately from locally executed x86-64/WASM/Chromium validation.

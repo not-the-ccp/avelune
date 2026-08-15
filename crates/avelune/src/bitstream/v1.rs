@@ -1,6 +1,6 @@
-//! Production implementation of the Draft Generation 1 integer and entropy primitives.
+//! Canonical implementation of the Draft Generation 1 integer and entropy primitives.
 //!
-//! The normative representation is `spec/common/001-entropy-v1.md`.  The decoder uses a
+//! The normative representation is `spec/common/001-entropy-v1.adoc`. The decoder uses a
 //! optimized packed 4096-entry rANS lookup: one load yields symbol, frequency and
 //! cumulative frequency, avoiding the dependent lookup chain used by the small reference crate.
 
@@ -108,6 +108,7 @@ impl EntropyScratch {
     }
 }
 
+/// Validates a 256-symbol frequency table and builds the packed rANS encode model.
 fn build_encode_model(freq: [u16; 256]) -> Result<EncodeModel, BitstreamError> {
     let mut cum = [0u16; 256];
     let mut total = 0u32;
@@ -126,6 +127,7 @@ fn build_encode_model(freq: [u16; 256]) -> Result<EncodeModel, BitstreamError> {
     Ok(EncodeModel { freq, cum })
 }
 
+/// Builds the packed 4096-entry decode lookup from a validated symbol/cumulative model.
 fn build_decode_lookup(
     freq: &[u16; 256],
     lookup: &mut [u32; LOOKUP_LEN],
@@ -152,6 +154,7 @@ fn build_decode_lookup(
     Ok(())
 }
 
+/// Constructs the frequency model for one byte sequence (non-normative encoder model selection).
 fn normalize(data: &[u8]) -> EncodeModel {
     let mut counts = [0u32; 256];
     for &byte in data {
@@ -197,6 +200,7 @@ fn normalize(data: &[u8]) -> EncodeModel {
     build_encode_model(freq).expect("normalization must sum to 4096")
 }
 
+/// tANS/rANS encodes one byte slice with the supplied model.
 fn rans_encode(data: &[u8], model: &EncodeModel) -> Vec<u8> {
     let mut state = RANS_L;
     let mut reverse_renorm = Vec::with_capacity(data.len() / 2);
@@ -217,6 +221,7 @@ fn rans_encode(data: &[u8], model: &EncodeModel) -> Vec<u8> {
     coded
 }
 
+/// Decodes one rANS block into `out`, enforcing exact output length.
 fn rans_decode_into(
     coded: &[u8],
     raw_len: usize,
@@ -283,43 +288,22 @@ pub fn entropy_compress(data: &[u8]) -> Vec<u8> {
     }
 }
 
+/// Reads a mode-2 canonical-uvarint symbol/frequency model and rejects invalid models.
 fn parse_entropy_model(
     input: &[u8],
-    mode: u8,
     used: usize,
     pos: &mut usize,
     freq: &mut [u16; 256],
 ) -> Result<(), BitstreamError> {
     freq.fill(0);
-    if mode == 1 {
-        let bytes = used
-            .checked_mul(3)
-            .ok_or(BitstreamError::BadEntropyHeader)?;
-        let end = pos
-            .checked_add(bytes)
-            .ok_or(BitstreamError::BadEntropyHeader)?;
-        if input.len() < end {
-            return Err(BitstreamError::UnexpectedEof);
+    for _ in 0..used {
+        let symbol = usize::from(*input.get(*pos).ok_or(BitstreamError::UnexpectedEof)?);
+        *pos += 1;
+        let frequency = get_uvarint(input, pos)?;
+        if frequency == 0 || frequency > u64::from(RANS_SCALE) || freq[symbol] != 0 {
+            return Err(BitstreamError::BadEntropyModel);
         }
-        for _ in 0..used {
-            let symbol = usize::from(input[*pos]);
-            let frequency = u16::from_le_bytes([input[*pos + 1], input[*pos + 2]]);
-            *pos += 3;
-            if frequency == 0 || freq[symbol] != 0 {
-                return Err(BitstreamError::BadEntropyModel);
-            }
-            freq[symbol] = frequency;
-        }
-    } else {
-        for _ in 0..used {
-            let symbol = usize::from(*input.get(*pos).ok_or(BitstreamError::UnexpectedEof)?);
-            *pos += 1;
-            let frequency = get_uvarint(input, pos)?;
-            if frequency == 0 || frequency > u64::from(RANS_SCALE) || freq[symbol] != 0 {
-                return Err(BitstreamError::BadEntropyModel);
-            }
-            freq[symbol] = frequency as u16;
-        }
+        freq[symbol] = frequency as u16;
     }
     Ok(())
 }
@@ -353,7 +337,7 @@ pub fn entropy_decompress_with_scratch<'a>(
         scratch.output.extend_from_slice(&input[5..]);
         return Ok(&scratch.output);
     }
-    if mode != 1 && mode != 2 {
+    if mode != 2 {
         return Err(BitstreamError::BadEntropyHeader);
     }
     if input.len() < 7 {
@@ -365,7 +349,7 @@ pub fn entropy_decompress_with_scratch<'a>(
     }
     let mut pos = 7usize;
     let mut freq = [0u16; 256];
-    parse_entropy_model(input, mode, used, &mut pos, &mut freq)?;
+    parse_entropy_model(input, used, &mut pos, &mut freq)?;
     build_decode_lookup(&freq, &mut scratch.lookup)?;
     if input.len() < pos + 4 {
         return Err(BitstreamError::UnexpectedEof);
@@ -455,5 +439,13 @@ mod tests {
             assert_eq!(decoded, data);
         }
         assert!(scratch.output_capacity() >= 10000);
+    }
+
+    #[test]
+    fn rejects_obsolete_entropy_mode_one() {
+        assert_eq!(
+            entropy_decompress(&[1, 0, 0, 0, 0], 1),
+            Err(BitstreamError::BadEntropyHeader)
+        );
     }
 }

@@ -1,6 +1,6 @@
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
-  html { scroll-padding-top: calc(var(--header-height) + 1rem); }
+  html { scroll-padding-top: calc(var(--header-height) + 1rem); scroll-behavior: smooth; }
   body {
     margin: 0;
     background: var(--paper);
@@ -22,4 +22,7 @@
   .skip-link { position: fixed; z-index: 100; top: .5rem; left: .5rem; transform: translateY(-180%); padding: .55rem .8rem; background: var(--ink); color: var(--paper); }
   .skip-link:focus { transform: none; }
   .eyebrow { margin: 0; color: var(--muted); font: .72rem/1.4 var(--font-mono); letter-spacing: .1em; }
+  [hidden] { display: none !important; }
+  summary { touch-action: manipulation; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 }

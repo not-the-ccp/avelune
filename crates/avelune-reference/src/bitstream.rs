@@ -88,6 +88,7 @@ struct Model {
     lookup: [u8; RANS_SCALE as usize],
 }
 
+/// Constructs the frequency model for one byte sequence (independent encoder model selection).
 fn normalize(data: &[u8]) -> Model {
     let mut counts = [0u32; 256];
     for &b in data {
@@ -145,6 +146,7 @@ fn normalize(data: &[u8]) -> Model {
     build_model(freq).expect("normalized model")
 }
 
+/// Validates a 256-symbol frequency table and builds the rANS decode model.
 fn build_model(freq: [u16; 256]) -> Result<Model, BitstreamError> {
     let mut cum = [0u16; 256];
     let mut lookup = [0u8; RANS_SCALE as usize];
@@ -166,6 +168,7 @@ fn build_model(freq: [u16; 256]) -> Result<Model, BitstreamError> {
     Ok(Model { freq, cum, lookup })
 }
 
+/// Encodes one byte slice with the supplied rANS model.
 fn rans_encode(data: &[u8], model: &Model) -> Vec<u8> {
     let mut state = RANS_L;
     let mut renorm = Vec::new();
@@ -185,6 +188,7 @@ fn rans_encode(data: &[u8], model: &Model) -> Vec<u8> {
     out
 }
 
+/// Decodes one rANS block, enforcing the supplied output length.
 fn rans_decode(input: &[u8], n: usize, model: &Model) -> Result<Vec<u8>, BitstreamError> {
     if input.len() < 4 {
         return Err(BitstreamError::UnexpectedEof);
@@ -216,10 +220,8 @@ fn rans_decode(input: &[u8], n: usize, model: &Model) -> Result<Vec<u8>, Bitstre
 
 /// Self-contained byte entropy block.
 ///
-/// Mode 0 is raw. Mode 1 is the original fixed-width static-model rANS
-/// representation. Mode 2 has identical rANS semantics but writes each nonzero
-/// frequency as a canonical uvarint. V1 encoders use mode 2 when entropy coding
-/// wins; decoders retain mode 1 so pre-freeze development vectors remain useful.
+/// Mode 0 is raw. Mode 2 uses static-model rANS and writes each nonzero
+/// frequency as a canonical uvarint.
 /// Compresses a byte sequence using the Draft Generation 1 static rANS representation.
 pub fn entropy_compress(data: &[u8]) -> Vec<u8> {
     let model = normalize(data);
@@ -268,7 +270,7 @@ pub fn entropy_decompress(input: &[u8], max_output: usize) -> Result<Vec<u8>, Bi
         }
         return Ok(input[5..].to_vec());
     }
-    if mode != 1 && mode != 2 {
+    if mode != 2 {
         return Err(BitstreamError::BadEntropyHeader);
     }
     if input.len() < 7 {
@@ -280,32 +282,14 @@ pub fn entropy_decompress(input: &[u8], max_output: usize) -> Result<Vec<u8>, Bi
     }
     let mut freq = [0u16; 256];
     let mut p = 7usize;
-    if mode == 1 {
-        let model_end = 7usize
-            .checked_add(used * 3)
-            .ok_or(BitstreamError::BadEntropyHeader)?;
-        if input.len() < model_end + 4 {
-            return Err(BitstreamError::UnexpectedEof);
+    for _ in 0..used {
+        let sym = *input.get(p).ok_or(BitstreamError::UnexpectedEof)? as usize;
+        p += 1;
+        let fv = get_uvarint(input, &mut p)?;
+        if fv == 0 || fv > RANS_SCALE as u64 || freq[sym] != 0 {
+            return Err(BitstreamError::BadEntropyModel);
         }
-        for _ in 0..used {
-            let sym = input[p] as usize;
-            let f = u16::from_le_bytes([input[p + 1], input[p + 2]]);
-            p += 3;
-            if f == 0 || freq[sym] != 0 {
-                return Err(BitstreamError::BadEntropyModel);
-            }
-            freq[sym] = f;
-        }
-    } else {
-        for _ in 0..used {
-            let sym = *input.get(p).ok_or(BitstreamError::UnexpectedEof)? as usize;
-            p += 1;
-            let fv = get_uvarint(input, &mut p)?;
-            if fv == 0 || fv > RANS_SCALE as u64 || freq[sym] != 0 {
-                return Err(BitstreamError::BadEntropyModel);
-            }
-            freq[sym] = fv as u16;
-        }
+        freq[sym] = fv as u16;
     }
     let model = build_model(freq)?;
     if input.len() < p + 4 {
@@ -369,5 +353,12 @@ mod tests {
         let c = entropy_compress(&d);
         assert!(c.len() < 200);
         assert_eq!(entropy_decompress(&c, 20000).unwrap(), d);
+    }
+    #[test]
+    fn rejects_obsolete_entropy_mode_one() {
+        assert_eq!(
+            entropy_decompress(&[1, 0, 0, 0, 0], 1),
+            Err(BitstreamError::BadEntropyHeader)
+        );
     }
 }

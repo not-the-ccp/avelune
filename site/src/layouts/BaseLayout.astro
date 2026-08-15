@@ -1,15 +1,15 @@
 ---
-import "@fontsource/ibm-plex-sans/400.css";
-import "@fontsource/ibm-plex-sans/500.css";
-import "@fontsource/ibm-plex-sans/600.css";
-import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-sans/latin-400.css";
+import "@fontsource/ibm-plex-sans/latin-500.css";
+import "@fontsource/ibm-plex-sans/latin-600.css";
+import "@fontsource/ibm-plex-mono/latin-400.css";
 import "../styles/main.css";
 
 interface Props {
   title?: string;
   description?: string;
   mode?: "grid" | "publication";
-  current?: "home" | "docs" | "spec" | "api" | "demo" | "project";
+  current?: "home" | "docs" | "spec" | "api" | "demo" | "search" | "project";
 }
 
 const {
@@ -20,6 +20,7 @@ const {
 } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 const pageTitle = title ? `${title} · Avelune` : "Avelune";
+const canonical = new URL(`${base}${Astro.url.pathname.replace(base, "")}`, Astro.site);
 const links = [
   ["Docs", `${base}/docs/`, "docs"],
   ["Spec", `${base}/spec/`, "spec"],
@@ -34,7 +35,16 @@ const links = [
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
-    <meta name="theme-color" content={mode === "grid" ? "#111211" : "#f3f1ea"} />
+    <meta name="theme-color" content={mode === "grid" ? "#111211" : "#f3f1ea"} media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#141513" media="(prefers-color-scheme: dark)" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Avelune" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href={`${base}/favicon.svg`} type="image/svg+xml" />
     <title>{pageTitle}</title>
   </head>
   <body class:list={[`mode-${mode}`, { "is-home": current === "home" }] }>
@@ -45,14 +55,15 @@ const links = [
         <span class="generation"><span aria-hidden="true">◇</span> GEN 1 / UNFROZEN</span>
         <nav class="site-nav" aria-label="Primary navigation">
           {links.map(([label, href, key]) => <a href={href} aria-current={current === key ? "page" : undefined}>{label}</a>)}
+          <a href={`${base}/search/`} aria-current={current === "search" ? "page" : undefined}>Search</a>
           <a href="https://github.com/not-the-ccp/avelune">GitHub</a>
         </nav>
       </div>
     </header>
     <main id="main-content"><slot /></main>
     <footer class="site-footer">
-      <span>Avelune is experimental. Draft Generation 1 is unfrozen.</span>
-      <a href="https://github.com/not-the-ccp/avelune">Authoritative repository sources</a>
+      <div><strong>AVELUNE</strong><span>Experimental audiovisual formats. Draft Generation 1 is unfrozen.</span></div>
+      <nav aria-label="Footer navigation"><a href={`${base}/docs/`}>Documentation</a><a href={`${base}/spec/`}>Specification</a><a href="https://github.com/not-the-ccp/avelune">Repository</a></nav>
     </footer>
   </body>
 </html>

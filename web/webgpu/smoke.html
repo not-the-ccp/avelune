@@ -1,4 +1,12 @@
-<!doctype html><meta charset="utf-8"><title>Avelune WebGPU compute smoke</title><pre id="out">starting</pre>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Runtime smoke test for Avelune's experimental WebGPU compute kernels.">
+<link rel="canonical" href="https://not-the-ccp.github.io/avelune/demo/webgpu/smoke.html">
+<title>Avelune WebGPU compute smoke</title>
+</head>
+<body><main><h1>Avelune WebGPU compute smoke</h1><pre id="out">starting</pre></main>
 <script type="module">
 const out=document.querySelector('#out');
 function failInfo(info){const e=info.messages.filter(m=>m.type==='error');if(e.length)throw Error(e.map(m=>m.message).join('\n'))}
@@ -29,3 +37,4 @@ try{
  out.textContent='PASS WebGPU encoder SAD + decoder inverse-WHT';document.title='PASS';
 }catch(e){out.textContent='SKIP/FAIL '+e.message;document.title='SKIP/FAIL'}
 </script>
+</body></html>

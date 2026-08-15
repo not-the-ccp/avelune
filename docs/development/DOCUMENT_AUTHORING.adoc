@@ -7,7 +7,7 @@
 [#authoring-purpose]
 == Purpose
 
-Files under `docs/` and `spec/` are authored in AsciiDoc and rendered by the custom Astro publication system. Checked-in source remains authoritative; generated HTML is a presentation artifact. This profile deliberately keeps the language small enough that a contributor can understand a document by opening one file.
+Files under `docs/` and `spec/` are authored in AsciiDoc and rendered by the custom Astro publication system. Checked-in source remains authoritative; generated HTML is a presentation artifact. The publication loader builds one validated content graph for routes, navigation, source provenance, headings, and cross-references. This profile deliberately keeps the language small enough that a contributor can understand a document by opening one file.
 
 `docs/user/CLI.adoc` is the canonical ordinary documentation example. `spec/video/001-video-v1.adoc` is the canonical normative example.
 
@@ -25,7 +25,7 @@ Every document begins with one level-zero title followed by these attributes:
 :nav-order: 30
 ----
 
-Allowed `page-type` values are `guide`, `architecture`, `development-guide`, `normative`, `supporting`, and `historical`. Normative documents use `page-status: current normative draft · unfrozen`. Historical specification material uses `page-type: historical` and `page-status: historical · non-normative`. `nav-order` is an integer used only for navigation order.
+Allowed `page-type` values are `guide`, `architecture`, `development-guide`, `normative`, `supporting`, and `historical`. Normative documents use `page-status: current normative draft · unfrozen`. Historical specification material uses `page-type: historical` and `page-status: historical · non-normative`. `nav-order` is an integer used only for navigation order. Public routes are derived centrally from source identity and validated for collisions; documents must not hardcode rendered routes into prose.
 
 Specification documents may add `:sectnums:`. Do not add presentation attributes that change normative meaning.
 
@@ -96,6 +96,6 @@ Store durable documentation assets beside the owning content area or in a clearl
 [#authoring-validation]
 == Validation and review
 
-Run `npm run check:content` while authoring and `./scripts/build-site.sh --skip-wasm` before review. Validation checks metadata, IDs, xrefs, local assets, stale Markdown destinations, normative restrictions, and historical classification. Generated-site validation checks both files and fragments.
+Run `npm run check:content` while authoring and `./scripts/build-site.sh --skip-wasm` before review. Validation checks metadata, IDs, xrefs, local assets, stale Markdown destinations, normative restrictions, historical classification, and publication-route collisions. Generated-site validation checks both files and fragments. For navigation, responsive, or interactive changes, also run the browser site smoke when Chromium is available; an unavailable browser is reported as a skip.
 
 For specification conversions, compare normalized source text so that changes are limited to markup, metadata, identifiers, xref syntax, and presentation numbering. Do not alter normative wording, numbers, identifiers, layouts, algorithms, decoded behavior, or requirement strength as part of a publishing migration.

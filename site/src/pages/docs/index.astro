@@ -60,9 +60,9 @@ const currentGroups = groups.filter((group) => group.id !== "history");
 const historyGroup = groups.find((group) => group.id === "history");
 
 const paths = [
-  { label: "TRY", title: "Open the browser demo", summary: "Load a bundled example or a local Avelune file.", route: "/demo/" },
-  { label: "USE", title: "Start with the CLI", summary: "Encode, decode, inspect, and verify media.", route: "/docs/cli/" },
-  { label: "DEFINE", title: "Read the specification", summary: "Consult the authoritative Draft Generation 1 definitions.", route: "/spec/" },
+  { label: "DEMO", title: "Open the browser demo", summary: "Load a bundled example or a local Avelune file.", route: "/demo/" },
+  { label: "CLI", title: "Build and encode", summary: "Encode, decode, inspect, and verify media.", route: "/docs/cli/" },
+  { label: "SPECIFICATION", title: "Read the format", summary: "Consult the authoritative Draft Generation 1 definitions.", route: "/spec/" },
 ];
 
 const projectLinks = [
@@ -76,13 +76,13 @@ const projectLinks = [
   <div class="index-shell docs-index">
     <header class="index-header">
       <p class="eyebrow">DOCUMENTATION</p>
-      <h1>Start with the path that matches your work.</h1>
-      <p class="index-summary">Guides for using Avelune, integrating its browser surface, and understanding the engineering around the Draft Generation 1 format.</p>
+      <h1>Documentation</h1>
+      <p class="index-summary">Build the tools, encode a first file, understand the browser integration, or go deeper into Avelune’s architecture and validation.</p>
       <p class="index-status">Draft Generation 1 is experimental and unfrozen.</p>
     </header>
 
     <nav class="docs-paths" aria-labelledby="docs-paths-title">
-      <h2 id="docs-paths-title">Choose a path</h2>
+      <h2 id="docs-paths-title">Start here</h2>
       <ul>
         {paths.map((path) => <li><a href={`${base}${path.route}`}><span>{path.label}</span><strong>{path.title}</strong><small>{path.summary}</small></a></li>)}
       </ul>
@@ -129,7 +129,6 @@ const projectLinks = [
 
 <style>
   @layer page {
-    .index-status { margin: 1.25rem 0 0; color: var(--warm); font: .72rem/1.5 var(--font-mono); }
     .docs-paths { margin-top: 3rem; }
     .docs-paths h2 { margin: 0 0 1rem; font-size: 1.2rem; }
     .docs-paths ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; border-block: 1px solid var(--rule); list-style: none; }
