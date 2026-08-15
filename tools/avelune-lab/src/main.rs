@@ -460,7 +460,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("independent decoder mismatch before benchmark".into());
     }
     let (_, canonical_from_reference, _) = video::decode(&ref_encoded.packet, &[])?;
-    if canonical_from_reference.y() != ref_encoded.reconstructed.y
+    if canonical_from_reference.width != ref_encoded.reconstructed.width
+        || canonical_from_reference.height != ref_encoded.reconstructed.height
+        || canonical_from_reference.y() != ref_encoded.reconstructed.y
         || canonical_from_reference.u() != ref_encoded.reconstructed.u
         || canonical_from_reference.v() != ref_encoded.reconstructed.v
     {

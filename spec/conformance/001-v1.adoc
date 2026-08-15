@@ -45,4 +45,4 @@ The conformance package includes a deliberately CRC-corrupted file which MUST be
 [#conformance-reference-implementations]
 == Reference implementations
 
-The canonical Rust decoder and the independent scalar decoder in `avelune-reference` are informative implementations. Neither source tree is normative. Differential tests check canonical-encoder ALV1 output through both reconstruction implementations.
+The canonical Rust decoder and the independent scalar decoder in `avelune-reference` are informative implementations. Neither source tree is normative. The independent encoder in `avelune-reference` is used only for differential testing: interoperability is checked by decoding its packets with the canonical decoder and comparing the decoded reconstructions, not by requiring byte-identical packets from encoders whose policy choices may legitimately differ.

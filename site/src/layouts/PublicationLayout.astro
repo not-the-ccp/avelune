@@ -16,12 +16,14 @@ interface Props {
 const { title, summary, status, type = "guide", sourcePath, toc = [], nav = [], current } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 const sourceUrl = `https://github.com/not-the-ccp/avelune/blob/main/${sourcePath}`;
-const currentIndex = nav.findIndex((item) => item.title === title);
-const previous = currentIndex > 0 ? nav[currentIndex - 1] : null;
-const next = currentIndex >= 0 && currentIndex < nav.length - 1 ? nav[currentIndex + 1] : null;
 const currentLabel = current === "spec" ? "Specification" : "Documentation";
 const currentDocs = nav.filter((item) => item.type !== "historical");
 const historicalDocs = nav.filter((item) => item.type === "historical");
+const isHistorical = nav.find((item) => item.title === title)?.type === "historical";
+const group = isHistorical ? historicalDocs : currentDocs;
+const groupIndex = group.findIndex((item) => item.title === title);
+const previous = groupIndex > 0 ? group[groupIndex - 1] : null;
+const next = groupIndex >= 0 && groupIndex < group.length - 1 ? group[groupIndex + 1] : null;
 ---
 
 <BaseLayout title={title} description={summary} mode="publication" current={current}>
@@ -29,7 +31,7 @@ const historicalDocs = nav.filter((item) => item.type === "historical");
     <aside class="section-nav" aria-label={`${currentLabel} navigation`}>
       <p class="eyebrow">{currentLabel.toUpperCase()}</p>
       <a class="section-index" href={`${base}/${current}/`}>Overview</a>
-      <details>
+      <details open>
         <summary>{current === "spec" ? "Current draft" : "All documents"}</summary>
         <ol>{currentDocs.map((item) => <li><a href={`${base}${item.route}`} aria-current={item.title === title ? "page" : undefined}>{item.title}</a></li>)}</ol>
       </details>

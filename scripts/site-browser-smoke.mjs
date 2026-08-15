@@ -36,18 +36,41 @@ const server = http.createServer((request, response) => {
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
-const debugPort = 20000 + process.pid % 10000;
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'avelune-site-chrome-'));
 const groupedProcess = process.platform !== 'win32';
-const child = spawn(chromium, ['--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage',`--remote-debugging-port=${debugPort}`,`--user-data-dir=${profile}`,'about:blank'], {stdio:'ignore',detached:groupedProcess});
+// `--remote-debugging-port=0` makes Chromium publish its chosen ephemeral port in the profile;
+// a guessed fixed port is what made the CI run fail the DevTools connect.
+const child = spawn(chromium, ['--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'], {stdio:['ignore','ignore','pipe'],detached:groupedProcess});
+// Keep Chromium diagnostics so a failed startup reports the actual error instead of a bare timeout.
+let chromiumErrors = '';
+child.stderr.on('data', chunk => { chromiumErrors = (chromiumErrors + chunk).slice(-8192); });
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-async function pageTarget() {
+function chromiumFailure(prefix) {
+  const exit = child.exitCode ?? child.signalCode ?? null;
+  const detail = chromiumErrors.trim() || 'no stderr captured';
+  return exit === null ? Error(`${prefix}: ${detail}`) : Error(`${prefix} (Chromium exited with ${exit}): ${detail}`);
+}
+async function devtoolsPort() {
+  const portFile = path.join(profile, 'DevToolsActivePort');
   for (let attempt=0; attempt<200; attempt++) {
+    if (child.exitCode !== null || child.signalCode !== null) break;
+    try {
+      const port = Number(fs.readFileSync(portFile, 'utf8').split('\n', 1)[0]);
+      if (Number.isInteger(port) && port > 0) return port;
+    } catch {}
+    await delay(50);
+  }
+  throw chromiumFailure(`Chromium did not publish a DevTools port in ${portFile}`);
+}
+async function pageTarget() {
+  const debugPort = await devtoolsPort();
+  for (let attempt=0; attempt<200; attempt++) {
+    if (child.exitCode !== null || child.signalCode !== null) break;
     try { const pages = await (await fetch(`http://127.0.0.1:${debugPort}/json/list`)).json(); const page = pages.find(item => item.type === 'page'); if (page) return page; } catch {}
     await delay(50);
   }
-  throw Error('Chromium DevTools target unavailable');
+  throw chromiumFailure(`Chromium DevTools target unavailable on port ${debugPort}`);
 }
 
 let ws;
@@ -110,6 +133,9 @@ try {
   await call('Emulation.setEmulatedMedia',{media:'screen',features:[{name:'prefers-color-scheme',value:'dark'}]});
 
   await navigate('/search/');
+  // Filtering must actually remove unmatched rows from rendering, not only reflect the attribute.
+  const filtered = await evaluate("(()=>{const input=document.querySelector('#site-search');input.value='avelune-no-such-term-7q9z';input.dispatchEvent(new Event('input'));const rows=[...document.querySelectorAll('#search-results>li')];const hidden=rows.filter(x=>x.hidden);return {total:rows.length,hidden:hidden.length,renderedHidden:hidden.every(x=>getComputedStyle(x).display==='none')}})()");
+  if (!filtered.total || filtered.hidden !== filtered.total || !filtered.renderedHidden) throw Error(`site search filtering failed: ${JSON.stringify(filtered)}`);
   const count = await evaluate("(()=>{const i=document.querySelector('#site-search');i.value='epoch';i.dispatchEvent(new Event('input'));return [...document.querySelectorAll('#search-results>li')].filter(x=>!x.hidden).length})()");
   if (!count) throw Error('site search returned no epoch documents');
   console.log(JSON.stringify({pages:pageRoutes.length,widths:[1280,320],keyboard:'skip-link',demo:'ready',mobilePublication:'reflowed',themes:'light/dark/print',searchResults:count}));

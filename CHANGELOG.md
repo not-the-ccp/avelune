@@ -27,7 +27,8 @@ may be incompatible until a stable major line is explicitly declared.
 - Restructured Draft Generation 1 documentation with explicit status, conventions, reading order,
   stable anchors, cross-references, and more complete first-file CLI guidance.
 - Removed obsolete entropy mode `1`; Draft Generation 1 decoders now accept only raw mode `0` and
-  canonical Huffman mode `2`, with all other mode values rejected as invalid input.
+  static byte rANS mode `2` with canonical-uvarint frequencies, with all other mode values rejected
+  as invalid input.
 - Corrected the independent-encoder interoperability lab to compare decoded reconstruction rather
   than requiring byte-identical packets from encoders whose policy choices may legitimately differ.
 - Replaced the parallel reference/production application stacks with one canonical `avelune`

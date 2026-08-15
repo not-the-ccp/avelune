@@ -17,7 +17,6 @@
   .section-nav, .page-toc { position: sticky; top: calc(var(--header-height) + 2rem); align-self: start; max-height: calc(100vh - var(--header-height) - 4rem); overflow: auto; margin-top: 3rem; font-size: .8rem; scrollbar-width: thin; }
   .section-index { display: block; margin: .75rem 0 1rem; color: var(--ink); font-weight: 500; }
   .section-nav details { margin-top: .75rem; }
-  .section-nav details:not([open]) > :not(summary) { display: block; }
   .section-nav summary { cursor: pointer; padding: .45rem 0; border-bottom: 1px solid var(--rule); color: var(--muted); font: .65rem/1.4 var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
   .section-nav ol, .page-toc ol, .mobile-toc ol { margin: 0; padding: 0; list-style: none; }
   .section-nav li { border-bottom: 1px solid var(--rule-soft); }
@@ -48,7 +47,6 @@
     .site-nav a { min-height: 30px; white-space: nowrap; }
     .publication-shell { display: flex; flex-direction: column; width: min(calc(100% - 2rem), var(--measure)); gap: 0; }
     .section-nav { position: static; order: 1; max-height: none; margin-top: 1.5rem; }
-    .section-nav details:not([open]) ol { display: none; }
     .publication { order: 3; padding-top: 1.25rem; }
     .mobile-toc { order: 2; margin: 1rem 0 0; border-block: 1px solid var(--rule); padding: .65rem 0; }
     .mobile-toc summary { cursor: pointer; color: var(--ink); font-weight: 500; }

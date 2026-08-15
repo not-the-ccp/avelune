@@ -14,6 +14,8 @@ SKIPPED_SCHEMES = {"data", "javascript", "mailto", "tel"}
 
 
 class LinkParser(HTMLParser):
+    """Collect links, anchors, and semantic HTML facts from one generated page."""
+
     def __init__(self) -> None:
         super().__init__()
         self.links: list[str] = []
@@ -56,6 +58,7 @@ class LinkParser(HTMLParser):
 
 
 def parse_html(path: Path) -> LinkParser:
+    """Parse one generated HTML file into a populated :class:`LinkParser`."""
     parser = LinkParser()
     parser.feed(path.read_text(encoding="utf-8", errors="replace"))
     return parser
@@ -84,6 +87,7 @@ def is_rustdoc(root: Path, path: Path) -> bool:
 
 
 def main() -> int:
+    """Check every generated page for missing files, fragments, and semantic issues."""
     root = Path(sys.argv[1] if len(sys.argv) > 1 else "dist/site").resolve()
     site_base = sys.argv[2] if len(sys.argv) > 2 else "/avelune"
     if not root.is_dir():
