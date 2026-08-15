@@ -88,6 +88,7 @@ struct Model {
     lookup: [u8; RANS_SCALE as usize],
 }
 
+/// Constructs the frequency model for one byte sequence (independent encoder model selection).
 fn normalize(data: &[u8]) -> Model {
     let mut counts = [0u32; 256];
     for &b in data {
@@ -145,6 +146,7 @@ fn normalize(data: &[u8]) -> Model {
     build_model(freq).expect("normalized model")
 }
 
+/// Validates a 256-symbol frequency table and builds the rANS decode model.
 fn build_model(freq: [u16; 256]) -> Result<Model, BitstreamError> {
     let mut cum = [0u16; 256];
     let mut lookup = [0u8; RANS_SCALE as usize];
@@ -166,6 +168,7 @@ fn build_model(freq: [u16; 256]) -> Result<Model, BitstreamError> {
     Ok(Model { freq, cum, lookup })
 }
 
+/// Encodes one byte slice with the supplied rANS model.
 fn rans_encode(data: &[u8], model: &Model) -> Vec<u8> {
     let mut state = RANS_L;
     let mut renorm = Vec::new();
@@ -185,6 +188,7 @@ fn rans_encode(data: &[u8], model: &Model) -> Vec<u8> {
     out
 }
 
+/// Decodes one rANS block, enforcing the supplied output length.
 fn rans_decode(input: &[u8], n: usize, model: &Model) -> Result<Vec<u8>, BitstreamError> {
     if input.len() < 4 {
         return Err(BitstreamError::UnexpectedEof);

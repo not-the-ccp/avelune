@@ -22,6 +22,7 @@ struct Sample {
     bytes: usize,
 }
 
+/// Runs one closure repeatedly and records a normalized sample.
 fn measure(
     mut f: impl FnMut() -> u64,
     name: &str,
@@ -53,6 +54,7 @@ fn measure(
 }
 
 #[inline(never)]
+/// Scalar 8x8 SAD baseline with an explicit row stride.
 fn direct_sad8x8(a: &[u8], stride: usize, b: &[u8]) -> u64 {
     let mut sum = 0u64;
     for y in 0..8 {
@@ -63,6 +65,7 @@ fn direct_sad8x8(a: &[u8], stride: usize, b: &[u8]) -> u64 {
     sum
 }
 
+/// Deterministic xorshift64* byte sequence with mixed edges for entropy tests.
 fn xorshift_bytes(n: usize, mut x: u64) -> Vec<u8> {
     (0..n)
         .map(|i| {
@@ -81,12 +84,14 @@ fn xorshift_bytes(n: usize, mut x: u64) -> Vec<u8> {
         .collect()
 }
 
+/// Builds a deterministic YCbCr 4:2:0 frame for encoder/decoder checks.
 fn canonical_frame(w: u32, h: u32) -> video::Frame420 {
     let y = xorshift_bytes((w * h) as usize, 0x6a09_e667_f3bc_c909);
     let u = xorshift_bytes((w * h / 4) as usize, 0xbb67_ae85_84ca_a73b);
     let v = xorshift_bytes((w * h / 4) as usize, 0x3c6e_f372_fe94_f82b);
     video::Frame420::from_planes(w, h, y, u, v).unwrap()
 }
+/// Shifts one plane horizontally by `dx` samples, clamping at the right edge.
 fn shift_plane(src: &[u8], w: usize, h: usize, dx: usize) -> Vec<u8> {
     let mut out = vec![0_u8; src.len()];
     for y in 0..h {
@@ -96,6 +101,7 @@ fn shift_plane(src: &[u8], w: usize, h: usize, dx: usize) -> Vec<u8> {
     }
     out
 }
+/// Moves all three planes of a frame horizontally to exercise motion search.
 fn shifted_frame(f: &video::Frame420) -> video::Frame420 {
     let w = f.width as usize;
     let h = f.height as usize;
@@ -109,6 +115,7 @@ fn shifted_frame(f: &video::Frame420) -> video::Frame420 {
     .unwrap()
 }
 
+/// Converts a canonical frame to the independent oracle's encoder representation.
 fn ref_encoder_frame(f: &video::Frame420) -> ref_video_encoder::Frame420 {
     ref_video_encoder::Frame420 {
         width: f.width,
@@ -118,6 +125,7 @@ fn ref_encoder_frame(f: &video::Frame420) -> ref_video_encoder::Frame420 {
         v: f.v().to_vec(),
     }
 }
+/// Converts a canonical frame to the independent oracle's decoder representation.
 fn ref_decoder_frame(f: &video::Frame420) -> ref_video_decoder::Frame420 {
     ref_video_decoder::Frame420 {
         width: f.width,
@@ -128,6 +136,7 @@ fn ref_decoder_frame(f: &video::Frame420) -> ref_video_decoder::Frame420 {
     }
 }
 
+/// Escapes one string for safe embedding in JSON output.
 fn json_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for ch in s.chars() {
@@ -145,6 +154,7 @@ fn json_escape(s: &str) -> String {
     }
     out
 }
+/// Runs a helper command and returns captured stdout (used for on-demand diagnostics).
 fn command_output(program: &str, args: &[&str]) -> String {
     Command::new(program)
         .args(args)

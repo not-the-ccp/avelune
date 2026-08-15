@@ -108,6 +108,7 @@ impl EntropyScratch {
     }
 }
 
+/// Validates a 256-symbol frequency table and builds the packed rANS encode model.
 fn build_encode_model(freq: [u16; 256]) -> Result<EncodeModel, BitstreamError> {
     let mut cum = [0u16; 256];
     let mut total = 0u32;
@@ -126,6 +127,7 @@ fn build_encode_model(freq: [u16; 256]) -> Result<EncodeModel, BitstreamError> {
     Ok(EncodeModel { freq, cum })
 }
 
+/// Builds the packed 4096-entry decode lookup from a validated symbol/cumulative model.
 fn build_decode_lookup(
     freq: &[u16; 256],
     lookup: &mut [u32; LOOKUP_LEN],
@@ -152,6 +154,7 @@ fn build_decode_lookup(
     Ok(())
 }
 
+/// Constructs the frequency model for one byte sequence (non-normative encoder model selection).
 fn normalize(data: &[u8]) -> EncodeModel {
     let mut counts = [0u32; 256];
     for &byte in data {
@@ -197,6 +200,7 @@ fn normalize(data: &[u8]) -> EncodeModel {
     build_encode_model(freq).expect("normalization must sum to 4096")
 }
 
+/// tANS/rANS encodes one byte slice with the supplied model.
 fn rans_encode(data: &[u8], model: &EncodeModel) -> Vec<u8> {
     let mut state = RANS_L;
     let mut reverse_renorm = Vec::with_capacity(data.len() / 2);
@@ -217,6 +221,7 @@ fn rans_encode(data: &[u8], model: &EncodeModel) -> Vec<u8> {
     coded
 }
 
+/// Decodes one rANS block into `out`, enforcing exact output length.
 fn rans_decode_into(
     coded: &[u8],
     raw_len: usize,
@@ -283,6 +288,7 @@ pub fn entropy_compress(data: &[u8]) -> Vec<u8> {
     }
 }
 
+/// Reads a mode-2 canonical-uvarint symbol/frequency model and rejects invalid models.
 fn parse_entropy_model(
     input: &[u8],
     used: usize,
