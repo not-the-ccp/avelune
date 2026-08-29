@@ -68,7 +68,7 @@ Target WCAG 2.2 AA. Preserve semantic landmarks and heading order, a skip link, 
 [#style-components]
 == Representative components
 
-Primary links may use a thin rectangular outline and arrow. Secondary paths remain ordinary underlined text. Document indexes are ruled rows with title, factual summary, and type/status metadata. Technical profile and inspector groups may use borders because they represent actual data structures. Site search is a dedicated, restrained publication page over documentation, specification, and project titles/summaries; it does not index navigation chrome, demo controls, or rustdoc internals.
+Primary links may use a thin rectangular outline and arrow. Secondary paths remain ordinary underlined text. Document indexes are ruled rows with title, factual summary, and type/status metadata. Technical profile and inspector groups may use borders because they represent actual data structures. Site search is a dedicated, restrained publication page over documentation, specification, and project document titles, summaries, and body text; it does not index navigation chrome, demo controls, or rustdoc internals.
 
 Before adding a local component variant, check whether the shared token, layout, content, or component primitive is missing. Fix the shared system when the same problem appears in multiple places.
 
