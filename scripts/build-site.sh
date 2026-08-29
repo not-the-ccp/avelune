@@ -15,6 +15,7 @@ OUT=dist/site
 DOCROOT=${CARGO_TARGET_DIR:-target}/doc
 mkdir -p "$OUT/api/rust" "$OUT/demo"
 cp -a "$DOCROOT"/. "$OUT/api/rust/"
+cp scripts/install.sh "$OUT/install.sh"
 cp web/player/player.js web/player/encoder-worker.js web/player/avelune-loader.js web/player/renderers.js "$OUT/demo/"
 for media in demo.avl motion.avl screen.avl; do [[ -f web/player/$media ]] && cp "web/player/$media" "$OUT/demo/"; done
 for wasm in avelune-scalar.wasm avelune-simd128.wasm; do [[ -f web/player/$wasm ]] || { echo "missing required demo artifact: web/player/$wasm" >&2; exit 1; }; cp "web/player/$wasm" "$OUT/demo/"; done

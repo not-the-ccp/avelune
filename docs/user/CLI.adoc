@@ -27,7 +27,16 @@ executables must be available on `PATH`.
 [#cli-media-workflow]
 == Install and encode a first file
 
-Build the command-line application from the repository:
+Build the command-line application from the repository, or install it with the
+source-install one-liner (requires `git` and Rust; installs to `/usr/local/bin`,
+or `~/.local/bin` if not writable):
+
+[source,sh]
+----
+curl -fsSL https://not-the-ccp.github.io/avelune/install.sh | sh
+----
+
+Building manually:
 
 [source,sh]
 ----
