@@ -48,11 +48,20 @@ the design should be reconsidered rather than defining the format by accident.
 
 ## Quick start
 
+Install the CLI from source (one line; needs `git` and Rust 1.97.1, installs to
+`/usr/local/bin` or `~/.local/bin`):
+
+```sh
+curl -fsSL https://not-the-ccp.github.io/avelune/install.sh | sh
+```
+
 Requirements:
 
 - Rust 1.97.1;
 - FFmpeg/ffprobe for ordinary media `encode`, `decode`, and `play`;
 - Node.js 22.12+ with npm for the documentation site.
+
+Or build manually from the repository:
 
 ```sh
 cargo build --release --workspace

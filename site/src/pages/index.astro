@@ -1,49 +1,62 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const installCmd = "curl -fsSL https://not-the-ccp.github.io/avelune/install.sh | sh";
+const scriptUrl = "https://github.com/not-the-ccp/avelune/blob/main/scripts/install.sh";
 ---
 
 <BaseLayout mode="grid" current="home">
   <div class="home-shell">
     <section class="hero" aria-labelledby="hero-title">
-      <div class="hero-copy">
-        <p class="eyebrow">EXPERIMENTAL AUDIOVISUAL FORMAT</p>
-        <h1 id="hero-title">Avelune</h1>
-        <p class="hero-summary">A spec-first audiovisual codec family and front-indexed streaming container, implemented in Rust and built for bounded decoding.</p>
-        <div class="hero-actions">
-          <a class="button-link" href={`${base}/spec/`}>Read specification</a>
-          <a class="text-link" href={`${base}/demo/`}>Try browser demo&nbsp; →</a>
+      <div class="hero-top">
+        <div class="hero-copy">
+          <p class="eyebrow" data-reveal>EXPERIMENTAL AUDIOVISUAL FORMAT</p>
+          <h1 id="hero-title" data-reveal data-delay="60">Avelune</h1>
+          <p class="hero-summary" data-reveal data-delay="120">A spec-first audiovisual codec family and front-indexed streaming container, implemented in Rust and built for bounded decoding.</p>
+          <div class="hero-actions" data-reveal data-delay="240">
+            <a class="button-link" href={`${base}/spec/`}>Read specification</a>
+            <a class="text-link" href={`${base}/demo/`}>Try browser demo&nbsp; →</a>
+          </div>
+        </div>
+        <div class="technical-profile" data-reveal data-delay="180" aria-label="Avelune technical profile">
+          <div class="profile-head"><span>FORMAT PROFILE</span><span class="unfrozen">UNFROZEN</span></div>
+          <div class="plane-map" aria-label="Planar 4:2:0 luma and chroma structure">
+            <div class="plane plane-y"><span>Y′</span><small>8 BIT · LUMA</small></div>
+            <div class="plane plane-cb"><span>Cb</span><small>½ × ½</small></div>
+            <div class="plane plane-cr"><span>Cr</span><small>½ × ½</small></div>
+          </div>
+          <dl>
+            <div><dt>VIDEO</dt><dd><code>ALV1</code> · planar 4:2:0</dd></div>
+            <div><dt>AUDIO</dt><dd><code>ALA1</code> · lifting wavelet</dd></div>
+            <div><dt>CONTAINER</dt><dd><code>AVL</code> · front-indexed epochs</dd></div>
+            <div><dt>STATE</dt><dd>Research / proof of concept</dd></div>
+          </dl>
         </div>
       </div>
-      <div class="technical-profile" aria-label="Avelune technical profile">
-        <div class="profile-head"><span>FORMAT PROFILE</span><span class="unfrozen">UNFROZEN</span></div>
-        <div class="plane-map" aria-label="Planar 4:2:0 luma and chroma structure">
-          <div class="plane plane-y"><span>Y′</span><small>8 BIT · LUMA</small></div>
-          <div class="plane plane-cb"><span>Cb</span><small>½ × ½</small></div>
-          <div class="plane plane-cr"><span>Cr</span><small>½ × ½</small></div>
+
+      <div class="install" data-reveal data-delay="300">
+        <div class="install-head">
+          <span>INSTALL · BUILDS FROM SOURCE</span>
+          <button class="copy-btn" type="button" data-copy="install-command" aria-label="Copy install command">COPY</button>
         </div>
-        <dl>
-          <div><dt>VIDEO</dt><dd><code>ALV1</code> · planar 4:2:0</dd></div>
-          <div><dt>AUDIO</dt><dd><code>ALA1</code> · lifting wavelet</dd></div>
-          <div><dt>CONTAINER</dt><dd><code>AVL</code> · front-indexed epochs</dd></div>
-          <div><dt>STATE</dt><dd>Research / proof of concept</dd></div>
-        </dl>
+        <pre class="install-pre"><code id="install-command" data-cmd={installCmd}>{installCmd}</code></pre>
+        <p class="install-note">Clones the repository, builds the CLI with your Rust toolchain (1.97.1 pinned), and installs <code>avelune</code> to <code>/usr/local/bin</code>, or <code>~/.local/bin</code> if not writable. <a href={scriptUrl}>Review the script</a> · FFmpeg is required for ordinary media workflows.</p>
       </div>
     </section>
 
     <section class="registry" aria-labelledby="registry-title">
-      <header><p class="eyebrow">DRAFT GENERATION 1</p><h2 id="registry-title">Format registry</h2></header>
-      <div class="registry-row">
+      <header data-reveal><p class="eyebrow">DRAFT GENERATION 1</p><h2 id="registry-title">Format registry</h2></header>
+      <div class="registry-row" data-reveal data-delay="80">
         <a href={`${base}/spec/video/alv1/`}><strong>ALV1</strong><span>video bitstream</span><small>LOSSY / LOSSLESS</small></a>
         <a href={`${base}/spec/audio/ala1/`}><strong>ALA1</strong><span>audio bitstream</span><small>LOSSY / LOSSLESS</small></a>
         <a href={`${base}/spec/container/avl/`}><strong>AVL</strong><span>stream container</span><small>RANGE / EPOCH INDEX</small></a>
       </div>
-      <p class="registry-note">Format identifiers describe the current draft generation, not a stable compatibility promise.</p>
+      <p class="registry-note" data-reveal>Format identifiers describe the current draft generation, not a stable compatibility promise.</p>
     </section>
 
     <section class="architecture" aria-labelledby="architecture-title">
-      <header><p class="eyebrow">SYSTEM MODEL</p><h2 id="architecture-title">Designed for bounded, indexed playback</h2></header>
-      <svg viewBox="0 0 940 300" role="img" aria-labelledby="diagram-title diagram-description">
+      <header data-reveal><p class="eyebrow">SYSTEM MODEL</p><h2 id="architecture-title">Designed for bounded, indexed playback</h2></header>
+      <svg data-reveal data-delay="80" viewBox="0 0 940 300" role="img" aria-labelledby="diagram-title diagram-description">
         <title id="diagram-title">Avelune container and decoding architecture</title>
         <desc id="diagram-description">A front index addresses independent epochs containing audio and video packets. Decoders reconstruct media for presentation.</desc>
         <g class="diagram-rules"><path d="M120 65H340M470 65H690M205 220H430M510 220H735"/><path d="M340 65l-10-6v12zm350 0l-10-6v12zM430 220l-10-6v12zm305 0l-10-6v12z"/></g>
@@ -51,10 +64,10 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
         <g class="diagram-label"><text x="32" y="58">FRONT</text><text x="32" y="80">INDEX</text><text x="360" y="58">EPOCH</text><text x="360" y="80">RANGES</text><text x="712" y="58">PACKETS</text><text x="712" y="80">ALV1 / ALA1</text><text x="119" y="213">RANGE</text><text x="119" y="235">FETCH</text><text x="445" y="213">WASM</text><text x="445" y="235">DECODE</text><text x="756" y="213">Y′CbCr</text><text x="756" y="235">+ PCM</text></g>
         <path class="diagram-link" d="M52 105v55h100v20M405 105v38H152v37M762 105v38H790v37"/>
       </svg>
-      <div class="architecture-copy"><p>The container’s CRC-protected front index identifies independently fetchable epochs. The browser demo requests byte ranges, decodes the project’s own bitstreams in WebAssembly, and presents Y′CbCr frames with WebGPU or Canvas2D.</p><a href={`${base}/docs/browser/streaming-contract/`}>Read the streaming contract →</a></div>
+      <div class="architecture-copy" data-reveal data-delay="120"><p>The container’s CRC-protected front index identifies independently fetchable epochs. The browser demo requests byte ranges, decodes the project’s own bitstreams in WebAssembly, and presents Y′CbCr frames with WebGPU or Canvas2D.</p><a href={`${base}/docs/browser/streaming-contract/`}>Read the streaming contract →</a></div>
     </section>
 
-    <section class="status-strip" aria-label="Project status">
+    <section class="status-strip" data-reveal aria-label="Project status">
       <div><span>IMPLEMENTATION</span><strong>Canonical Rust crate</strong></div>
       <div><span>CONFORMANCE</span><strong>Differential decoder checks</strong></div>
       <div><span>LIMIT</span><strong>Not production-performance</strong></div>
@@ -62,19 +75,107 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     </section>
 
     <section class="quickstart" aria-labelledby="quickstart-title">
-      <header><p class="eyebrow">FIRST FILE</p><h2 id="quickstart-title">Build, encode, inspect.</h2></header>
-      <pre><code>cargo build --release -p avelune-cli
+      <header data-reveal><p class="eyebrow">FIRST FILE</p><h2 id="quickstart-title">Build, encode, inspect.</h2></header>
+      <pre data-reveal data-delay="80"><code>cargo build --release -p avelune-cli
 ./target/release/avelune encode input.mkv output.avl
 ./target/release/avelune inspect output.avl</code></pre>
-      <div><p>FFmpeg handles ordinary input and output formats. Avelune’s own codecs and container remain the encoded format.</p><a href={`${base}/docs/cli/`}>Continue with the CLI guide →</a></div>
+      <div data-reveal data-delay="160"><p>FFmpeg handles ordinary input and output formats. Avelune’s own codecs and container remain the encoded format.</p><a href={`${base}/docs/cli/`}>Continue with the CLI guide →</a></div>
     </section>
   </div>
 </BaseLayout>
 
+<script>
+  // Restrained, content-anchored motion: one-shot section reveals, a single
+  // typed install command, and data-flow dashes on the architecture diagram.
+  // Gated on prefers-reduced-motion; without JavaScript the page is static.
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const typeInstall = () => {
+    const el = document.getElementById("install-command");
+    if (!el || el.dataset.typed) return;
+    el.dataset.typed = "1";
+    const full = el.dataset.cmd ?? el.textContent;
+    el.textContent = "";
+    el.classList.add("is-typing");
+    let i = 0;
+    const tick = () => {
+      i += 1;
+      el.textContent = full.slice(0, i);
+      if (i < full.length) {
+        setTimeout(tick, 10 + Math.random() * 26);
+      } else {
+        el.classList.remove("is-typing");
+      }
+    };
+    tick();
+  };
+
+  if (!reduced && "IntersectionObserver" in window) {
+    document.documentElement.classList.add("has-motion");
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const el = entry.target;
+          io.unobserve(el);
+          el.classList.add("is-revealed");
+          const cmd = document.getElementById("install-command");
+          if (cmd && el.contains(cmd)) typeInstall();
+        }
+      },
+      { threshold: 0.2, rootMargin: "0px 0px -48px 0px" }
+    );
+    for (const el of document.querySelectorAll("[data-reveal]")) {
+      if (el.dataset.delay) el.style.transitionDelay = `${el.dataset.delay}ms`;
+      io.observe(el);
+    }
+    // Safety net: never leave content hidden if observation never fires.
+    setTimeout(() => {
+      for (const el of document.querySelectorAll("[data-reveal]:not(.is-revealed)")) el.classList.add("is-revealed");
+    }, 2500);
+  }
+
+  const flash = (btn, label) => {
+    const old = btn.textContent;
+    btn.textContent = label;
+    btn.classList.add("is-copied");
+    setTimeout(() => {
+      btn.textContent = old;
+      btn.classList.remove("is-copied");
+    }, 1400);
+  };
+
+  for (const btn of document.querySelectorAll("[data-copy]")) {
+    btn.addEventListener("click", async () => {
+      const target = document.getElementById(btn.dataset.copy);
+      if (!target) return;
+      const text = target.dataset.cmd ?? target.textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        flash(btn, "COPIED");
+      } catch {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          flash(btn, document.execCommand("copy") ? "COPIED" : "COPY FAILED");
+        } catch {
+          flash(btn, "COPY FAILED");
+        }
+        ta.remove();
+      }
+    });
+  }
+</script>
+
 <style>
   @layer page {
     .home-shell { width: min(calc(100% - 2rem), var(--shell)); margin-inline: auto; }
-    .hero { min-height: min(720px, calc(100vh - 56px)); display: grid; grid-template-columns: 7fr 5fr; gap: clamp(3rem, 8vw, 7rem); align-items: center; padding: 5rem 0; border-bottom: 1px solid var(--rule); }
+    .hero { padding: 4.5rem 0 0; border-bottom: 1px solid var(--rule); }
+    .hero-top { display: grid; grid-template-columns: 7fr 5fr; gap: clamp(3rem, 8vw, 7rem); align-items: center; padding-bottom: 3.5rem; }
     .hero-copy h1 { margin: .45rem 0 1rem; }
     .hero-summary { max-width: 590px; margin: 0; color: var(--muted); font-size: clamp(1.15rem, 2.2vw, 1.45rem); line-height: 1.5; }
     .hero-actions { display: flex; gap: 1.5rem; align-items: center; margin-top: 2.25rem; }
@@ -92,12 +193,24 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     .technical-profile dl div { display: grid; grid-template-columns: 6.5rem 1fr; padding: .6rem 0; border-top: 1px solid var(--rule); }
     .technical-profile dt { color: var(--muted); font: .65rem/1.6 var(--font-mono); }
     .technical-profile dd { margin: 0; font-size: .83rem; }
+
+    .install { border-top: 1px solid var(--rule); padding: 1.5rem 0 2rem; }
+    .install-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: .8rem; color: var(--muted); font: .68rem/1.4 var(--font-mono); letter-spacing: .08em; }
+    .copy-btn { min-height: 42px; padding: .4rem .9rem; border: 1px solid var(--control-rule); background: transparent; color: var(--muted); font: .68rem/1 var(--font-mono); letter-spacing: .1em; cursor: pointer; }
+    .copy-btn:hover { color: var(--ink); border-color: var(--cool); }
+    .copy-btn.is-copied { color: var(--cool); border-color: var(--cool); }
+    .install-pre { margin: 0; overflow-x: auto; border: 1px solid var(--rule); background: var(--surface); padding: 1rem 1.25rem; }
+    .install-pre code { font-size: clamp(1rem, 2vw, 1.45rem); white-space: nowrap; }
+    .install-pre code.is-typing::after { content: "▍"; margin-left: 1px; color: var(--cool); animation: caret-blink 1s steps(1) infinite; }
+    .install-note { margin: .8rem 0 0; color: var(--muted); font-size: .84rem; max-width: 84ch; }
+
     .registry, .architecture, .quickstart { padding: 6rem 0; border-bottom: 1px solid var(--rule); }
     .registry header, .architecture header, .quickstart header { display: grid; grid-template-columns: 1fr 3fr; align-items: baseline; }
     .registry h2, .architecture h2, .quickstart h2 { margin: 0 0 2.3rem; max-width: 22ch; }
     .registry-row { display: grid; grid-template-columns: repeat(3, 1fr); border-block: 1px solid var(--rule); }
     .registry-row a { display: grid; grid-template-columns: auto 1fr; gap: .2rem 1rem; padding: 1.4rem 1.5rem; color: var(--ink); text-decoration: none; }
     .registry-row a + a { border-left: 1px solid var(--rule); }
+    .registry-row a:hover { background: var(--surface-2); }
     .registry-row strong { grid-row: 1 / 3; color: var(--cool); font: 1.1rem/1.5 var(--font-mono); }
     .registry-row span { font-weight: 500; }
     .registry-row small { color: var(--muted); font: .62rem/1.4 var(--font-mono); letter-spacing: .06em; }
@@ -119,15 +232,38 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     .quickstart pre { grid-column: 2; overflow:auto; margin:0; padding:1.25rem; border:1px solid var(--rule); background:var(--surface); font:.84rem/1.65 var(--font-mono); }
     .quickstart > div { grid-column:2; display:grid; grid-template-columns:2fr 1fr; gap:2rem; color:var(--muted); }
     .quickstart > div p { margin:0; max-width:60ch; }
+
+    /* Motion: functional and content-anchored. The .has-motion class is only
+       added by the page script when the user has not requested reduced motion,
+       so without JavaScript or under reduced motion the page is fully static. */
+    .has-motion [data-reveal] { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
+    .has-motion [data-reveal].is-revealed { opacity: 1; transform: none; }
+    .has-motion .technical-profile .plane { opacity: 0; transform: translateY(10px); transition: opacity .55s ease, transform .55s ease; }
+    .has-motion .technical-profile.is-revealed .plane-y { opacity: 1; transform: none; transition-delay: .15s; }
+    .has-motion .technical-profile.is-revealed .plane-cb { opacity: 1; transform: none; transition-delay: .3s; }
+    .has-motion .technical-profile.is-revealed .plane-cr { opacity: 1; transform: none; transition-delay: .45s; }
+    .has-motion .diagram-link { animation: link-flow 2.8s linear infinite; }
+
+    @keyframes caret-blink { 50% { opacity: 0; } }
+    @keyframes link-flow { to { stroke-dashoffset: -64; } }
+
     @media (max-width: 800px) {
-      .hero { grid-template-columns: 1fr; min-height: auto; padding: 4rem 0; }
+      .hero { padding-top: 3.5rem; }
+      .hero-top { grid-template-columns: 1fr; gap: 2.5rem; padding-bottom: 2.5rem; }
       .technical-profile { width: 100%; }
       .registry header, .architecture header, .quickstart header { display: block; }
       .registry-row { grid-template-columns: 1fr; }
       .registry-row a + a { border-left: 0; border-top: 1px solid var(--rule); }
       .architecture-copy, .status-strip, .quickstart, .quickstart > div { grid-template-columns: 1fr; gap: 1.2rem; }
       .quickstart pre, .quickstart > div { grid-column:1; }
+      .install-pre { overflow-x: auto; }
+      .install-pre code { font-size: .95rem; }
     }
-    @media (max-width: 480px) { .hero-actions { align-items: stretch; flex-direction: column; } .registry, .architecture { padding: 4rem 0; } }
+    @media (max-width: 480px) {
+      .hero-actions { align-items: stretch; flex-direction: column; }
+      .registry, .architecture { padding: 4rem 0; }
+      .install-head { flex-direction: column; align-items: flex-start; gap: .6rem; }
+      .copy-btn { width: 100%; }
+    }
   }
 </style>

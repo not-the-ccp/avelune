@@ -27,7 +27,7 @@ node --check scripts/site-browser-smoke.mjs
 node --check scripts/validate-content.mjs
 python3 -m py_compile scripts/benchmark-real.py scripts/benchmark-real-audio.py scripts/benchmark-xiph.py scripts/check-site-links.py scripts/format-experiments.py scripts/encoder-curves.py scripts/ci-media-regression.py scripts/compare-ci-media.py scripts/test-ci-regression-tools.py scripts/generate-demo-fixtures.py
 python3 scripts/test-ci-regression-tools.py
-bash -n scripts/build-wasm.sh scripts/build-site.sh scripts/fetch-xiph-corpus.sh scripts/audit-unsafe.sh scripts/disassembly-check.sh scripts/validate-release.sh scripts/ci-media-base-head.sh
+bash -n scripts/build-wasm.sh scripts/build-site.sh scripts/fetch-xiph-corpus.sh scripts/audit-unsafe.sh scripts/disassembly-check.sh scripts/validate-release.sh scripts/ci-media-base-head.sh scripts/install.sh
 
 echo '[6/9] unsafe boundary'
 ./scripts/audit-unsafe.sh

@@ -7,6 +7,10 @@ may be incompatible until a stable major line is explicitly declared.
 
 ### Added
 
+- Added a one-line source installer (`scripts/install.sh`, published as `install.sh` on the site)
+  and a landing-page install command with a copy control.
+- Added restrained landing-page motion: one-shot section reveals, a typed install command, and
+  data-flow dashes on the architecture diagram, all disabled under `prefers-reduced-motion`.
 - Added full-text documentation search, sitemap/robots metadata, canonical and social metadata,
   responsive publication navigation, mobile tables of contents, and previous/next reading links.
 - Added generated-site semantic, link, fragment, responsive-overflow, keyboard, accessibility-tree,

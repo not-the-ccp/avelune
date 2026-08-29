@@ -37,7 +37,7 @@ Spacing should reveal hierarchy without wrapping every group in a surface. A bor
 [#style-landing]
 == Landing page technical grid
 
-The first viewport uses a seven/five-column relationship: factual project identity and primary paths on the left, real format metadata and a proportional Y′/Cb/Cr plane map on the right. The registry is one structural row for ALV1, ALA1, and AVL, not three promotional cards. The architecture diagram uses lines, boundaries, and labels to explain indexed playback.
+The first viewport keeps the seven/five-column relationship: factual project identity and primary paths on the left, real format metadata and a proportional Y′/Cb/Cr plane map on the right. Below the identity row, the primary install command occupies its own full-width row: a large monospace command that fetches the published `install.sh` (a source build, since Avelune has no prebuilt release artifacts), with a copy control and a factual note linking to the script in the repository. The command must remain a real, working command, not a fake terminal with invented output. The registry is one structural row for ALV1, ALA1, and AVL, not three promotional cards. The architecture diagram uses lines, boundaries, and labels to explain indexed playback, with slow data-flow dashes moving along its fetch path.
 
 The homepage must remain purpose-built. It is not generated from `README.md`, and it must not acquire a slogan, decorative hero art, fake terminal, unsupported performance claims, or maturity percentages.
 
@@ -58,7 +58,7 @@ The demo uses the dark mode. Its sequence is viewport, controls, then a compact 
 
 Layouts should become simpler, not merely smaller. The landing hero stacks, registry boundaries become horizontal, publication sidebars collapse in priority order, code and tables scroll, and the demo places its viewport before controls and inspection. Long identifiers must wrap or scroll without widening the page.
 
-There is no ambient motion. Functional transitions, if added, are subtle and disabled or reduced under `prefers-reduced-motion`.
+There is no ambient motion. The landing page’s motion is functional and content-anchored: one-shot reveals when sections first enter the viewport, the install command typed once on first view, the plane map assembled in Y′/Cb/Cr order, and the continuous dash flow along the architecture diagram’s fetch path. Motion is subtle (under 600 ms for one-shot effects, small offsets, palette-restrained), is added only when the user has not requested reduced motion, and degrades to a fully static page without JavaScript.
 
 [#style-accessibility]
 == Accessibility
