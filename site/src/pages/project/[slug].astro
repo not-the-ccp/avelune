@@ -13,4 +13,8 @@ const sourceUrl = `https://github.com/not-the-ccp/avelune/blob/main/${document.s
     <div class="asciidoc"><Fragment set:html={document.html} /></div>
   </article>
 </BaseLayout>
-<style>.root-document{width:min(calc(100% - 2rem),var(--measure));margin-inline:auto;padding-top:clamp(3rem,6vw,5.5rem)}</style>
+<style>
+  @layer page {
+    .root-document { width:min(calc(100% - 2rem),var(--measure)); margin-inline:auto; padding-top:clamp(3rem,6vw,5.5rem); }
+  }
+</style>

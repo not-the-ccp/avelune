@@ -9,8 +9,6 @@ const documents = [
   ...(await loadDocuments("spec")),
   ...loadRootDocuments().map((document) => ({ ...document, route: `/project/${document.slug}/`, type: "project" })),
 ];
-const searchableText = (document) => `${document.title} ${document.summary} ${document.type} ${document.html || ""}`
-  .replace(/<[^>]*>/g, " ").replace(/&(?:[a-z]+|#\d+);/gi, " ").replace(/\s+/g, " ").toLocaleLowerCase();
 ---
 <BaseLayout title="Search" current="search">
   <div class="index-shell search-shell">
@@ -19,26 +17,38 @@ const searchableText = (document) => `${document.title} ${document.summary} ${do
     <input id="site-search" type="search" autocomplete="off" placeholder="Try “epoch”, “qstep”, or “WebAssembly”" />
     <p id="search-count" class="search-count" role="status">{documents.length} documents</p>
     <ol class="document-list" id="search-results">
-      {documents.map((document) => <li data-search={searchableText(document)}><a href={`${base}${document.route}`}>{document.title}</a><p>{document.summary}</p><span>{document.type}</span></li>)}
+      {documents.map((document) => <li data-route={document.route}><a href={`${base}${document.route}`}>{document.title}</a><p>{document.summary}</p><span>{document.type}</span></li>)}
     </ol>
   </div>
   <script>
     const input = document.querySelector('#site-search');
     const rows = [...document.querySelectorAll('#search-results > li')];
     const count = document.querySelector('#search-count');
-    const update = () => {
+    // The full-text corpus ships as a separate JSON document so this page stays small;
+    // until it loads, matching degrades to visible title/summary text.
+    let texts = new Map(rows.map((row) => [row.dataset.route, row.textContent.toLocaleLowerCase()]));
+    const apply = () => {
       const terms = input.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
       let visible = 0;
       for (const row of rows) {
-        const matches = terms.every((term) => row.dataset.search.includes(term));
+        const matches = terms.every((term) => (texts.get(row.dataset.route) ?? '').includes(term));
         row.hidden = !matches;
         if (matches) visible += 1;
       }
       count.textContent = `${visible} document${visible === 1 ? '' : 's'}`;
     };
-    input.addEventListener('input', update);
+    input.addEventListener('input', apply);
     const query = new URLSearchParams(location.search).get('q');
-    if (query) { input.value = query; update(); }
+    if (query) input.value = query;
+    apply();
+    const corpusUrl = new URL('corpus.json', location.href).href;
+    fetch(corpusUrl, {cache: 'no-store'}).then((response) => {
+      if (!response.ok) return;
+      return response.json().then((corpus) => {
+        texts = new Map(corpus.map((entry) => [entry.route, entry.text]));
+        apply();
+      });
+    }).catch(() => {});
   </script>
 </BaseLayout>
 
