@@ -7,11 +7,11 @@ function colorParams(meta0) {
 
 function buildColorTables(meta0) {
   const [ys, yo, rv, gu, gv, bu] = colorParams(meta0);
-  const y = new Float32Array(256);
-  const rV = new Float32Array(256);
-  const gU = new Float32Array(256);
-  const gV = new Float32Array(256);
-  const bU = new Float32Array(256);
+  const y = new Float64Array(256);
+  const rV = new Float64Array(256);
+  const gU = new Float64Array(256);
+  const gV = new Float64Array(256);
+  const bU = new Float64Array(256);
   for (let value = 0; value < 256; value++) {
     y[value] = ys * (value / 255 - yo) * 255;
     const chroma = value / 255 - .5;
