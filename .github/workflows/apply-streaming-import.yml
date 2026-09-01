@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          cat .github/streaming-import-patch/part00 > /tmp/streaming.patch.xz.b64
+          cat .github/streaming-import-patch/part00 .github/streaming-import-patch/part01 .github/streaming-import-patch/part02 .github/streaming-import-patch/part03 > /tmp/streaming.patch.xz.b64
           base64 -d /tmp/streaming.patch.xz.b64 > /tmp/streaming.patch.xz
           echo '678c147d7bd20451edf62c82678dd5f13420b2b65b4a4db8ef71c9471dca17ea  /tmp/streaming.patch.xz' | sha256sum -c -
           xz -dc /tmp/streaming.patch.xz > /tmp/streaming.patch
