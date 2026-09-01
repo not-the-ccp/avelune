@@ -114,6 +114,7 @@ class PlayerController {
     this.rangeRequests = 0;
     this.rangeBytes = 0n;
     this.framesRendered = 0;
+    this.loadGeneration = 0;
   }
 
   setState(state, detail = '') {
@@ -166,6 +167,7 @@ class PlayerController {
   }
 
   async load(source) {
+    const generation = ++this.loadGeneration;
     this.cancelPlayback();
     this.decoder?.destroy();
     this.decoder = null;
@@ -185,12 +187,16 @@ class PlayerController {
 
     try {
       const decoder = await createAveluneDecoder({artifact: $('wasm-artifact').value});
+      if (generation !== this.loadGeneration) {
+        decoder.destroy();
+        return;
+      }
       this.decoder = decoder;
       this.log.add(`WASM ${decoder.artifact} loaded`);
       const index = await decoder.loadIndex(source, {
         onRange: range => this.rangeEvent(range),
       });
-      if (decoder !== this.decoder) return;
+      if (generation !== this.loadGeneration || decoder !== this.decoder) return;
 
       this.index = index;
       const videos = index.streams.filter(s => s.kind === 1);
@@ -204,7 +210,10 @@ class PlayerController {
       this.videoStreamId = video?.id ?? null;
       this.audioStreamId = audio?.id ?? null;
       const renderer = await createRenderer($('c'), video?.meta0 ?? 0, $('renderer-choice').value);
-      if (decoder !== this.decoder) { renderer.renderer.destroy?.(); return; }
+      if (generation !== this.loadGeneration || decoder !== this.decoder) {
+        renderer.renderer.destroy?.();
+        return;
+      }
       this.renderer = renderer.renderer;
       this.duration = Math.max(...index.epochs.map(e => seconds(e.pts) + seconds(e.duration)));
       $('seek').max = String(this.duration);
@@ -228,6 +237,7 @@ class PlayerController {
       this.setState('ready', `${index.epochs.length} indexed epoch${index.epochs.length === 1 ? '' : 's'} · ${formatTime(this.duration)}`);
       this.log.add(`index streams=${index.streams.length} epochs=${index.epochs.length} front=${index.frontBytes}B`);
     } catch (error) {
+      if (generation !== this.loadGeneration || error?.name === 'AbortError' || error instanceof StaleDecodeGenerationError) return;
       this.log.add(`load error: ${error.message ?? error}`);
       this.setState('error', error.message ?? String(error));
       throw error;
@@ -350,6 +360,7 @@ class PlayerController {
   }
 
   destroy() {
+    this.loadGeneration++;
     this.cancelPlayback();
     this.decoder?.destroy();
     this.renderer?.destroy?.();
