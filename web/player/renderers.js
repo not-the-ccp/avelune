@@ -5,40 +5,103 @@ function colorParams(meta0) {
   return full ? [1, 0, 1.5748, -.187324, -.468124, 1.8556] : [1.164, 16 / 255, 1.793, -.213, -.533, 2.112];
 }
 
+function buildColorTables(meta0) {
+  const [ys, yo, rv, gu, gv, bu] = colorParams(meta0);
+  const y = new Float32Array(256);
+  const rV = new Float32Array(256);
+  const gU = new Float32Array(256);
+  const gV = new Float32Array(256);
+  const bU = new Float32Array(256);
+  for (let value = 0; value < 256; value++) {
+    y[value] = ys * (value / 255 - yo) * 255;
+    const chroma = value / 255 - .5;
+    rV[value] = rv * chroma * 255;
+    gU[value] = gu * chroma * 255;
+    gV[value] = gv * chroma * 255;
+    bU[value] = bu * chroma * 255;
+  }
+  return {y, rV, gU, gV, bU};
+}
+
 export class CanvasRenderer {
   constructor(canvas, meta0) {
     this.canvas = canvas;
     this.context = canvas.getContext('2d', {alpha: false});
     if (!this.context) throw Error('Canvas2D context unavailable');
-    this.coefficients = colorParams(meta0);
+    this.tables = buildColorTables(meta0);
     this.image = null;
     this.width = 0;
     this.height = 0;
   }
+
   render(frame) {
-    const {w, h, yuv} = frame, [ys, yo, rv, gu, gv, bu] = this.coefficients;
+    const {w, h, yuv} = frame;
     if (this.width !== w || this.height !== h || !this.image) {
-      this.width = w; this.height = h;
-      this.canvas.width = w; this.canvas.height = h;
+      this.width = w;
+      this.height = h;
+      this.canvas.width = w;
+      this.canvas.height = h;
       this.image = this.context.createImageData(w, h);
     }
+
     const image = this.image;
-    const yLen = w * h, cLen = yLen / 4;
-    const yPlane = yuv.subarray(0, yLen), uPlane = yuv.subarray(yLen, yLen + cLen), vPlane = yuv.subarray(yLen + cLen);
-    for (let row = 0, pixel = 0; row < h; row++) {
-      for (let col = 0; col < w; col++, pixel++) {
-        const y = yPlane[pixel] / 255;
-        const u = uPlane[(row >> 1) * (w >> 1) + (col >> 1)] / 255 - .5;
-        const v = vPlane[(row >> 1) * (w >> 1) + (col >> 1)] / 255 - .5;
-        const luma = ys * (y - yo), out = pixel * 4;
-        image.data[out] = Math.max(0, Math.min(255, (luma + rv * v) * 255));
-        image.data[out + 1] = Math.max(0, Math.min(255, (luma + gu * u + gv * v) * 255));
-        image.data[out + 2] = Math.max(0, Math.min(255, (luma + bu * u) * 255));
-        image.data[out + 3] = 255;
+    const out = image.data;
+    const yLen = w * h;
+    const cWidth = w >> 1;
+    const cLen = yLen >> 2;
+    const yPlane = yuv.subarray(0, yLen);
+    const uPlane = yuv.subarray(yLen, yLen + cLen);
+    const vPlane = yuv.subarray(yLen + cLen, yLen + cLen * 2);
+    const {y, rV, gU, gV, bU} = this.tables;
+
+    // ALV1 is planar 4:2:0, so one chroma sample serves a 2×2 luma block.
+    // Reuse those chroma contributions instead of recalculating indexes,
+    // normalization, and matrix multiplications for every output pixel.
+    for (let row = 0; row < h; row += 2) {
+      const yRow0 = row * w;
+      const yRow1 = yRow0 + w;
+      const cRow = (row >> 1) * cWidth;
+      for (let col = 0; col < w; col += 2) {
+        const c = cRow + (col >> 1);
+        const u = uPlane[c], v = vPlane[c];
+        const r = rV[v], g = gU[u] + gV[v], b = bU[u];
+
+        let pixel = yRow0 + col;
+        let dst = pixel << 2;
+        let luma = y[yPlane[pixel]];
+        out[dst] = luma + r;
+        out[dst + 1] = luma + g;
+        out[dst + 2] = luma + b;
+        out[dst + 3] = 255;
+
+        pixel++;
+        dst += 4;
+        luma = y[yPlane[pixel]];
+        out[dst] = luma + r;
+        out[dst + 1] = luma + g;
+        out[dst + 2] = luma + b;
+        out[dst + 3] = 255;
+
+        pixel = yRow1 + col;
+        dst = pixel << 2;
+        luma = y[yPlane[pixel]];
+        out[dst] = luma + r;
+        out[dst + 1] = luma + g;
+        out[dst + 2] = luma + b;
+        out[dst + 3] = 255;
+
+        pixel++;
+        dst += 4;
+        luma = y[yPlane[pixel]];
+        out[dst] = luma + r;
+        out[dst + 1] = luma + g;
+        out[dst + 2] = luma + b;
+        out[dst + 3] = 255;
       }
     }
     this.context.putImageData(image, 0, 0);
   }
+
   destroy() {}
 }
 
@@ -139,7 +202,10 @@ export class WebGpuRenderer {
     this.device.queue.submit([encoder.finish()]);
   }
 
-  destroy() { this.#destroyTextures(); this.device.destroy?.(); }
+  destroy() {
+    this.#destroyTextures();
+    this.device.destroy?.();
+  }
 }
 
 export async function createRenderer(canvas, meta0, preference = 'auto') {
