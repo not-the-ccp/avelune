@@ -2,116 +2,171 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 ---
-<BaseLayout title="Browser demo" mode="grid" current="demo">
+<BaseLayout
+  title="Browser demo"
+  description="Play, inspect, seek, and range-fetch Avelune media directly in the browser with the canonical Rust decoder compiled to WebAssembly."
+  mode="grid"
+  current="demo"
+>
   <div class="demo-shell" id="drop-target">
     <header class="demo-header">
-      <p class="eyebrow">BROWSER CODEC INSTRUMENT</p>
-      <h1>Decode Avelune in the browser.</h1>
-      <p>
-        Load a bundled example, an HTTP Range source, or a local <code>.avl</code> file.
-        The canonical Rust decoder runs in WebAssembly; JavaScript owns transport,
-        cancellation, scheduling, and Canvas/WebGPU presentation.
-      </p>
+      <div>
+        <p class="eyebrow">BROWSER CODEC WORKBENCH</p>
+        <h1>Play and inspect Avelune.</h1>
+      </div>
+      <div class="demo-intro">
+        <p>
+          The canonical Rust decoder runs in WebAssembly. Load a bundled fixture, an HTTP Range
+          source, or a local <code>.avl</code>, then inspect the actual stream, index, fetch, and
+          presentation state while it plays.
+        </p>
+        <p class="fixture-note">
+          Bundled media is intentionally small enough for source-controlled regression testing.
+          The 160×90 motion and screen clips are stress vectors, not quality-showcase footage.
+          Open your own <code>.avl</code> for meaningful resolution and throughput evaluation.
+        </p>
+      </div>
     </header>
 
     <div class="instrument">
-      <section class="viewport" aria-label="Video viewport">
-        <canvas id="c" width="640" height="360">Decoded Avelune video appears here.</canvas>
-        <div class="drop-message" aria-hidden="true">DROP .AVL FILE</div>
-      </section>
-
-      <section class="transport" aria-label="Player controls">
-        <div class="load-grid">
-          <div class="control-group">
-            <label for="sample">Bundled example</label>
-            <div class="control-row">
-              <select id="sample">
-                <option value="demo.avl">A/V baseline · 320×180</option>
-                <option value="motion.avl">Motion / texture</option>
-                <option value="screen.avl">Screen / text content</option>
-              </select>
-              <button id="load-sample" type="button">Load</button>
-            </div>
+      <section class="viewport-panel" aria-label="Video output">
+        <div class="viewport-head">
+          <div>
+            <span>OUTPUT</span>
+            <strong id="state-label">IDLE</strong>
           </div>
-
-          <div class="control-group">
-            <label for="url">HTTP Range source</label>
-            <div class="control-row">
-              <input id="url" type="url" placeholder="https://…/video.avl" spellcheck="false" />
-              <button id="load-url" type="button">Load URL</button>
-            </div>
-          </div>
-
-          <div class="control-group">
-            <label for="file">Local file</label>
-            <div class="control-row file-row">
-              <input id="file" type="file" accept=".avl,application/octet-stream" />
-              <span class="hint">or drop it anywhere on the instrument</span>
-            </div>
-          </div>
+          <p id="state-detail" role="status" aria-live="polite">Preparing the bundled baseline…</p>
         </div>
 
+        <div class="viewport">
+          <canvas id="c" width="640" height="360">Decoded Avelune video appears here.</canvas>
+          <div id="viewport-state" class="viewport-state">Choose a sample or open an .avl file.</div>
+          <div class="drop-message" aria-hidden="true">DROP .AVL TO OPEN</div>
+        </div>
+
+        <div class="performance-strip" aria-label="Current session measurements">
+          <div><span>INDEX LOAD</span><strong id="metric-index">—</strong></div>
+          <div><span>RANGE REQUESTS</span><strong id="metric-ranges">0</strong></div>
+          <div><span>FETCHED</span><strong id="metric-bytes">0 B</strong></div>
+          <div><span>FRAMES SHOWN</span><strong id="metric-frames">0</strong></div>
+        </div>
+      </section>
+
+      <section class="transport" aria-label="Playback and source controls">
         <div class="play-control">
-          <button id="play" type="button" disabled>Play</button>
-          <label class="sr-only" for="seek">Seek position</label>
-          <input id="seek" type="range" min="0" max="1" step=".001" value="0" disabled />
-          <output id="time" for="seek">0.00s</output>
-          <label class="compact-label" for="volume">VOL</label>
+          <button id="play" class="play-button" type="button" disabled>Play</button>
+          <div class="timeline">
+            <label class="sr-only" for="seek">Seek position</label>
+            <input id="seek" type="range" min="0" max="1" step=".001" value="0" disabled />
+            <div class="timeline-meta">
+              <output id="time" for="seek">0.00s</output>
+              <span>Space · ←/→ 5s · Home/End</span>
+            </div>
+          </div>
+          <label class="compact-label" for="volume">Volume</label>
           <input id="volume" class="volume" type="range" min="0" max="1" step=".01" value="1" />
         </div>
 
+        <div class="source-section">
+          <div class="section-heading">
+            <span>01</span>
+            <div><h2>Bundled source</h2><p>Start here; the baseline index loads automatically.</p></div>
+          </div>
+          <div class="control-row sample-row">
+            <label class="sr-only" for="sample">Bundled example</label>
+            <select id="sample">
+              <option
+                value="demo.avl"
+                data-description="320×180 · audio + video · 60 video frames · baseline browser regression fixture"
+              >Baseline A/V · 320×180</option>
+              <option
+                value="motion.avl"
+                data-description="160×90 · 90 frames · procedural motion and texture stress vector; intentionally tiny"
+              >Motion stress vector · 160×90</option>
+              <option
+                value="screen.avl"
+                data-description="160×90 · 90 frames · procedural text and hard-edge stress vector; intentionally tiny"
+              >Screen/text stress vector · 160×90</option>
+            </select>
+            <button id="load-sample" type="button">Load fixture</button>
+          </div>
+          <p id="sample-description" class="source-description"></p>
+        </div>
+
+        <div class="source-section source-grid">
+          <div>
+            <div class="section-heading">
+              <span>02</span>
+              <div><h2>Local file</h2><p>Nothing is uploaded; decoding stays in this tab.</p></div>
+            </div>
+            <input id="file" type="file" accept=".avl,application/octet-stream" />
+          </div>
+
+          <div>
+            <div class="section-heading">
+              <span>03</span>
+              <div><h2>HTTP Range source</h2><p>The server must return valid <code>206</code> byte ranges.</p></div>
+            </div>
+            <div class="control-row">
+              <label class="sr-only" for="url">HTTP Range source URL</label>
+              <input id="url" type="url" placeholder="https://example.invalid/video.avl" spellcheck="false" />
+              <button id="load-url" type="button">Load URL</button>
+            </div>
+          </div>
+        </div>
+
         <details class="advanced-controls">
-          <summary>Decoder / renderer controls</summary>
-          <div class="advanced-row">
-            <label for="wasm-artifact">WASM</label>
+          <summary>Decoder, renderer, and local encoder</summary>
+          <div class="advanced-grid">
+            <label for="wasm-artifact">WASM artifact</label>
             <select id="wasm-artifact">
-              <option value="auto">Auto</option>
+              <option value="auto">Auto · prefer SIMD128</option>
               <option value="simd128">SIMD128</option>
               <option value="scalar">Scalar</option>
             </select>
+
             <label for="renderer-choice">Renderer</label>
             <select id="renderer-choice">
-              <option value="auto">Auto</option>
+              <option value="auto">Auto · prefer WebGPU</option>
               <option value="webgpu">WebGPU</option>
               <option value="canvas">Canvas 2D</option>
             </select>
           </div>
-        </details>
 
-
-        <details class="encoder-lab">
-          <summary>Local Y4M encoder lab</summary>
-          <p>
-            Encode an 8-bit 4:2:0 Y4M video entirely in this tab, then load the resulting
-            <code>.avl</code> into the same player. This intentionally does not pretend the browser
-            can robustly demux arbitrary MP4/WebM without another media stack.
-          </p>
-          <div class="encoder-grid">
-            <label for="encode-file">Y4M source</label>
-            <input id="encode-file" type="file" accept=".y4m,video/x-yuv4mpeg" />
-            <label for="encode-q">Q step</label>
-            <input id="encode-q" type="number" min="1" max="65535" value="96" inputmode="numeric" />
-            <label for="encode-preset">Preset</label>
-            <select id="encode-preset">
-              <option value="fast">Fast</option>
-              <option value="balanced" selected>Balanced</option>
-              <option value="quality">Quality</option>
-            </select>
-            <button id="encode-y4m" type="button">Encode + load</button>
-          </div>
-          <div class="encoder-result">
-            <span id="encode-status" role="status" aria-live="polite">No source selected.</span>
-            <a id="encode-download" hidden>Save encoded .avl</a>
+          <div class="encoder-lab">
+            <header>
+              <h3>Local Y4M encoder</h3>
+              <p>
+                Encode an 8-bit 4:2:0 Y4M file in a worker, then load its generated
+                <code>.avl</code> in this player.
+              </p>
+            </header>
+            <div class="encoder-grid">
+              <label for="encode-file">Y4M source</label>
+              <input id="encode-file" type="file" accept=".y4m,video/x-yuv4mpeg" />
+              <label for="encode-q">Q step</label>
+              <input id="encode-q" type="number" min="1" max="65535" value="96" inputmode="numeric" />
+              <label for="encode-preset">Preset</label>
+              <select id="encode-preset">
+                <option value="fast">Fast</option>
+                <option value="balanced" selected>Balanced</option>
+                <option value="quality">Quality</option>
+              </select>
+              <button id="encode-y4m" type="button">Encode + load</button>
+            </div>
+            <div class="encoder-result">
+              <span id="encode-status" role="status" aria-live="polite">No Y4M source selected.</span>
+              <a id="encode-download" hidden>Save encoded .avl</a>
+            </div>
           </div>
         </details>
       </section>
 
       <aside class="inspector" aria-label="Stream inspector">
         <header>
-          <span>INSPECTOR</span>
-          <span id="state-label">IDLE</span>
+          <span>LIVE INSPECTOR</span>
+          <span>KNOWN FACTS ONLY</span>
         </header>
-        <p id="state-detail" class="state-detail" role="status" aria-live="polite">No source loaded.</p>
 
         <section>
           <h2>Source</h2>
@@ -145,9 +200,10 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
         <section>
           <h2>Playback</h2>
           <dl>
+            <div><dt>Duration</dt><dd id="playback-duration">—</dd></div>
             <div><dt>Epoch</dt><dd id="playback-epoch">—</dd></div>
             <div><dt>Frame</dt><dd id="playback-frame">—</dd></div>
-            <div><dt>Range</dt><dd id="playback-range">—</dd></div>
+            <div><dt>Last range</dt><dd id="playback-range">—</dd></div>
             <div><dt>Time</dt><dd id="playback-time">0.00s</dd></div>
           </dl>
         </section>
@@ -164,89 +220,479 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 <style>
   @layer page {
-    .demo-shell { width:min(calc(100% - 2rem),var(--shell)); margin:auto; padding:4rem 0; }
-    .demo-header { display:grid; grid-template-columns:1fr 2fr; gap:2rem; align-items:start; margin-bottom:2.5rem; }
-    .demo-header h1 { grid-column:2; margin:0; font-size:clamp(2.5rem,5vw,4.1rem); max-width:15ch; }
-    .demo-header > p:last-child { grid-column:2; max-width:68ch; color:var(--muted); margin:0; }
-
-    .instrument { position:relative; display:grid; grid-template-columns:minmax(0,3fr) minmax(270px,1fr); grid-template-areas:"transport inspector" "viewport inspector"; border-block:1px solid var(--rule); }
-    .viewport { grid-area:viewport; position:relative; display:grid; place-items:center; min-height:360px; overflow:hidden; background:#050505; border-top:1px solid var(--rule); border-right:1px solid var(--rule); }
-    .viewport canvas { width:100%; height:auto; max-height:70vh; object-fit:contain; }
-    .drop-message { position:absolute; inset:1rem; display:none; place-items:center; border:1px dashed var(--cool); background:rgba(17,18,17,.88); color:var(--cool); font:.72rem var(--font-mono); letter-spacing:.08em; }
-    .demo-shell[data-drop="true"] .drop-message { display:grid; }
-
-    .transport { grid-area:transport; display:grid; gap:1rem; padding:1rem 1rem 1rem 0; border-right:1px solid var(--rule); }
-    .load-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.8rem 1rem; }
-    .control-group { min-width:0; }
-    .control-group > label, .compact-label { display:block; margin-bottom:.35rem; color:var(--muted); font:.66rem var(--font-mono); letter-spacing:.04em; text-transform:uppercase; }
-    .control-row { display:flex; min-width:0; gap:.5rem; align-items:center; }
-    .file-row { min-height:40px; }
-    .hint { color:var(--muted); font-size:.72rem; }
-
-    input, select, button { min-height:40px; border:1px solid var(--control-rule); border-radius:2px; background:var(--surface); color:var(--ink); }
-    input[type=url], select { min-width:0; flex:1; padding:.45rem .6rem; font-family:var(--font-mono); }
-    input[type=file] { width:100%; min-width:0; padding:.35rem; font:.72rem var(--font-mono); }
-    input[type=file]::file-selector-button { margin-right:.5rem; border:0; border-right:1px solid var(--rule); background:transparent; color:var(--ink); }
-    button { padding:.4rem .8rem; white-space:nowrap; }
-    button:not(:disabled):hover, select:hover, input:hover { border-color:var(--cool); }
-    button:disabled { color:var(--muted); }
-    button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline:2px solid var(--cool); outline-offset:2px; }
-
-    .play-control { display:grid; grid-template-columns:auto minmax(120px,1fr) auto auto minmax(70px,110px); gap:.65rem; align-items:center; border-top:1px solid var(--rule); padding-top:1rem; }
-    input[type=range] { width:100%; min-height:auto; accent-color:var(--cool); border:0; background:transparent; }
-    output { min-width:5rem; font:.78rem var(--font-mono); }
-    .compact-label { margin:0; }
-
-    .advanced-controls { border-top:1px solid var(--rule); padding-top:.75rem; }
-    .advanced-controls summary, .event-panel summary { cursor:pointer; color:var(--muted); font:.68rem var(--font-mono); }
-    .advanced-row { display:grid; grid-template-columns:auto minmax(110px,180px) auto minmax(110px,180px); gap:.5rem; align-items:center; margin-top:.75rem; }
-    .advanced-row label { color:var(--muted); font:.65rem var(--font-mono); }
-
-    .encoder-lab { border-top:1px solid var(--rule); padding-top:.75rem; }
-    .encoder-lab summary { cursor:pointer; color:var(--muted); font:.68rem var(--font-mono); }
-    .encoder-lab > p { max-width:72ch; margin:.75rem 0; color:var(--muted); font-size:.78rem; }
-    .encoder-grid { display:grid; grid-template-columns:auto minmax(0,1fr) auto minmax(90px,130px) auto minmax(110px,160px) auto; gap:.5rem; align-items:center; }
-    .encoder-grid > label { color:var(--muted); font:.65rem var(--font-mono); text-transform:uppercase; }
-    .encoder-grid input[type=number] { width:100%; padding:.45rem .6rem; font-family:var(--font-mono); }
-    .encoder-result { display:flex; justify-content:space-between; gap:1rem; margin-top:.65rem; color:var(--muted); font:.7rem var(--font-mono); }
-    .encoder-result a { color:var(--cool); }
-
-    .inspector { grid-area:inspector; min-width:0; }
-    .inspector > header { display:flex; justify-content:space-between; padding:.8rem; color:var(--muted); font:.65rem var(--font-mono); }
-    #state-label { color:var(--warm); }
-    .state-detail { margin:0; padding:0 .8rem .8rem; color:var(--muted); font-size:.72rem; overflow-wrap:anywhere; }
-    .inspector section { padding:.85rem; border-top:1px solid var(--rule); }
-    .inspector h2 { margin:0 0 .65rem; color:var(--muted); font:.65rem var(--font-mono); letter-spacing:.08em; text-transform:uppercase; }
-    .inspector dl { margin:0; }
-    .inspector dl div { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.35fr); gap:.5rem; padding:.25rem 0; }
-    .inspector dt { color:var(--muted); font-size:.73rem; }
-    .inspector dd { margin:0; text-align:right; font:.7rem var(--font-mono); overflow-wrap:anywhere; }
-    .stream-list { margin:0 0 .6rem; padding:0 0 .6rem; white-space:pre-wrap; border-bottom:1px solid var(--rule); background:none; color:var(--ink); font:.68rem/1.55 var(--font-mono); }
-    .event-panel { border-top:1px solid var(--rule); padding:.85rem; }
-    #event-log { max-height:14rem; overflow:auto; margin:.75rem 0 0; padding:.65rem; border:1px solid var(--rule); background:#0b0c0b; color:var(--muted); white-space:pre-wrap; font:.63rem/1.5 var(--font-mono); }
-
-    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-
-    @media(max-width:900px) {
-      .instrument { grid-template-columns:minmax(0,1fr) 250px; }
-      .viewport { min-height:360px; }
-      .load-grid { grid-template-columns:1fr; }
+    .demo-shell {
+      width: min(calc(100% - 2rem), var(--shell));
+      margin-inline: auto;
+      padding: clamp(2.5rem, 6vw, 5rem) 0 5rem;
     }
-    @media(max-width:720px) {
-      .demo-shell { padding:2rem 0; }
-      .demo-header { display:block; }
-      .demo-header h1 { margin:.6rem 0 1rem; }
-      .instrument { display:flex; flex-direction:column; }
-      .transport { order:1; border-right:0; padding-right:0; }
-      .viewport { order:2; min-height:0; border-right:0; }
-      .inspector { order:3; }
-      .play-control { grid-template-columns:auto minmax(80px,1fr) auto; }
-      .play-control .compact-label, .play-control .volume { grid-row:2; }
-      .play-control .volume { grid-column:2/4; }
-      .advanced-row { grid-template-columns:auto 1fr; }
-      .encoder-grid { grid-template-columns:auto minmax(0,1fr); }
-      .encoder-grid button { grid-column:1/3; }
-      .encoder-result { flex-direction:column; }
+
+    .demo-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(24rem, 1fr);
+      gap: clamp(2rem, 7vw, 6rem);
+      align-items: end;
+      margin-bottom: 2.5rem;
+    }
+    .demo-header h1 {
+      max-width: 10ch;
+      margin: .45rem 0 0;
+      font-size: clamp(2.8rem, 6vw, 5.6rem);
+      line-height: .96;
+      letter-spacing: -.045em;
+    }
+    .demo-intro {
+      align-self: end;
+      max-width: 68ch;
+    }
+    .demo-intro p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .demo-intro .fixture-note {
+      margin-top: .9rem;
+      padding-top: .9rem;
+      border-top: 1px solid var(--rule);
+      font-size: .84rem;
+    }
+
+    .instrument {
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(270px, 1fr);
+      grid-template-areas:
+        "viewport inspector"
+        "transport inspector";
+      border-block: 1px solid var(--rule);
+    }
+
+    .viewport-panel {
+      grid-area: viewport;
+      min-width: 0;
+      border-right: 1px solid var(--rule);
+    }
+    .viewport-head {
+      min-height: 52px;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: center;
+      padding: .65rem 1rem .65rem 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .viewport-head > div {
+      display: flex;
+      align-items: baseline;
+      gap: .65rem;
+      font: .66rem var(--font-mono);
+      letter-spacing: .08em;
+    }
+    .viewport-head span { color: var(--muted); }
+    #state-label { color: var(--warm); }
+    .viewport-head p {
+      max-width: 58ch;
+      margin: 0;
+      overflow-wrap: anywhere;
+      color: var(--muted);
+      font-size: .76rem;
+      text-align: right;
+    }
+
+    .viewport {
+      position: relative;
+      display: grid;
+      place-items: center;
+      aspect-ratio: 16 / 9;
+      min-height: 360px;
+      max-height: 72vh;
+      overflow: hidden;
+      background: #050505;
+    }
+    .viewport canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #050505;
+    }
+    .viewport-state {
+      position: absolute;
+      inset: auto 1rem 1rem;
+      max-width: 44rem;
+      padding: .65rem .8rem;
+      border: 1px solid var(--rule);
+      background: rgba(5, 5, 5, .88);
+      color: var(--muted);
+      font: .7rem/1.45 var(--font-mono);
+    }
+    .viewport-state[data-state="error"] {
+      border-color: var(--warm);
+      color: var(--ink);
+    }
+    .drop-message {
+      position: absolute;
+      inset: 1rem;
+      display: none;
+      place-items: center;
+      border: 1px dashed var(--cool);
+      background: rgba(17, 18, 17, .92);
+      color: var(--cool);
+      font: .72rem var(--font-mono);
+      letter-spacing: .08em;
+    }
+    .demo-shell[data-drop="true"] .drop-message { display: grid; }
+
+    .performance-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      border-top: 1px solid var(--rule);
+    }
+    .performance-strip div {
+      min-width: 0;
+      padding: .65rem .8rem;
+      border-right: 1px solid var(--rule);
+    }
+    .performance-strip div:last-child { border-right: 0; }
+    .performance-strip span {
+      display: block;
+      margin-bottom: .25rem;
+      color: var(--muted);
+      font: .6rem var(--font-mono);
+      letter-spacing: .05em;
+    }
+    .performance-strip strong {
+      display: block;
+      overflow-wrap: anywhere;
+      font: 500 .78rem var(--font-mono);
+    }
+
+    .transport {
+      grid-area: transport;
+      min-width: 0;
+      border-top: 1px solid var(--rule);
+      border-right: 1px solid var(--rule);
+    }
+
+    .play-control {
+      display: grid;
+      grid-template-columns: auto minmax(12rem, 1fr) auto minmax(6rem, 8rem);
+      gap: .8rem;
+      align-items: center;
+      padding: 1rem 1rem 1rem 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .play-button {
+      min-width: 7rem;
+      min-height: 48px;
+      font-weight: 600;
+    }
+    .timeline { min-width: 0; }
+    .timeline-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-top: .35rem;
+      color: var(--muted);
+      font: .63rem var(--font-mono);
+    }
+    .timeline-meta output {
+      min-width: 4.5rem;
+      color: var(--ink);
+      font: inherit;
+    }
+    .compact-label {
+      color: var(--muted);
+      font: .63rem var(--font-mono);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .source-section {
+      padding: 1rem 1rem 1rem 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .source-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1.25rem;
+    }
+    .source-grid > div + div {
+      padding-left: 1.25rem;
+      border-left: 1px solid var(--rule);
+    }
+    .section-heading {
+      display: grid;
+      grid-template-columns: 2rem minmax(0, 1fr);
+      gap: .5rem;
+      margin-bottom: .7rem;
+    }
+    .section-heading > span {
+      color: var(--cool);
+      font: .63rem var(--font-mono);
+    }
+    .section-heading h2,
+    .encoder-lab h3 {
+      margin: 0;
+      font-size: .9rem;
+    }
+    .section-heading p,
+    .encoder-lab header p {
+      margin: .15rem 0 0;
+      color: var(--muted);
+      font-size: .75rem;
+      line-height: 1.45;
+    }
+    .source-description {
+      margin: .55rem 0 0 2.5rem;
+      color: var(--muted);
+      font: .68rem/1.45 var(--font-mono);
+    }
+
+    .control-row {
+      display: flex;
+      min-width: 0;
+      gap: .5rem;
+      align-items: center;
+    }
+    input, select, button {
+      min-height: 42px;
+      border: 1px solid var(--control-rule);
+      border-radius: 2px;
+      background: var(--surface);
+      color: var(--ink);
+    }
+    input[type="url"], input[type="number"], select {
+      min-width: 0;
+      padding: .45rem .6rem;
+      font-family: var(--font-mono);
+    }
+    input[type="url"], .sample-row select { flex: 1; }
+    input[type="file"] {
+      width: 100%;
+      min-width: 0;
+      padding: .35rem;
+      font: .72rem var(--font-mono);
+    }
+    input[type="file"]::file-selector-button {
+      min-height: 32px;
+      margin-right: .6rem;
+      border: 0;
+      border-right: 1px solid var(--rule);
+      background: transparent;
+      color: var(--ink);
+    }
+    input[type="range"] {
+      width: 100%;
+      min-height: auto;
+      border: 0;
+      background: transparent;
+      accent-color: var(--cool);
+    }
+    button {
+      padding: .45rem .85rem;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    button:not(:disabled):hover,
+    select:hover,
+    input:hover { border-color: var(--cool); }
+    button:disabled {
+      cursor: default;
+      color: var(--muted);
+    }
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    summary:focus-visible {
+      outline: 2px solid var(--cool);
+      outline-offset: 2px;
+    }
+
+    .advanced-controls {
+      padding: 1rem 1rem 1rem 0;
+    }
+    .advanced-controls > summary,
+    .event-panel summary {
+      cursor: pointer;
+      color: var(--muted);
+      font: .68rem var(--font-mono);
+    }
+    .advanced-grid {
+      display: grid;
+      grid-template-columns: auto minmax(11rem, 1fr) auto minmax(11rem, 1fr);
+      gap: .55rem .8rem;
+      align-items: center;
+      margin-top: 1rem;
+    }
+    .advanced-grid label,
+    .encoder-grid > label {
+      color: var(--muted);
+      font: .63rem var(--font-mono);
+      text-transform: uppercase;
+    }
+    .encoder-lab {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--rule);
+    }
+    .encoder-grid {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto minmax(5rem, 8rem) auto minmax(8rem, 11rem) auto;
+      gap: .5rem;
+      align-items: center;
+      margin-top: .85rem;
+    }
+    .encoder-grid input[type="number"] { width: 100%; }
+    .encoder-result {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-top: .65rem;
+      color: var(--muted);
+      font: .68rem var(--font-mono);
+    }
+    .encoder-result a { color: var(--cool); }
+
+    .inspector {
+      grid-area: inspector;
+      min-width: 0;
+    }
+    .inspector > header {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: .8rem;
+      color: var(--muted);
+      font: .61rem var(--font-mono);
+      letter-spacing: .06em;
+    }
+    .inspector section {
+      padding: .9rem;
+      border-top: 1px solid var(--rule);
+    }
+    .inspector h2 {
+      margin: 0 0 .65rem;
+      color: var(--muted);
+      font: .62rem var(--font-mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .inspector dl { margin: 0; }
+    .inspector dl div {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
+      gap: .6rem;
+      padding: .28rem 0;
+    }
+    .inspector dt {
+      color: var(--muted);
+      font-size: .73rem;
+    }
+    .inspector dd {
+      margin: 0;
+      overflow-wrap: anywhere;
+      text-align: right;
+      font: .69rem var(--font-mono);
+    }
+    .stream-list {
+      margin: 0 0 .65rem;
+      padding: 0 0 .65rem;
+      border-bottom: 1px solid var(--rule);
+      background: none;
+      color: var(--ink);
+      white-space: pre-wrap;
+      font: .67rem/1.55 var(--font-mono);
+    }
+    .event-panel {
+      padding: .9rem;
+      border-top: 1px solid var(--rule);
+    }
+    #event-log {
+      max-height: 16rem;
+      overflow: auto;
+      margin: .75rem 0 0;
+      padding: .65rem;
+      border: 1px solid var(--rule);
+      background: #0b0c0b;
+      color: var(--muted);
+      white-space: pre-wrap;
+      font: .62rem/1.5 var(--font-mono);
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 980px) {
+      .demo-header {
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+      }
+      .instrument {
+        grid-template-columns: minmax(0, 1fr) 250px;
+      }
+      .performance-strip { grid-template-columns: repeat(2, 1fr); }
+      .performance-strip div:nth-child(2) { border-right: 0; }
+      .performance-strip div:nth-child(n+3) { border-top: 1px solid var(--rule); }
+      .source-grid { grid-template-columns: 1fr; }
+      .source-grid > div + div {
+        padding: 1rem 0 0;
+        border-top: 1px solid var(--rule);
+        border-left: 0;
+      }
+      .encoder-grid {
+        grid-template-columns: auto minmax(0, 1fr);
+      }
+      .encoder-grid button { grid-column: 1 / 3; }
+    }
+
+    @media (max-width: 760px) {
+      .demo-shell { padding-top: 2rem; }
+      .demo-header { display: block; }
+      .demo-header h1 { margin-bottom: 1.2rem; }
+      .instrument { display: flex; flex-direction: column; }
+      .viewport-panel { order: 1; border-right: 0; }
+      .transport { order: 2; border-right: 0; }
+      .inspector { order: 3; }
+      .viewport-head {
+        align-items: flex-start;
+        padding-right: 0;
+      }
+      .viewport-head p { max-width: 55%; }
+      .viewport {
+        min-height: 0;
+        max-height: none;
+      }
+      .play-control {
+        grid-template-columns: auto minmax(0, 1fr);
+        padding-right: 0;
+      }
+      .compact-label { grid-column: 1; }
+      .volume { grid-column: 2; }
+      .source-section,
+      .advanced-controls { padding-right: 0; }
+      .advanced-grid { grid-template-columns: auto minmax(0, 1fr); }
+    }
+
+    @media (max-width: 480px) {
+      .demo-shell { width: min(calc(100% - 1.25rem), var(--shell)); }
+      .demo-header h1 { font-size: 2.65rem; }
+      .fixture-note { display: none; }
+      .performance-strip { grid-template-columns: 1fr 1fr; }
+      .sample-row,
+      .control-row { align-items: stretch; flex-direction: column; }
+      .sample-row button,
+      .control-row button { width: 100%; }
+      .source-description { margin-left: 0; }
+      .timeline-meta span { display: none; }
+      .inspector > header span:last-child { display: none; }
     }
   }
 </style>
