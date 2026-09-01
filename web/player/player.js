@@ -193,6 +193,7 @@ class PlayerController {
       }
       this.decoder = decoder;
       this.log.add(`WASM ${decoder.artifact} loaded`);
+      setText('engine-wasm-active', decoder.artifact === 'simd128' ? 'SIMD128' : 'scalar');
       const index = await decoder.loadIndex(source, {
         onRange: range => this.rangeEvent(range),
       });
@@ -238,6 +239,7 @@ class PlayerController {
       this.log.add(`index streams=${index.streams.length} epochs=${index.epochs.length} front=${index.frontBytes}B`);
     } catch (error) {
       if (generation !== this.loadGeneration || error?.name === 'AbortError' || error instanceof StaleDecodeGenerationError) return;
+      setText('engine-wasm-active', 'unavailable');
       this.log.add(`load error: ${error.message ?? error}`);
       this.setState('error', error.message ?? String(error));
       throw error;
@@ -367,52 +369,156 @@ class PlayerController {
   }
 }
 
-let encodedObjectUrl = null;
+let mediaObjectUrl = null;
+let pendingMediaFile = null;
+let mediaImportWorker = null;
+let mediaImportSequence = 0;
+let activeMediaImport = null;
 
-async function encodeLocalY4m() {
-  const file = $('encode-file').files?.[0];
-  if (!file) throw Error('choose a local .y4m file first');
-  const status = $('encode-status');
-  const button = $('encode-y4m');
+function queueMediaFile(file) {
+  if (file && /\.avl$/i.test(file.name)) {
+    pendingMediaFile = null;
+    $('media-convert').disabled = true;
+    setText('media-file-name', `${file.name} · ${formatBytes(file.size)}`);
+    setText('media-status', 'Avelune file detected — loading directly; no conversion needed.');
+    $('media-download').hidden = true;
+    player.load(new BlobRangeSource(file, file.name)).catch(error => {
+      setText('media-status', error.message ?? String(error));
+      reportUiError(error);
+    });
+    return;
+  }
+  pendingMediaFile = file ?? null;
+  const button = $('media-convert');
+  button.disabled = !pendingMediaFile;
+  setText('media-file-name', pendingMediaFile ? `${pendingMediaFile.name} · ${formatBytes(pendingMediaFile.size)}` : 'No file selected.');
+  setText('media-status', pendingMediaFile ? 'Ready to convert. Adjust compression/import settings or start.' : 'Choose or drop a media file or .avl.');
+  const download = $('media-download');
+  download.hidden = true;
+}
+
+function mediaOptions() {
+  const videoQ = Number($('media-video-q').value);
+  const audioQ = Number($('media-audio-q').value);
+  const audioChannels = Number($('media-audio-channels').value);
+  const audioRate = Number($('media-audio-rate').value);
+  const epochSeconds = Number($('media-epoch').value);
+  const startSeconds = Number($('media-start').value);
+  const durationSeconds = Number($('media-duration').value);
+  if (!Number.isInteger(videoQ) || videoQ < 1 || videoQ > 65535) throw Error('video Q step must be in 1..65535');
+  if (!Number.isInteger(audioQ) || audioQ < 1 || audioQ > 65535) throw Error('audio Q step must be in 1..65535');
+  if (![0, 1, 2].includes(audioChannels)) throw Error('audio channels must be disabled, mono, or stereo');
+  if (![32000, 44100, 48000].includes(audioRate)) throw Error('unsupported browser audio sample rate');
+  if (!Number.isFinite(epochSeconds) || epochSeconds <= 0 || epochSeconds > 60) throw Error('epoch length must be in (0, 60] seconds');
+  if (!Number.isFinite(startSeconds) || startSeconds < 0) throw Error('start time must be non-negative');
+  if (!Number.isFinite(durationSeconds) || durationSeconds < 0) throw Error('duration must be non-negative');
+  const preset = $('media-preset').value;
+  if (!['fast', 'balanced', 'quality'].includes(preset)) throw Error(`unknown encoder preset: ${preset}`);
+  return {
+    videoQ,
+    audioQ,
+    audioChannels,
+    audioRate,
+    epochSeconds,
+    startSeconds,
+    durationSeconds,
+    preset,
+    resolution: $('media-resolution').value,
+    fps: $('media-fps').value,
+    artifact: $('wasm-artifact').value,
+  };
+}
+
+function getMediaImportWorker() {
+  if (!mediaImportWorker) {
+    mediaImportWorker = new Worker(new URL('./media-import-worker.js', import.meta.url), {type: 'module'});
+  }
+  return mediaImportWorker;
+}
+
+function cancelMediaConversion() {
+  if (!activeMediaImport) return;
+  const {reject} = activeMediaImport;
+  activeMediaImport = null;
+  mediaImportSequence++;
+  mediaImportWorker?.terminate();
+  mediaImportWorker = null;
+  reject(new DOMException('Conversion cancelled', 'AbortError'));
+}
+
+async function convertMediaFile() {
+  const file = pendingMediaFile;
+  if (!file) throw Error('choose or drop a media file first');
+  const button = $('media-convert');
+  const status = $('media-status');
+  const progress = $('media-progress');
+  const logNode = $('media-log');
+  const logLines = [];
+  if (activeMediaImport) throw Error('a media conversion is already running');
   button.disabled = true;
-  status.textContent = 'Reading Y4M…';
-  const worker = new Worker(new URL('./encoder-worker.js', import.meta.url), {type: 'module'});
+  $('media-cancel').disabled = false;
+  progress.hidden = false;
+  progress.removeAttribute('value');
+  status.textContent = 'Preparing browser media importer…';
+  logNode.textContent = '';
+  const worker = getMediaImportWorker();
+  const requestId = ++mediaImportSequence;
   try {
     const input = await file.arrayBuffer();
+    const options = mediaOptions();
     const result = await new Promise((resolve, reject) => {
-      worker.addEventListener('message', event => {
-        if (event.data?.type === 'progress') {
-          status.textContent = `Encoding ${event.data.done} / ${event.data.total} frames…`;
-        } else if (event.data?.type === 'done') {
-          resolve(event.data);
-        } else if (event.data?.type === 'error') {
-          reject(Error(event.data.message));
-        }
-      });
-      worker.addEventListener('error', event => reject(Error(event.message || 'encoder worker failed')), {once: true});
-      worker.postMessage({
-        type: 'encode',
-        buffer: input,
-        qstep: Number($('encode-q').value),
-        preset: $('encode-preset').value,
-        artifact: $('wasm-artifact').value,
-      }, [input]);
+      const cleanup = () => {
+        worker.removeEventListener('message', onMessage);
+        worker.removeEventListener('error', onError);
+        if (activeMediaImport?.requestId === requestId) activeMediaImport = null;
+      };
+      const settle = (fn, value) => { cleanup(); fn(value); };
+      const onMessage = event => {
+        const data = event.data ?? {};
+        if (data.requestId !== requestId) return;
+        if (data.type === 'progress') {
+          if (data.detail) status.textContent = data.detail;
+          if (Number.isFinite(data.done) && Number.isFinite(data.total) && data.total > 0) {
+            progress.max = data.total;
+            progress.value = data.done;
+          } else if (Number.isFinite(data.progress) && data.progress >= 0) {
+            progress.max = 1;
+            progress.value = Math.min(1, data.progress);
+          } else {
+            progress.removeAttribute('value');
+          }
+        } else if (data.type === 'log') {
+          logLines.push(data.message);
+          if (logLines.length > 160) logLines.splice(0, logLines.length - 160);
+          logNode.textContent = logLines.join('\n');
+          logNode.scrollTop = logNode.scrollHeight;
+        } else if (data.type === 'done') settle(resolve, data);
+        else if (data.type === 'error') settle(reject, Error(data.message));
+      };
+      const onError = event => settle(reject, Error(event.message || 'media import worker failed'));
+      activeMediaImport = {requestId, reject: error => settle(reject, error)};
+      worker.addEventListener('message', onMessage);
+      worker.addEventListener('error', onError);
+      worker.postMessage({type: 'convert', requestId, buffer: input, name: file.name, options}, [input]);
     });
     const encoded = new Uint8Array(result.encoded);
     const blob = new Blob([encoded], {type: 'application/octet-stream'});
-    const stem = file.name.replace(/\.y4m$/i, '') || 'encoded';
-    if (encodedObjectUrl) URL.revokeObjectURL(encodedObjectUrl);
-    encodedObjectUrl = URL.createObjectURL(blob);
-    const download = $('encode-download');
-    download.href = encodedObjectUrl;
+    const stem = file.name.replace(/\.[^.]+$/, '') || 'converted';
+    if (mediaObjectUrl) URL.revokeObjectURL(mediaObjectUrl);
+    mediaObjectUrl = URL.createObjectURL(blob);
+    const download = $('media-download');
+    download.href = mediaObjectUrl;
     download.download = `${stem}.avl`;
-    download.hidden = false;
     download.textContent = `Save ${stem}.avl`;
-    status.textContent = `${result.frames} frames → ${formatBytes(encoded.length)} · ${result.artifact}`;
+    download.hidden = false;
+    progress.max = 1;
+    progress.value = 1;
+    const audio = result.audioChannels ? ` · ${result.audioChannels}ch/${result.audioRate} Hz audio` : ' · video-only';
+    status.textContent = `${result.width}×${result.height} · ${result.frames} frames${audio} → ${formatBytes(encoded.length)} · ${result.artifact}`;
     await player.load(new BlobRangeSource(blob, `${stem}.avl`));
   } finally {
-    worker.terminate();
-    button.disabled = false;
+    button.disabled = !pendingMediaFile;
+    $('media-cancel').disabled = true;
   }
 }
 
@@ -452,10 +558,13 @@ $('load-sample').addEventListener('click', () => player.load(selectedSampleSourc
 $('sample').addEventListener('change', updateSampleDescription);
 $('load-url').addEventListener('click', loadUrl);
 $('url').addEventListener('keydown', event => { if (event.key === 'Enter') loadUrl(); });
-$('file').addEventListener('change', event => {
-  const file = event.target.files?.[0];
-  if (file) player.load(new BlobRangeSource(file, file.name)).catch(reportUiError);
-});
+$('media-file').addEventListener('change', event => queueMediaFile(event.target.files?.[0]));
+$('media-convert').addEventListener('click', () => convertMediaFile().catch(error => {
+  $('media-status').textContent = error?.name === 'AbortError' ? 'Conversion cancelled.' : (error.message ?? String(error));
+  $('media-progress').hidden = true;
+  reportUiError(error);
+}));
+$('media-cancel').addEventListener('click', cancelMediaConversion);
 $('play').addEventListener('click', () => {
   if (player.state === 'playing') player.pause(); else player.play().catch(reportUiError);
 });
@@ -464,11 +573,6 @@ $('seek').addEventListener('input', () => {
 });
 $('seek').addEventListener('change', () => player.seek(Number($('seek').value)).catch(reportUiError));
 $('volume').addEventListener('input', () => player.audio.setVolume(Number($('volume').value)));
-$('encode-y4m').addEventListener('click', () => encodeLocalY4m().catch(error => {
-  $('encode-status').textContent = error.message ?? String(error);
-  reportUiError(error);
-}));
-
 for (const id of ['wasm-artifact', 'renderer-choice']) {
   $(id).addEventListener('change', () => {
     if (player.source) player.load(player.source).catch(reportUiError);
@@ -489,7 +593,13 @@ for (const eventName of ['dragleave', 'drop']) {
 }
 $('drop-target').addEventListener('drop', event => {
   const file = event.dataTransfer?.files?.[0];
-  if (file) player.load(new BlobRangeSource(file, file.name)).catch(reportUiError);
+  if (!file) return;
+  if (/\.avl$/i.test(file.name)) {
+    player.load(new BlobRangeSource(file, file.name)).catch(reportUiError);
+  } else {
+    queueMediaFile(file);
+    $('media-import').scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  }
 });
 
 window.addEventListener('keydown', event => {
@@ -516,7 +626,9 @@ window.addEventListener('keydown', event => {
 
 window.addEventListener('pagehide', () => {
   player.destroy();
-  if (encodedObjectUrl) URL.revokeObjectURL(encodedObjectUrl);
+  if (mediaObjectUrl) URL.revokeObjectURL(mediaObjectUrl);
+  mediaImportWorker?.terminate();
+  mediaImportWorker = null;
 });
 
 updateSampleDescription();

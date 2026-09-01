@@ -16,14 +16,10 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       </div>
       <div class="demo-intro">
         <p>
-          The canonical Rust decoder runs in WebAssembly. Load a bundled fixture, an HTTP Range
-          source, or a local <code>.avl</code>, then inspect the actual stream, index, fetch, and
-          presentation state while it plays.
+          The canonical Rust codec runs in WebAssembly. Open an existing <code>.avl</code>, or drop ordinary media such as MP4, MKV, WebM, MOV, or Y4M and convert it to Avelune directly in this tab. The resulting file is loaded into the player and can be downloaded immediately.
         </p>
         <p class="fixture-note">
-          Bundled media is intentionally small enough for source-controlled regression testing.
-          The 160×90 motion and screen clips are stress vectors, not quality-showcase footage.
-          Open your own <code>.avl</code> for meaningful resolution and throughput evaluation.
+          The tiny 160×90 files remain deterministic regression vectors. Larger procedural showcase clips exercise gameplay-like motion, perspective, hard text edges, audio, seeking, and real browser decode paths without third-party media.
         </p>
       </div>
     </header>
@@ -35,13 +31,13 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
             <span>OUTPUT</span>
             <strong id="state-label">IDLE</strong>
           </div>
-          <p id="state-detail" role="status" aria-live="polite">Preparing the bundled baseline…</p>
+          <p id="state-detail" role="status" aria-live="polite">Preparing the bundled 640×360 showcase…</p>
         </div>
 
         <div class="viewport">
           <canvas id="c" width="640" height="360">Decoded Avelune video appears here.</canvas>
-          <div id="viewport-state" class="viewport-state">Choose a sample or open an .avl file.</div>
-          <div class="drop-message" aria-hidden="true">DROP .AVL TO OPEN</div>
+          <div id="viewport-state" class="viewport-state">Drop a video to convert, open an .avl, or play a bundled showcase.</div>
+          <div class="drop-message" aria-hidden="true">DROP .AVL TO OPEN · MEDIA TO CONVERT</div>
         </div>
 
         <div class="performance-strip" aria-label="Current session measurements">
@@ -67,100 +63,141 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
           <input id="volume" class="volume" type="range" min="0" max="1" step=".01" value="1" />
         </div>
 
-        <div class="source-section">
+        <section class="source-section media-import" id="media-import">
           <div class="section-heading">
             <span>01</span>
-            <div><h2>Bundled source</h2><p>Start here; the baseline index loads automatically.</p></div>
+            <div>
+              <h2>Open or convert media</h2>
+              <p>Drop MP4, MKV, WebM, MOV, AVI, Y4M, or most other FFmpeg-readable video. Conversion stays in this tab and produces a playable, downloadable <code>.avl</code>.</p>
+            </div>
+          </div>
+          <div class="media-file-row">
+            <label for="media-file">Media or .avl</label>
+            <input id="media-file" type="file" accept=".avl,application/octet-stream,video/*,.mp4,.mkv,.webm,.mov,.avi,.m4v,.ts,.m2ts,.flv,.ogv,.mpg,.mpeg,.y4m" />
+            <span id="media-file-name">No file selected.</span>
+          </div>
+          <div class="media-options">
+            <label for="media-video-q">Video quantizer <small>1 = lossless residuals</small></label>
+            <input id="media-video-q" type="number" min="1" max="65535" value="112" inputmode="numeric" />
+            <label for="media-preset">Preset</label>
+            <select id="media-preset">
+              <option value="fast">Fast</option>
+              <option value="balanced" selected>Balanced</option>
+              <option value="quality">Quality</option>
+            </select>
+            <label for="media-resolution">Resolution</label>
+            <select id="media-resolution">
+              <option value="source">Source (even dimensions)</option>
+              <option value="1920x1080">1920×1080</option>
+              <option value="1280x720">1280×720 max canvas</option>
+              <option value="854x480">854×480</option>
+              <option value="640x360" selected>640×360</option>
+            </select>
+            <label for="media-fps">Frame rate</label>
+            <select id="media-fps">
+              <option value="source">Source</option>
+              <option value="60">60 fps</option>
+              <option value="30" selected>30 fps</option>
+              <option value="24">24 fps</option>
+            </select>
+            <label for="media-epoch">Epoch length</label>
+            <select id="media-epoch">
+              <option value="1">1 second</option>
+              <option value="2" selected>2 seconds</option>
+              <option value="4">4 seconds</option>
+              <option value="8">8 seconds</option>
+            </select>
+            <label for="media-audio-channels">Audio</label>
+            <select id="media-audio-channels">
+              <option value="2" selected>Stereo</option>
+              <option value="1">Mono</option>
+              <option value="0">Disabled</option>
+            </select>
+            <label for="media-audio-rate">Audio rate</label>
+            <select id="media-audio-rate">
+              <option value="48000" selected>48 kHz</option>
+              <option value="44100">44.1 kHz</option>
+              <option value="32000">32 kHz</option>
+            </select>
+            <label for="media-audio-q">Audio quantizer <small>1 = lossless</small></label>
+            <input id="media-audio-q" type="number" min="1" max="65535" value="64" inputmode="numeric" />
+            <label for="media-start">Start time <small>seconds</small></label>
+            <input id="media-start" type="number" min="0" step="0.1" value="0" inputmode="decimal" />
+            <label for="media-duration">Length <small>seconds · 0 = entire file</small></label>
+            <input id="media-duration" type="number" min="0" step="0.1" value="0" inputmode="decimal" />
+          </div>
+          <div class="media-actions">
+            <button id="media-convert" type="button" disabled>Convert → Avelune</button>
+            <button id="media-cancel" class="secondary-button" type="button" disabled>Cancel</button>
+            <progress id="media-progress" max="1" value="0" hidden></progress>
+            <span id="media-status" role="status" aria-live="polite">Choose or drop a media file or .avl.</span>
+            <a id="media-download" hidden>Download converted .avl</a>
+          </div>
+          <p class="media-privacy">Embedded FFmpeg WebAssembly is loaded locally by this page. Conversion does not upload your source media. Full-length high-resolution sources can use substantial browser memory; use Start/Length to make a shorter encode when experimenting.</p>
+          <details class="media-log-panel">
+            <summary>Conversion log</summary>
+            <pre id="media-log"></pre>
+          </details>
+        </section>
+
+        <div class="source-section">
+          <div class="section-heading">
+            <span>02</span>
+            <div><h2>Bundled Avelune demos</h2><p>Use these to compare playback immediately; the baseline index loads automatically.</p></div>
           </div>
           <div class="control-row sample-row">
             <label class="sr-only" for="sample">Bundled example</label>
             <select id="sample">
-              <option
-                value="demo.avl"
-                data-description="320×180 · audio + video · 60 video frames · baseline browser regression fixture"
-              >Baseline A/V · 320×180</option>
-              <option
-                value="motion.avl"
-                data-description="160×90 · 90 frames · procedural motion and texture stress vector; intentionally tiny"
-              >Motion stress vector · 160×90</option>
-              <option
-                value="screen.avl"
-                data-description="160×90 · 90 frames · procedural text and hard-edge stress vector; intentionally tiny"
-              >Screen/text stress vector · 160×90</option>
+              <option selected value="showcase-2d.avl" data-description="640×360 · 4 s · 30 fps · stereo audio · procedural platform/action showcase">2D gameplay · 640×360 · A/V</option>
+              <option value="showcase-3d.avl" data-description="640×360 · 4 s · 30 fps · stereo audio · procedural pseudo-3D racing showcase">3D racing · 640×360 · A/V</option>
+              <option value="showcase-text.avl" data-description="640×360 · 4 s · 30 fps · stereo audio · editor/terminal/text/UI showcase">Text / UI · 640×360 · A/V</option>
+              <option value="demo.avl" data-description="320×180 · audio + video · 60 video frames · compact baseline browser regression fixture">Compact baseline · 320×180 · A/V</option>
+              <option value="motion.avl" data-description="160×90 · 90 frames · procedural motion and texture regression vector; intentionally tiny">Regression: motion · 160×90</option>
+              <option value="screen.avl" data-description="160×90 · 90 frames · procedural text and hard-edge regression vector; intentionally tiny">Regression: screen/text · 160×90</option>
             </select>
             <button id="load-sample" type="button">Load fixture</button>
           </div>
           <p id="sample-description" class="source-description"></p>
         </div>
 
-        <div class="source-section source-grid">
-          <div>
-            <div class="section-heading">
-              <span>02</span>
-              <div><h2>Local file</h2><p>Nothing is uploaded; decoding stays in this tab.</p></div>
-            </div>
-            <label class="sr-only" for="file">Local Avelune file</label>
-            <input id="file" type="file" accept=".avl,application/octet-stream" />
+        <div class="source-section">
+          <div class="section-heading">
+            <span>03</span>
+            <div><h2>HTTP Range .avl</h2><p>Stream an Avelune file without downloading it in full. The server must return valid <code>206</code> byte ranges.</p></div>
           </div>
-
-          <div>
-            <div class="section-heading">
-              <span>03</span>
-              <div><h2>HTTP Range source</h2><p>The server must return valid <code>206</code> byte ranges.</p></div>
-            </div>
-            <div class="control-row">
-              <label class="sr-only" for="url">HTTP Range source URL</label>
-              <input id="url" type="url" placeholder="https://example.invalid/video.avl" spellcheck="false" />
-              <button id="load-url" type="button">Load URL</button>
-            </div>
+          <div class="control-row source-control-indent">
+            <label class="sr-only" for="url">HTTP Range source URL</label>
+            <input id="url" type="url" placeholder="https://example.invalid/video.avl" spellcheck="false" />
+            <button id="load-url" type="button">Load URL</button>
           </div>
         </div>
 
-        <details class="advanced-controls">
-          <summary>Decoder, renderer, and local encoder</summary>
-          <div class="advanced-grid">
-            <label for="wasm-artifact">WASM artifact</label>
+        <section class="source-section engine-controls" aria-labelledby="engine-heading">
+          <div class="section-heading">
+            <span>04</span>
+            <div>
+              <h2 id="engine-heading">Browser engine</h2>
+              <p>These are live controls, not hidden expert settings. Auto prefers SIMD128 and WebGPU when the browser supports them.</p>
+            </div>
+          </div>
+          <div class="engine-status" aria-live="polite">Active codec: <strong id="engine-wasm-active">loading…</strong></div>
+          <div class="engine-grid">
+            <label for="wasm-artifact">Codec WASM</label>
             <select id="wasm-artifact">
               <option value="auto">Auto · prefer SIMD128</option>
               <option value="simd128">SIMD128</option>
               <option value="scalar">Scalar</option>
             </select>
 
-            <label for="renderer-choice">Renderer</label>
+            <label for="renderer-choice">Video renderer</label>
             <select id="renderer-choice">
               <option value="auto">Auto · prefer WebGPU</option>
               <option value="webgpu">WebGPU</option>
               <option value="canvas">Canvas 2D</option>
             </select>
           </div>
-
-          <div class="encoder-lab">
-            <header>
-              <h3>Local Y4M encoder</h3>
-              <p>
-                Encode an 8-bit 4:2:0 Y4M file in a worker, then load its generated
-                <code>.avl</code> in this player.
-              </p>
-            </header>
-            <div class="encoder-grid">
-              <label for="encode-file">Y4M source</label>
-              <input id="encode-file" type="file" accept=".y4m,video/x-yuv4mpeg" />
-              <label for="encode-q">Q step</label>
-              <input id="encode-q" type="number" min="1" max="65535" value="96" inputmode="numeric" />
-              <label for="encode-preset">Preset</label>
-              <select id="encode-preset">
-                <option value="fast">Fast</option>
-                <option value="balanced" selected>Balanced</option>
-                <option value="quality">Quality</option>
-              </select>
-              <button id="encode-y4m" type="button">Encode + load</button>
-            </div>
-            <div class="encoder-result">
-              <span id="encode-status" role="status" aria-live="polite">No Y4M source selected.</span>
-              <a id="encode-download" hidden>Save encoded .avl</a>
-            </div>
-          </div>
-        </details>
+          <p class="engine-note">The inspector shows the artifact and renderer that were actually selected. Imported media uses the same codec-WASM choice for Avelune encoding.</p>
+        </section>
       </section>
 
       <aside class="inspector" aria-label="Stream inspector">
@@ -430,13 +467,11 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       color: var(--cool);
       font: .63rem var(--font-mono);
     }
-    .section-heading h2,
-    .encoder-lab h3 {
+    .section-heading h2 {
       margin: 0;
       font-size: .9rem;
     }
-    .section-heading p,
-    .encoder-lab header p {
+    .section-heading p {
       margin: .15rem 0 0;
       color: var(--muted);
       font-size: .75rem;
@@ -447,6 +482,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       color: var(--muted);
       font: .68rem/1.45 var(--font-mono);
     }
+
+    .source-control-indent { margin-left: 2.5rem; }
 
     .control-row {
       display: flex;
@@ -508,50 +545,88 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       outline-offset: 2px;
     }
 
-    .advanced-controls {
-      padding: 1rem 1rem 1rem 0;
+    .media-import {
+      border-top: 1px solid var(--rule);
     }
-    .advanced-controls > summary,
+    .media-file-row {
+      display: grid;
+      grid-template-columns: auto minmax(14rem, 1fr) minmax(10rem, .8fr);
+      gap: .65rem;
+      align-items: center;
+      margin: .9rem 0 0 2.5rem;
+    }
+    .media-file-row > label,
+    .media-options > label,
+    .engine-grid > label {
+      color: var(--muted);
+      font: .63rem var(--font-mono);
+      text-transform: uppercase;
+    }
+    #media-file-name {
+      overflow-wrap: anywhere;
+      color: var(--muted);
+      font: .66rem var(--font-mono);
+    }
+    .media-options {
+      display: grid;
+      grid-template-columns: repeat(4, auto minmax(5rem, 1fr));
+      gap: .55rem .65rem;
+      align-items: center;
+      margin: .8rem 0 0 2.5rem;
+    }
+    .media-options input[type="number"] { width: 100%; }
+    .media-actions {
+      display: grid;
+      grid-template-columns: auto minmax(7rem, 12rem) minmax(12rem, 1fr) auto;
+      gap: .75rem;
+      align-items: center;
+      margin: .85rem 0 0 2.5rem;
+    }
+    .media-actions progress { width: 100%; accent-color: var(--cool); }
+    #media-status { color: var(--muted); font: .68rem/1.45 var(--font-mono); }
+    #media-download { color: var(--cool); font: .68rem var(--font-mono); }
+    .media-privacy,
+    .engine-note {
+      margin: .75rem 0 0 2.5rem;
+      color: var(--muted);
+      font-size: .74rem;
+      line-height: 1.5;
+    }
+    .media-log-panel { margin: .75rem 0 0 2.5rem; }
+    .media-log-panel summary,
     .event-panel summary {
       cursor: pointer;
       color: var(--muted);
       font: .68rem var(--font-mono);
     }
-    .advanced-grid {
+    #media-log {
+      max-height: 13rem;
+      overflow: auto;
+      margin: .6rem 0 0;
+      padding: .65rem;
+      border: 1px solid var(--rule);
+      background: #0b0c0b;
+      color: var(--muted);
+      white-space: pre-wrap;
+      font: .61rem/1.45 var(--font-mono);
+    }
+
+    .engine-controls {
+      border-bottom: 0;
+    }
+    .engine-status {
+      margin: .8rem 0 0 2.5rem;
+      color: var(--muted);
+      font: .68rem var(--font-mono);
+    }
+    .engine-status strong { color: var(--cool); font-weight: 600; }
+    .engine-grid {
       display: grid;
       grid-template-columns: auto minmax(11rem, 1fr) auto minmax(11rem, 1fr);
       gap: .55rem .8rem;
       align-items: center;
-      margin-top: 1rem;
+      margin: .8rem 0 0 2.5rem;
     }
-    .advanced-grid label,
-    .encoder-grid > label {
-      color: var(--muted);
-      font: .63rem var(--font-mono);
-      text-transform: uppercase;
-    }
-    .encoder-lab {
-      margin-top: 1rem;
-      padding-top: 1rem;
-      border-top: 1px solid var(--rule);
-    }
-    .encoder-grid {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto minmax(5rem, 8rem) auto minmax(8rem, 11rem) auto;
-      gap: .5rem;
-      align-items: center;
-      margin-top: .85rem;
-    }
-    .encoder-grid input[type="number"] { width: 100%; }
-    .encoder-result {
-      display: flex;
-      justify-content: space-between;
-      gap: 1rem;
-      margin-top: .65rem;
-      color: var(--muted);
-      font: .68rem var(--font-mono);
-    }
-    .encoder-result a { color: var(--cool); }
 
     .inspector {
       grid-area: inspector;
@@ -648,10 +723,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
         border-top: 1px solid var(--rule);
         border-left: 0;
       }
-      .encoder-grid {
-        grid-template-columns: auto minmax(0, 1fr);
-      }
-      .encoder-grid button { grid-column: 1 / 3; }
+      .media-options { grid-template-columns: repeat(2, auto minmax(0, 1fr)); }
+      .engine-grid { grid-template-columns: auto minmax(0, 1fr); }
     }
 
     @media (max-width: 760px) {
@@ -677,9 +750,21 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       }
       .compact-label { grid-column: 1; }
       .volume { grid-column: 2; }
-      .source-section,
-      .advanced-controls { padding-right: 0; }
-      .advanced-grid { grid-template-columns: auto minmax(0, 1fr); }
+      .source-section { padding-right: 0; }
+      .source-control-indent,
+      .media-file-row,
+      .media-options,
+      .media-actions,
+      .media-privacy,
+      .media-log-panel,
+      .engine-status,
+      .engine-grid,
+      .engine-note { margin-left: 0; }
+      .media-file-row { grid-template-columns: auto minmax(0, 1fr); }
+      #media-file-name { grid-column: 2; }
+      .media-options { grid-template-columns: auto minmax(0, 1fr); }
+      .media-actions { grid-template-columns: 1fr; }
+      .engine-grid { grid-template-columns: auto minmax(0, 1fr); }
     }
 
     @media (max-width: 480px) {
@@ -694,6 +779,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       .source-description { margin-left: 0; }
       .timeline-meta span { display: none; }
       .inspector > header span:last-child { display: none; }
+      .media-file-row { grid-template-columns: 1fr; }
+      #media-file-name { grid-column: 1; }
+      .engine-grid { grid-template-columns: 1fr; }
     }
   }
 </style>

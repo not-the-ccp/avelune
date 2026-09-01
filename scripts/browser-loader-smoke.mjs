@@ -6,6 +6,7 @@ import {
   HttpRangeSource,
   MemoryRangeSource,
   StaleDecodeGenerationError,
+  createAveluneAvEncoder,
   createAveluneDecoder,
   createAveluneVideoEncoder,
 } from '../web/player/avelune-loader.js';
@@ -99,6 +100,30 @@ try {
   try { encoderRoundtrip = await decodeAll(encoderRoundtripDecoder, new BlobRangeSource(new Blob([browserEncoded]), 'encoded.avl')); }
   finally { encoderRoundtripDecoder.destroy(); }
   if (encoderRoundtrip.video !== 5 || encoderRoundtrip.audio !== 0) throw Error('browser encoder wrapper roundtrip failed');
+
+  // A/V wrapper must mux real ALA1 audio, not silently discard imported source audio.
+  const avEncoder = await createAveluneAvEncoder({
+    width: 32, height: 24, fpsN: 30, fpsD: 1, videoQ: 96, audioQ: 32,
+    preset: 'balanced', epochFrames: 3, audioRate: 48_000, audioChannels: 2,
+  }, {artifact: 'scalar', scalarUrl: `${base}/scalar.wasm`});
+  let avEncoded;
+  try {
+    const pcm = new Int16Array(8_000 * 2);
+    for (let i = 0; i < pcm.length; i++) pcm[i] = Math.round(Math.sin(i / 17) * 12_000);
+    avEncoder.pushAudio(pcm);
+    for (let t = 0; t < 5; t++) {
+      const frame = new Uint8Array(avEncoder.expectedFrameBytes), yLen = 32 * 24, cLen = yLen / 4;
+      for (let i = 0; i < yLen; i++) frame[i] = (i * 3 + t * 19) & 255;
+      frame.fill(110 + t, yLen, yLen + cLen); frame.fill(145 - t, yLen + cLen);
+      avEncoder.pushFrame(frame);
+    }
+    avEncoded = avEncoder.finish();
+  } finally { avEncoder.destroy(); }
+  const avDecoder = await createAveluneDecoder({artifact: 'scalar', scalarUrl: `${base}/scalar.wasm`});
+  let avRoundtrip;
+  try { avRoundtrip = await decodeAll(avDecoder, new BlobRangeSource(new Blob([avEncoded]), 'av-encoded.avl')); }
+  finally { avDecoder.destroy(); }
+  if (avRoundtrip.video !== 5 || avRoundtrip.audio === 0) throw Error('browser A/V encoder wrapper roundtrip failed');
 
   // Arbitrarily fragmented complete ranges must decode identically to contiguous reads.
   class FragmentedSource {
@@ -196,6 +221,7 @@ try {
     http: {video: httpResult.video, audio: httpResult.audio, epochs: httpResult.index.epochs.length},
     blob: {video: blobResult.video, audio: blobResult.audio},
     encoder: {bytes: browserEncoded.length, video: encoderRoundtrip.video},
+    avEncoder: {bytes: avEncoded.length, video: avRoundtrip.video, audio: avRoundtrip.audio},
     fragmented: {video: fragmented.video, audio: fragmented.audio, steps: ['7','1','63','4093','2','61','8191','1']},
     mediaRangeRequests: requests.filter(r => r.url === '/demo.avl').length,
     adversarial: ['content-range', 'short-range', 'long-range', 'truncated-epoch', 'wrong-epoch', 'stale-generation'],

@@ -16,10 +16,14 @@ DOCROOT=${CARGO_TARGET_DIR:-target}/doc
 mkdir -p "$OUT/api/rust" "$OUT/demo"
 cp -a "$DOCROOT"/. "$OUT/api/rust/"
 cp scripts/install.sh "$OUT/install.sh"
-cp web/player/player.js web/player/encoder-worker.js web/player/avelune-loader.js web/player/renderers.js "$OUT/demo/"
-for media in demo.avl motion.avl screen.avl; do [[ -f web/player/$media ]] && cp "web/player/$media" "$OUT/demo/"; done
+cp web/player/player.js web/player/encoder-worker.js web/player/media-import-worker.js web/player/y4m.js web/player/avelune-loader.js web/player/renderers.js "$OUT/demo/"
+for media in demo.avl motion.avl screen.avl showcase-2d.avl showcase-3d.avl showcase-text.avl; do [[ -f web/player/$media ]] && cp "web/player/$media" "$OUT/demo/"; done
 for wasm in avelune-scalar.wasm avelune-simd128.wasm; do [[ -f web/player/$wasm ]] || { echo "missing required demo artifact: web/player/$wasm" >&2; exit 1; }; cp "web/player/$wasm" "$OUT/demo/"; done
 cp -a web/webgpu "$OUT/demo/webgpu"
+FFMPEG_CORE=node_modules/@ffmpeg/core/dist/esm
+[[ -f "$FFMPEG_CORE/ffmpeg-core.js" && -f "$FFMPEG_CORE/ffmpeg-core.wasm" ]] || { echo 'missing @ffmpeg/core browser assets; run npm ci' >&2; exit 1; }
+mkdir -p "$OUT/demo/ffmpeg"
+cp "$FFMPEG_CORE/ffmpeg-core.js" "$FFMPEG_CORE/ffmpeg-core.wasm" "$OUT/demo/ffmpeg/"
 python3 scripts/check-site-links.py "$OUT"
 find "$OUT" -type f | sort > "$OUT/FILES.txt"
 echo "built $OUT"
