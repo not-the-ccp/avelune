@@ -1,4 +1,5 @@
 use avelune::{
+    audio::v1::{self as audio, EncodeOptions as AudioEncodeOptions},
     container::v1::{
         self as container, ChromaLocation, Packet, PacketKind, StreamDesc, StreamKind, TIMEBASE,
         VideoMeta,
@@ -419,6 +420,509 @@ pub extern "C" fn video_encoder_last_error_ptr(handle: u32) -> *const u8 {
 #[unsafe(no_mangle)]
 pub extern "C" fn video_encoder_last_error_len(handle: u32) -> u32 {
     with_encoder(handle, 0, |encoder| {
+        encoder.error.len().try_into().unwrap_or(0)
+    })
+}
+
+#[derive(Debug)]
+struct AvEncoderState {
+    width: u32,
+    height: u32,
+    fps_n: u32,
+    fps_d: u32,
+    meta0: u32,
+    frame_us: u64,
+    epoch_frames: u64,
+    video_options: EncodeOptions,
+    video_encoder: VideoEncoder,
+    frame_index: u64,
+    encoded_video: Vec<EncodedFrame>,
+    frame_bytes: usize,
+    video_input: Vec<u8>,
+    audio_rate: u32,
+    audio_channels: u8,
+    audio_qstep: u16,
+    audio_staging: Vec<i16>,
+    audio_samples: Vec<i16>,
+    output: Vec<u8>,
+    finished: bool,
+    error: String,
+}
+
+impl AvEncoderState {
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        width: u32,
+        height: u32,
+        fps_flags: u32,
+        video_qstep: u16,
+        preset: EncoderPreset,
+        epoch_frames: u64,
+        meta0: u32,
+        audio_rate: u32,
+        audio_channels: u32,
+        audio_qstep: u16,
+    ) -> Result<Self, String> {
+        if width == 0 || height == 0 || !width.is_multiple_of(2) || !height.is_multiple_of(2) {
+            return Err("video dimensions must be non-zero and even for 4:2:0".into());
+        }
+        let pixels = u64::from(width)
+            .checked_mul(u64::from(height))
+            .ok_or_else(|| "video dimensions overflow".to_string())?;
+        if pixels > Limits::default().max_frame_pixels {
+            return Err("video dimensions exceed the canonical frame-pixel limit".into());
+        }
+        let fps_n = fps_flags >> 16;
+        let fps_d = fps_flags & 65_535;
+        if fps_n == 0 || fps_d == 0 {
+            return Err(
+                "packed frame rate must contain non-zero 16-bit numerator and denominator".into(),
+            );
+        }
+        if video_qstep == 0 {
+            return Err("video quantizer step must be > 0".into());
+        }
+        if epoch_frames == 0 {
+            return Err("epoch frame count must be > 0".into());
+        }
+        VideoMeta::unpack(meta0).map_err(|e| format!("invalid packed video metadata: {e}"))?;
+        let frame_us = 1_000_000u64
+            .checked_mul(u64::from(fps_d))
+            .ok_or_else(|| "frame duration overflow".to_string())?
+            / u64::from(fps_n);
+        if frame_us == 0 || frame_us > u64::from(u32::MAX) {
+            return Err(
+                "frame rate cannot be represented by the Draft Gen 1 microsecond timebase".into(),
+            );
+        }
+        let audio_channels = u8::try_from(audio_channels)
+            .map_err(|_| "audio channel count must be in 0..=8".to_string())?;
+        let audio_enabled = audio_rate != 0 || audio_channels != 0;
+        if audio_enabled {
+            if audio_rate == 0 {
+                return Err("audio sample rate must be > 0 when audio is enabled".into());
+            }
+            if audio_channels == 0 || audio_channels > 8 {
+                return Err("audio channel count must be in 1..=8 when audio is enabled".into());
+            }
+            if audio_qstep == 0 {
+                return Err("audio quantizer step must be > 0 when audio is enabled".into());
+            }
+        }
+        let video_options = EncodeOptions::for_preset(video_qstep, preset);
+        let y =
+            usize::try_from(pixels).map_err(|_| "frame size exceeds address space".to_string())?;
+        let frame_bytes = y
+            .checked_add(y / 2)
+            .ok_or_else(|| "frame byte size overflow".to_string())?;
+        Ok(Self {
+            width,
+            height,
+            fps_n,
+            fps_d,
+            meta0,
+            frame_us,
+            epoch_frames,
+            video_options,
+            video_encoder: VideoEncoder::new(video_options),
+            frame_index: 0,
+            encoded_video: Vec::new(),
+            frame_bytes,
+            video_input: vec![0; frame_bytes],
+            audio_rate,
+            audio_channels,
+            audio_qstep,
+            audio_staging: Vec::new(),
+            audio_samples: Vec::new(),
+            output: Vec::new(),
+            finished: false,
+            error: String::new(),
+        })
+    }
+
+    fn audio_enabled(&self) -> bool {
+        self.audio_rate != 0
+    }
+
+    fn fail(&mut self, error: impl std::fmt::Display) -> i32 {
+        self.error = error.to_string();
+        -1
+    }
+
+    fn push_video_frame(&mut self) -> Result<(), String> {
+        if self.finished {
+            return Err("encoder is already finished".into());
+        }
+        if self.frame_index > 0 && self.frame_index.is_multiple_of(self.epoch_frames) {
+            self.video_encoder = VideoEncoder::new(self.video_options);
+        }
+        let input = std::mem::take(&mut self.video_input);
+        let frame = match Frame420::from_tightly_packed(self.width, self.height, input) {
+            Ok(frame) => frame,
+            Err(error) => {
+                self.video_input = vec![0; self.frame_bytes];
+                return Err(error.to_string());
+            }
+        };
+        let frame_id = self.frame_index;
+        let encoded = self.video_encoder.encode_shared(frame_id, &frame);
+        self.video_input = frame.into_tightly_packed();
+        let encoded = encoded.map_err(|e| e.to_string())?;
+        let pts = frame_id
+            .checked_mul(self.frame_us)
+            .ok_or_else(|| "frame timestamp overflow".to_string())?;
+        self.encoded_video.push(EncodedFrame {
+            frame_id,
+            pts,
+            duration: self.frame_us as u32,
+            payload: encoded.packet,
+        });
+        self.frame_index += 1;
+        Ok(())
+    }
+
+    fn reserve_audio(&mut self, sample_count: usize) -> Result<*mut i16, String> {
+        if self.finished {
+            return Err("encoder is already finished".into());
+        }
+        if !self.audio_enabled() {
+            return Err("audio is disabled for this encoder".into());
+        }
+        let max_samples = 128usize * 1024 * 1024 / std::mem::size_of::<i16>();
+        if sample_count > max_samples {
+            return Err("one browser audio staging request exceeds 128 MiB".into());
+        }
+        self.audio_staging.resize(sample_count, 0);
+        Ok(self.audio_staging.as_mut_ptr())
+    }
+
+    fn push_audio(&mut self, sample_count: usize) -> Result<(), String> {
+        if !self.audio_enabled() {
+            return Err("audio is disabled for this encoder".into());
+        }
+        if sample_count != self.audio_staging.len() {
+            return Err("audio push length does not match the current staging buffer".into());
+        }
+        let channels = usize::from(self.audio_channels);
+        if !sample_count.is_multiple_of(channels) {
+            return Err("audio sample count is not aligned to the configured channels".into());
+        }
+        self.audio_samples.extend_from_slice(&self.audio_staging);
+        self.audio_staging.clear();
+        Ok(())
+    }
+
+    fn finish(&mut self) -> Result<(), String> {
+        if self.finished {
+            return Ok(());
+        }
+        if self.encoded_video.is_empty() {
+            return Err("cannot finish media with no video frames".into());
+        }
+        let total_video_frames = self.encoded_video.len() as u64;
+        let epoch_count = total_video_frames.div_ceil(self.epoch_frames);
+        let mut epochs = Vec::with_capacity(epoch_count as usize);
+        let audio_channels = usize::from(self.audio_channels);
+        let total_audio_frames = if self.audio_enabled() {
+            if !self.audio_samples.len().is_multiple_of(audio_channels) {
+                return Err("audio samples are not aligned to the configured channels".into());
+            }
+            self.audio_samples.len() / audio_channels
+        } else {
+            0
+        };
+
+        for epoch_index in 0..epoch_count {
+            let start_frame = epoch_index * self.epoch_frames;
+            let end_frame = (start_frame + self.epoch_frames).min(total_video_frames);
+            let pts = start_frame
+                .checked_mul(self.frame_us)
+                .ok_or_else(|| "epoch timestamp overflow".to_string())?;
+            let end_pts = end_frame
+                .checked_mul(self.frame_us)
+                .ok_or_else(|| "epoch timestamp overflow".to_string())?;
+            let duration = u32::try_from(end_pts - pts)
+                .map_err(|_| "epoch duration exceeds Draft Gen 1 range".to_string())?;
+            let epoch_id = u32::try_from(epoch_index)
+                .map_err(|_| "too many browser encoder epochs".to_string())?;
+            let mut packets = Vec::new();
+            packets.push(Packet {
+                kind: PacketKind::EpochStart,
+                flags: 0,
+                stream_id: 0,
+                pts,
+                duration,
+                payload: epoch_id.to_le_bytes().to_vec(),
+            });
+            for frame in &self.encoded_video[start_frame as usize..end_frame as usize] {
+                packets.push(Packet {
+                    kind: PacketKind::VideoFrame,
+                    flags: 0,
+                    stream_id: 1,
+                    pts: frame.pts,
+                    duration: frame.duration,
+                    payload: frame.payload.clone(),
+                });
+            }
+            if self.audio_enabled() {
+                let rate = u64::from(self.audio_rate);
+                let start_audio =
+                    ((pts * rate) / 1_000_000).min(total_audio_frames as u64) as usize;
+                let end_audio =
+                    ((end_pts * rate) / 1_000_000).min(total_audio_frames as u64) as usize;
+                let mut af = start_audio;
+                while af < end_audio {
+                    let n = (end_audio - af).min(960);
+                    let begin = af * audio_channels;
+                    let finish = (af + n) * audio_channels;
+                    let payload = audio::encode(
+                        &self.audio_samples[begin..finish],
+                        AudioEncodeOptions {
+                            sample_rate: self.audio_rate,
+                            channels: self.audio_channels,
+                            qstep: self.audio_qstep,
+                            mid_side: self.audio_channels == 2,
+                        },
+                    )
+                    .map_err(|e| e.to_string())?;
+                    packets.push(Packet {
+                        kind: PacketKind::AudioFrame,
+                        flags: 0,
+                        stream_id: 2,
+                        pts: af as u64 * 1_000_000 / rate,
+                        duration: u32::try_from(n as u64 * 1_000_000 / rate)
+                            .map_err(|_| "audio packet duration overflow".to_string())?,
+                        payload,
+                    });
+                    af += n;
+                }
+            }
+            packets.sort_by_key(|packet| {
+                (
+                    u8::from(packet.kind != PacketKind::EpochStart),
+                    packet.pts,
+                    match packet.kind {
+                        PacketKind::VideoFrame => 0u8,
+                        PacketKind::AudioFrame => 1,
+                        PacketKind::Metadata => 2,
+                        PacketKind::EpochStart => 0,
+                    },
+                )
+            });
+            let mut bytes = Vec::new();
+            for packet in packets {
+                container::encode_packet_checked(&packet, &mut bytes).map_err(|e| e.to_string())?;
+            }
+            epochs.push((epoch_id, pts, duration, bytes));
+        }
+
+        let mut streams = vec![StreamDesc {
+            id: 1,
+            kind: StreamKind::Video,
+            codec: 1,
+            timescale: TIMEBASE,
+            param0: self.width,
+            param1: self.height,
+            flags: (self.fps_n << 16) | self.fps_d,
+            meta0: self.meta0,
+        }];
+        if self.audio_enabled() {
+            streams.push(StreamDesc {
+                id: 2,
+                kind: StreamKind::Audio,
+                codec: 1,
+                timescale: TIMEBASE,
+                param0: self.audio_rate,
+                param1: u32::from(self.audio_channels),
+                flags: 0,
+                meta0: 0,
+            });
+        }
+        self.output = container::build_file_checked(streams, epochs).map_err(|e| e.to_string())?;
+        self.finished = true;
+        Ok(())
+    }
+}
+
+thread_local! {
+    static AV_ENCODERS: RefCell<Vec<Option<AvEncoderState>>> = const { RefCell::new(Vec::new()) };
+    static AV_CREATE_ERROR: RefCell<String> = const { RefCell::new(String::new()) };
+}
+
+fn fail_av_create(message: impl Into<String>) -> u32 {
+    AV_CREATE_ERROR.with(|error| *error.borrow_mut() = message.into());
+    0
+}
+
+fn with_av_encoder<R>(handle: u32, default: R, f: impl FnOnce(&mut AvEncoderState) -> R) -> R {
+    if handle == 0 {
+        return default;
+    }
+    AV_ENCODERS.with(|encoders| {
+        let mut encoders = encoders.borrow_mut();
+        encoders
+            .get_mut(handle as usize - 1)
+            .and_then(Option::as_mut)
+            .map(f)
+            .unwrap_or(default)
+    })
+}
+
+/// Creates a browser A/V encoder. Set both `audio_rate` and `audio_channels` to zero for video-only.
+#[allow(clippy::too_many_arguments)]
+#[unsafe(no_mangle)]
+pub extern "C" fn av_encoder_create(
+    width: u32,
+    height: u32,
+    fps_flags: u32,
+    video_qstep: u32,
+    preset: u32,
+    epoch_frames: u32,
+    meta0: u32,
+    audio_rate: u32,
+    audio_channels: u32,
+    audio_qstep: u32,
+) -> u32 {
+    let Ok(video_qstep) = u16::try_from(video_qstep) else {
+        return fail_av_create("video quantizer step must fit u16");
+    };
+    let Ok(audio_qstep) = u16::try_from(audio_qstep) else {
+        return fail_av_create("audio quantizer step must fit u16");
+    };
+    let preset = match preset {
+        0 => EncoderPreset::Fast,
+        1 => EncoderPreset::Balanced,
+        2 => EncoderPreset::Quality,
+        _ => return fail_av_create("unknown browser encoder preset"),
+    };
+    let state = match AvEncoderState::new(
+        width,
+        height,
+        fps_flags,
+        video_qstep,
+        preset,
+        u64::from(epoch_frames),
+        meta0,
+        audio_rate,
+        audio_channels,
+        audio_qstep,
+    ) {
+        Ok(state) => state,
+        Err(error) => return fail_av_create(error),
+    };
+    AV_CREATE_ERROR.with(|error| error.borrow_mut().clear());
+    AV_ENCODERS.with(|encoders| {
+        let mut encoders = encoders.borrow_mut();
+        if let Some((index, slot)) = encoders
+            .iter_mut()
+            .enumerate()
+            .find(|(_, slot)| slot.is_none())
+        {
+            *slot = Some(state);
+            return (index + 1).try_into().unwrap_or(0);
+        }
+        encoders.push(Some(state));
+        encoders.len().try_into().unwrap_or(0)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn av_encoder_create_error_ptr() -> *const u8 {
+    AV_CREATE_ERROR.with(|error| error.borrow().as_ptr())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn av_encoder_create_error_len() -> u32 {
+    AV_CREATE_ERROR.with(|error| error.borrow().len().try_into().unwrap_or(0))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn av_encoder_destroy(handle: u32) -> i32 {
+    if handle == 0 {
+        return -1;
+    }
+    AV_ENCODERS.with(|encoders| {
+        let mut encoders = encoders.borrow_mut();
+        let Some(slot) = encoders.get_mut(handle as usize - 1) else {
+            return -1;
+        };
+        if slot.take().is_some() { 0 } else { -1 }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn av_encoder_video_frame_len(handle: u32) -> u32 {
+    with_av_encoder(handle, 0, |encoder| {
+        encoder.video_input.len().try_into().unwrap_or(0)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn av_encoder_video_frame_ptr(handle: u32) -> *mut u8 {
+    with_av_encoder(handle, std::ptr::null_mut(), |encoder| {
+        encoder.video_input.as_mut_ptr()
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn av_encoder_push_video_frame(handle: u32) -> i32 {
+    with_av_encoder(handle, -1, |encoder| match encoder.push_video_frame() {
+        Ok(()) => 0,
+        Err(error) => encoder.fail(error),
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn av_encoder_audio_reserve(handle: u32, sample_count: u32) -> *mut i16 {
+    with_av_encoder(handle, std::ptr::null_mut(), |encoder| {
+        match encoder.reserve_audio(sample_count as usize) {
+            Ok(ptr) => ptr,
+            Err(error) => {
+                encoder.fail(error);
+                std::ptr::null_mut()
+            }
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn av_encoder_push_audio(handle: u32, sample_count: u32) -> i32 {
+    with_av_encoder(handle, -1, |encoder| {
+        match encoder.push_audio(sample_count as usize) {
+            Ok(()) => 0,
+            Err(error) => encoder.fail(error),
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn av_encoder_finish(handle: u32) -> i32 {
+    with_av_encoder(handle, -1, |encoder| match encoder.finish() {
+        Ok(()) => 0,
+        Err(error) => encoder.fail(error),
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn av_encoder_output_ptr(handle: u32) -> *const u8 {
+    with_av_encoder(handle, std::ptr::null(), |encoder| encoder.output.as_ptr())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn av_encoder_output_len(handle: u32) -> u32 {
+    with_av_encoder(handle, 0, |encoder| {
+        encoder.output.len().try_into().unwrap_or(0)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn av_encoder_last_error_ptr(handle: u32) -> *const u8 {
+    with_av_encoder(handle, std::ptr::null(), |encoder| encoder.error.as_ptr())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn av_encoder_last_error_len(handle: u32) -> u32 {
+    with_av_encoder(handle, 0, |encoder| {
         encoder.error.len().try_into().unwrap_or(0)
     })
 }

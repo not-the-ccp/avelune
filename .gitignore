@@ -20,3 +20,6 @@
 /results/ci-media/
 # Local validation/benchmark evidence. Rebuild with scripts/validate-release.sh.
 /results/
+
+# Locally staged FFmpeg browser core; site build copies it from @ffmpeg/core.
+/web/player/ffmpeg/
