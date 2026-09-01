@@ -464,7 +464,6 @@ async function convertMediaFile() {
   const worker = getMediaImportWorker();
   const requestId = ++mediaImportSequence;
   try {
-    const input = await file.arrayBuffer();
     const options = mediaOptions();
     const result = await new Promise((resolve, reject) => {
       const cleanup = () => {
@@ -499,10 +498,12 @@ async function convertMediaFile() {
       activeMediaImport = {requestId, reject: error => settle(reject, error)};
       worker.addEventListener('message', onMessage);
       worker.addEventListener('error', onError);
-      worker.postMessage({type: 'convert', requestId, buffer: input, name: file.name, options}, [input]);
+      // File/Blob is structured-cloned by reference. The worker mounts it through Emscripten
+      // WORKERFS, so a multi-gigabyte source is not copied into an ArrayBuffer up front.
+      worker.postMessage({type: 'convert', requestId, file, name: file.name, options});
     });
-    const encoded = new Uint8Array(result.encoded);
-    const blob = new Blob([encoded], {type: 'application/octet-stream'});
+    const blob = result.file;
+    if (!(blob instanceof Blob)) throw Error('media importer did not return an Avelune file');
     const stem = file.name.replace(/\.[^.]+$/, '') || 'converted';
     if (mediaObjectUrl) URL.revokeObjectURL(mediaObjectUrl);
     mediaObjectUrl = URL.createObjectURL(blob);
@@ -514,7 +515,8 @@ async function convertMediaFile() {
     progress.max = 1;
     progress.value = 1;
     const audio = result.audioChannels ? ` · ${result.audioChannels}ch/${result.audioRate} Hz audio` : ' · video-only';
-    status.textContent = `${result.width}×${result.height} · ${result.frames} frames${audio} → ${formatBytes(encoded.length)} · ${result.artifact}`;
+    const storage = result.spool === 'opfs' ? ' · streamed via browser storage' : ' · compressed chunks buffered in memory';
+    status.textContent = `${result.width}×${result.height} · ${result.frames} frames${audio} → ${formatBytes(blob.size)} · ${result.artifact}${storage}`;
     await player.load(new BlobRangeSource(blob, `${stem}.avl`));
   } finally {
     button.disabled = !pendingMediaFile;

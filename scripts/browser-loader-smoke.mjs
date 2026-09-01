@@ -7,6 +7,7 @@ import {
   MemoryRangeSource,
   StaleDecodeGenerationError,
   createAveluneAvEncoder,
+  createAveluneStreamingAvEncoder,
   createAveluneDecoder,
   createAveluneVideoEncoder,
 } from '../web/player/avelune-loader.js';
@@ -125,6 +126,32 @@ try {
   finally { avDecoder.destroy(); }
   if (avRoundtrip.video !== 5 || avRoundtrip.audio === 0) throw Error('browser A/V encoder wrapper roundtrip failed');
 
+  // The streaming A/V ABI must produce the same canonical file while allowing completed epochs
+  // to leave WASM immediately instead of retaining raw frames/audio until finish().
+  const streamEncoder = await createAveluneStreamingAvEncoder({
+    width: 32, height: 24, fpsN: 30, fpsD: 1, videoQ: 96, audioQ: 32,
+    preset: 'balanced', epochFrames: 3, audioRate: 48_000, audioChannels: 2,
+  }, {artifact: 'scalar', scalarUrl: `${base}/scalar.wasm`});
+  let streamEncoded;
+  try {
+    const chunks = [];
+    const pcm = new Int16Array(8_000 * 2);
+    for (let i = 0; i < pcm.length; i++) pcm[i] = Math.round(Math.sin(i / 17) * 12_000);
+    chunks.push(...streamEncoder.pushAudio(pcm));
+    for (let t = 0; t < 5; t++) {
+      const frame = new Uint8Array(streamEncoder.expectedFrameBytes), yLen = 32 * 24, cLen = yLen / 4;
+      for (let i = 0; i < yLen; i++) frame[i] = (i * 3 + t * 19) & 255;
+      frame.fill(110 + t, yLen, yLen + cLen); frame.fill(145 - t, yLen + cLen);
+      chunks.push(...streamEncoder.pushFrame(frame));
+    }
+    const finished = streamEncoder.finish();
+    chunks.push(...finished.epochs);
+    streamEncoded = new Uint8Array(new Blob([finished.prefix, ...chunks]).arrayBuffer ? await new Blob([finished.prefix, ...chunks]).arrayBuffer() : 0);
+  } finally { streamEncoder.destroy(); }
+  if (streamEncoded.length !== avEncoded.length || !streamEncoded.every((value, index) => value === avEncoded[index])) {
+    throw Error(`streaming A/V encoder output differs from batch encoder (${streamEncoded.length} vs ${avEncoded.length} bytes)`);
+  }
+
   // Arbitrarily fragmented complete ranges must decode identically to contiguous reads.
   class FragmentedSource {
     async *streamRange(first, length) {
@@ -222,6 +249,7 @@ try {
     blob: {video: blobResult.video, audio: blobResult.audio},
     encoder: {bytes: browserEncoded.length, video: encoderRoundtrip.video},
     avEncoder: {bytes: avEncoded.length, video: avRoundtrip.video, audio: avRoundtrip.audio},
+    streamingAvEncoder: {bytes: streamEncoded.length, exactBatchMatch: true},
     fragmented: {video: fragmented.video, audio: fragmented.audio, steps: ['7','1','63','4093','2','61','8191','1']},
     mediaRangeRequests: requests.filter(r => r.url === '/demo.avl').length,
     adversarial: ['content-range', 'short-range', 'long-range', 'truncated-epoch', 'wrong-epoch', 'stale-generation'],

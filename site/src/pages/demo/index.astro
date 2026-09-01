@@ -77,54 +77,16 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
             <span id="media-file-name">No file selected.</span>
           </div>
           <div class="media-options">
-            <label for="media-video-q">Video quantizer <small>1 = lossless residuals</small></label>
-            <input id="media-video-q" type="number" min="1" max="65535" value="112" inputmode="numeric" />
-            <label for="media-preset">Preset</label>
-            <select id="media-preset">
-              <option value="fast">Fast</option>
-              <option value="balanced" selected>Balanced</option>
-              <option value="quality">Quality</option>
-            </select>
-            <label for="media-resolution">Resolution</label>
-            <select id="media-resolution">
-              <option value="source">Source (even dimensions)</option>
-              <option value="1920x1080">1920×1080</option>
-              <option value="1280x720">1280×720 max canvas</option>
-              <option value="854x480">854×480</option>
-              <option value="640x360" selected>640×360</option>
-            </select>
-            <label for="media-fps">Frame rate</label>
-            <select id="media-fps">
-              <option value="source">Source</option>
-              <option value="60">60 fps</option>
-              <option value="30" selected>30 fps</option>
-              <option value="24">24 fps</option>
-            </select>
-            <label for="media-epoch">Epoch length</label>
-            <select id="media-epoch">
-              <option value="1">1 second</option>
-              <option value="2" selected>2 seconds</option>
-              <option value="4">4 seconds</option>
-              <option value="8">8 seconds</option>
-            </select>
-            <label for="media-audio-channels">Audio</label>
-            <select id="media-audio-channels">
-              <option value="2" selected>Stereo</option>
-              <option value="1">Mono</option>
-              <option value="0">Disabled</option>
-            </select>
-            <label for="media-audio-rate">Audio rate</label>
-            <select id="media-audio-rate">
-              <option value="48000" selected>48 kHz</option>
-              <option value="44100">44.1 kHz</option>
-              <option value="32000">32 kHz</option>
-            </select>
-            <label for="media-audio-q">Audio quantizer <small>1 = lossless</small></label>
-            <input id="media-audio-q" type="number" min="1" max="65535" value="64" inputmode="numeric" />
-            <label for="media-start">Start time <small>seconds</small></label>
-            <input id="media-start" type="number" min="0" step="0.1" value="0" inputmode="decimal" />
-            <label for="media-duration">Length <small>seconds · 0 = entire file</small></label>
-            <input id="media-duration" type="number" min="0" step="0.1" value="0" inputmode="decimal" />
+            <label class="media-field" for="media-video-q"><span>Video quantizer <small>1 = lossless residuals</small></span><input id="media-video-q" type="number" min="1" max="65535" value="112" inputmode="numeric" /></label>
+            <label class="media-field" for="media-preset"><span>Preset</span><select id="media-preset"><option value="fast">Fast</option><option value="balanced" selected>Balanced</option><option value="quality">Quality</option></select></label>
+            <label class="media-field" for="media-resolution"><span>Resolution</span><select id="media-resolution"><option value="source">Source · even dimensions</option><option value="1920x1080">1920×1080</option><option value="1280x720">1280×720 max canvas</option><option value="854x480">854×480</option><option value="640x360" selected>640×360</option></select></label>
+            <label class="media-field" for="media-fps"><span>Frame rate</span><select id="media-fps"><option value="source">Source</option><option value="60">60 fps</option><option value="30" selected>30 fps</option><option value="24">24 fps</option></select></label>
+            <label class="media-field" for="media-epoch"><span>Epoch length</span><select id="media-epoch"><option value="1">1 second</option><option value="2" selected>2 seconds</option><option value="4">4 seconds</option><option value="8">8 seconds</option></select></label>
+            <label class="media-field" for="media-audio-channels"><span>Audio</span><select id="media-audio-channels"><option value="2" selected>Stereo</option><option value="1">Mono</option><option value="0">Disabled</option></select></label>
+            <label class="media-field" for="media-audio-rate"><span>Audio rate</span><select id="media-audio-rate"><option value="48000" selected>48 kHz</option><option value="44100">44.1 kHz</option><option value="32000">32 kHz</option></select></label>
+            <label class="media-field" for="media-audio-q"><span>Audio quantizer <small>1 = lossless</small></span><input id="media-audio-q" type="number" min="1" max="65535" value="64" inputmode="numeric" /></label>
+            <label class="media-field" for="media-start"><span>Start time <small>seconds</small></span><input id="media-start" type="number" min="0" step="0.1" value="0" inputmode="decimal" /></label>
+            <label class="media-field" for="media-duration"><span>Length <small>seconds · 0 = entire file</small></span><input id="media-duration" type="number" min="0" step="0.1" value="0" inputmode="decimal" /></label>
           </div>
           <div class="media-actions">
             <button id="media-convert" type="button" disabled>Convert → Avelune</button>
@@ -133,7 +95,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
             <span id="media-status" role="status" aria-live="polite">Choose or drop a media file or .avl.</span>
             <a id="media-download" hidden>Download converted .avl</a>
           </div>
-          <p class="media-privacy">Embedded FFmpeg WebAssembly is loaded locally by this page. Conversion does not upload your source media. Full-length high-resolution sources can use substantial browser memory; use Start/Length to make a shorter encode when experimenting.</p>
+          <p class="media-privacy"><strong>Streaming path:</strong> the source file is mounted directly from browser storage, FFmpeg writes raw video/audio into bounded in-process sinks, Avelune emits completed epochs incrementally, and supported browsers spool encoded output through OPFS. Conversion does not upload your media. A compressed-memory fallback is used only when OPFS is unavailable.</p>
           <details class="media-log-panel">
             <summary>Conversion log</summary>
             <pre id="media-log"></pre>
@@ -556,7 +518,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       margin: .9rem 0 0 2.5rem;
     }
     .media-file-row > label,
-    .media-options > label,
     .engine-grid > label {
       color: var(--muted);
       font: .63rem var(--font-mono);
@@ -569,20 +530,54 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     }
     .media-options {
       display: grid;
-      grid-template-columns: repeat(4, auto minmax(5rem, 1fr));
-      gap: .55rem .65rem;
-      align-items: center;
-      margin: .8rem 0 0 2.5rem;
-    }
-    .media-options input[type="number"] { width: 100%; }
-    .media-actions {
-      display: grid;
-      grid-template-columns: auto minmax(7rem, 12rem) minmax(12rem, 1fr) auto;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
       gap: .75rem;
-      align-items: center;
-      margin: .85rem 0 0 2.5rem;
+      margin: .9rem 0 0 2.5rem;
     }
-    .media-actions progress { width: 100%; accent-color: var(--cool); }
+    .media-field {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: .35rem;
+      color: var(--muted);
+      font: .63rem var(--font-mono);
+      text-transform: uppercase;
+    }
+    .media-field > span {
+      min-height: 2.1em;
+      line-height: 1.25;
+    }
+    .media-field small {
+      display: block;
+      margin-top: .12rem;
+      color: color-mix(in srgb, var(--muted) 72%, transparent);
+      font: .58rem/1.2 var(--font-mono);
+      text-transform: none;
+    }
+    .media-field input,
+    .media-field select {
+      width: 100%;
+      max-width: 100%;
+    }
+    .media-actions {
+      display: flex;
+      min-width: 0;
+      flex-wrap: wrap;
+      gap: .65rem;
+      align-items: center;
+      margin: .9rem 0 0 2.5rem;
+    }
+    .media-actions progress {
+      order: 4;
+      width: 100%;
+      height: .45rem;
+      accent-color: var(--cool);
+    }
+    #media-status {
+      min-width: min(100%, 16rem);
+      flex: 1 1 18rem;
+    }
+    #media-download { flex: 0 1 auto; }
     #media-status { color: var(--muted); font: .68rem/1.45 var(--font-mono); }
     #media-download { color: var(--cool); font: .68rem var(--font-mono); }
     .media-privacy,
@@ -723,7 +718,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
         border-top: 1px solid var(--rule);
         border-left: 0;
       }
-      .media-options { grid-template-columns: repeat(2, auto minmax(0, 1fr)); }
       .engine-grid { grid-template-columns: auto minmax(0, 1fr); }
     }
 
@@ -762,8 +756,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       .engine-note { margin-left: 0; }
       .media-file-row { grid-template-columns: auto minmax(0, 1fr); }
       #media-file-name { grid-column: 2; }
-      .media-options { grid-template-columns: auto minmax(0, 1fr); }
-      .media-actions { grid-template-columns: 1fr; }
       .engine-grid { grid-template-columns: auto minmax(0, 1fr); }
     }
 

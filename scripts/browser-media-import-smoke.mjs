@@ -156,7 +156,8 @@ async function navigate(url) {
 }
 
 const browserProgram = `(async()=>{
-  const input = await (await fetch('/input.mp4')).arrayBuffer();
+  const inputBlob = await (await fetch('/input.mp4')).blob();
+  const input = new File([inputBlob], 'import-smoke.mp4', {type: 'video/mp4'});
   const worker = new Worker('/media-import-worker.js', {type: 'module'});
   const result = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('media import worker timeout')), 90_000);
@@ -168,17 +169,19 @@ const browserProgram = `(async()=>{
     });
     worker.addEventListener('error', event => { clearTimeout(timer); reject(Error(event.message || 'media import worker failed')); });
     worker.postMessage({
-      type: 'convert', requestId: 1, buffer: input, name: 'import-smoke.mp4',
+      type: 'convert', requestId: 1, file: input, name: 'import-smoke.mp4',
       options: {
         videoQ: 112, audioQ: 64, audioChannels: 2, audioRate: 32_000,
         epochSeconds: 1, preset: 'fast', resolution: '96x54', fps: '8', artifact: 'simd128',
       },
-    }, [input]);
+    });
   });
   worker.terminate();
 
   const {createAveluneDecoder, BlobRangeSource} = await import('/avelune-loader.js');
-  const encoded = new Uint8Array(result.encoded);
+  if (!(result.file instanceof Blob)) throw Error('streaming importer did not return a file/blob');
+  if (result.spool !== 'opfs') throw Error('Chromium streaming smoke did not use OPFS output spooling');
+  const encoded = new Uint8Array(await result.file.arrayBuffer());
   const decoder = await createAveluneDecoder({artifact: 'simd128'});
   let video = 0, audio = 0;
   try {
@@ -189,6 +192,9 @@ const browserProgram = `(async()=>{
     }
     if (video !== result.frames || video < 4) throw Error('converted video frame count mismatch');
     if (audio <= 0 || result.audioSamples <= 0) throw Error('converted audio was lost');
+    const expectedRawVideoBytes = result.frames * result.width * result.height * 3 / 2;
+    if (result.rawVideoBytes !== expectedRawVideoBytes) throw Error('raw video streaming byte count mismatch: ' + result.rawVideoBytes + ' != ' + expectedRawVideoBytes);
+    if (result.rawAudioBytes !== result.audioSamples * 2) throw Error('raw PCM streaming byte count mismatch');
     if (result.artifact !== 'simd128') throw Error('requested SIMD128 encoder was not used');
     return {
       artifact: result.artifact,
@@ -200,6 +206,10 @@ const browserProgram = `(async()=>{
       decodedAudioPackets: audio,
       audioSamples: result.audioSamples,
       streams: index.streams.map(stream => stream.kind),
+      spool: result.spool,
+      sourceBytes: result.sourceBytes,
+      rawVideoBytes: result.rawVideoBytes,
+      rawAudioBytes: result.rawAudioBytes,
     };
   } finally {
     decoder.destroy();

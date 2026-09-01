@@ -116,6 +116,17 @@ try {
   await auditPages(1280,900);
 
   await navigate('/demo/');
+  const mediaLayout = await evaluate(`(()=>{
+    const panel=document.querySelector('.media-options');
+    const fields=[...document.querySelectorAll('.media-field')];
+    if(!panel||fields.length<8)return {missing:true};
+    const bounds=panel.getBoundingClientRect();
+    const rects=fields.map(field=>{const r=field.getBoundingClientRect();const control=field.querySelector('input,select')?.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,controlWidth:control?.width??0}});
+    let overlaps=0;
+    for(let i=0;i<rects.length;i++)for(let j=i+1;j<rects.length;j++){const a=rects[i],b=rects[j];if(Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1)overlaps++;}
+    return {missing:false,overlaps,outside:rects.some(r=>r.left<bounds.left-1||r.right>bounds.right+1),tooNarrow:rects.some(r=>r.width<120||r.controlWidth<100)};
+  })()`);
+  if (mediaLayout.missing || mediaLayout.overlaps || mediaLayout.outside || mediaLayout.tooNarrow) throw Error(`demo media-control layout is unusable at 1280px: ${JSON.stringify(mediaLayout)}`);
   await evaluate("document.querySelector('#load-sample').click()");
   let state;
   for (let attempt=0; attempt<300; attempt++) { state=await evaluate("document.querySelector('#state-label')?.textContent"); if (state === 'READY' || state === 'ERROR') break; await delay(50); }

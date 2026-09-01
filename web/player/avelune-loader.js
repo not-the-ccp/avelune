@@ -226,6 +226,18 @@ function avEncoderCreateError(ex) {
   return new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, len));
 }
 
+function streamAvEncoderError(ex, handle) {
+  const ptr = ex.av_stream_encoder_last_error_ptr(handle), len = ex.av_stream_encoder_last_error_len(handle);
+  return len ? new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, len)) : 'unknown streaming A/V encoder error';
+}
+
+function streamAvEncoderCreateError(ex) {
+  const len = ex.av_stream_encoder_create_error_len();
+  if (!len) return 'streaming A/V encoder configuration was rejected';
+  const ptr = ex.av_stream_encoder_create_error_ptr();
+  return new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, len));
+}
+
 export class StaleDecodeGenerationError extends Error {
   constructor() { super('stale decode generation'); this.name = 'StaleDecodeGenerationError'; }
 }
@@ -542,4 +554,104 @@ export async function createAveluneAvEncoder(options, {artifact = 'auto', simdUr
   catch (error) { simdFailure = error; }
   try { return await loadAvEncoderArtifact(scalarUrl, 'scalar', options, signal); }
   catch (scalarFailure) { throw new AggregateError([simdFailure, scalarFailure], 'neither Avelune WASM A/V encoder artifact could be loaded'); }
+}
+
+export class AveluneStreamingAvEncoder {
+  constructor(instance, artifact, {
+    width, height, fpsN, fpsD = 1, videoQ = 96, audioQ = 96, preset = 'balanced',
+    epochFrames = 60, chromaLocation = 0, fullRange = false, audioRate = 0, audioChannels = 0,
+  }) {
+    this.instance = instance;
+    this.ex = instance.exports;
+    this.artifact = artifact;
+    const presetId = ({fast: 0, balanced: 1, quality: 2})[preset];
+    if (presetId === undefined) throw Error(`unknown encoder preset: ${preset}`);
+    for (const [label, value] of Object.entries({width, height, fpsN, fpsD, videoQ, audioQ, epochFrames, chromaLocation, audioRate, audioChannels})) {
+      if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff_ffff) throw Error(`${label} must fit an unsigned 32-bit integer`);
+    }
+    if (!fpsN || !fpsD || fpsN > 0xffff || fpsD > 0xffff) throw Error('frame-rate numerator and denominator must be in 1..=65535');
+    const fpsFlags = ((fpsN << 16) | fpsD) >>> 0;
+    const meta0 = this.ex.video_encoder_pack_meta0(chromaLocation, fullRange ? 1 : 0);
+    if (meta0 === 0xffff_ffff) throw Error(`unknown chroma location: ${chromaLocation}`);
+    this.handle = this.ex.av_stream_encoder_create(
+      width, height, fpsFlags, videoQ, presetId, epochFrames, meta0, audioRate, audioChannels, audioQ,
+    );
+    if (!this.handle) throw Error(streamAvEncoderCreateError(this.ex));
+    this.expectedFrameBytes = this.ex.av_stream_encoder_video_frame_len(this.handle);
+    this.audioChannels = audioChannels;
+  }
+
+  destroy() {
+    if (this.handle) {
+      this.ex.av_stream_encoder_destroy(this.handle);
+      this.handle = 0;
+    }
+  }
+
+  #drainReady() {
+    const chunks = [];
+    while (this.ex.av_stream_encoder_ready_epochs(this.handle) > 0) {
+      const status = this.ex.av_stream_encoder_take_epoch(this.handle);
+      if (status < 0) throw Error(streamAvEncoderError(this.ex, this.handle));
+      if (status === 0) break;
+      const ptr = this.ex.av_stream_encoder_epoch_ptr(this.handle);
+      const len = this.ex.av_stream_encoder_epoch_len(this.handle);
+      if (!len) throw Error('streaming A/V encoder exposed an empty ready epoch');
+      chunks.push(new Uint8Array(this.ex.memory.buffer, ptr, len).slice());
+    }
+    return chunks;
+  }
+
+  pushFrame(bytes) {
+    if (!this.handle) throw Error('streaming A/V encoder is destroyed');
+    if (!(bytes instanceof Uint8Array)) bytes = new Uint8Array(bytes);
+    if (bytes.length !== this.expectedFrameBytes) {
+      throw Error(`raw YUV frame has ${bytes.length} bytes; expected ${this.expectedFrameBytes}`);
+    }
+    const ptr = this.ex.av_stream_encoder_video_frame_ptr(this.handle);
+    if (!ptr && bytes.length) throw Error(streamAvEncoderError(this.ex, this.handle));
+    new Uint8Array(this.ex.memory.buffer, ptr, bytes.length).set(bytes);
+    if (this.ex.av_stream_encoder_push_video_frame(this.handle) !== 0) throw Error(streamAvEncoderError(this.ex, this.handle));
+    return this.#drainReady();
+  }
+
+  pushAudio(samples) {
+    if (!this.handle) throw Error('streaming A/V encoder is destroyed');
+    if (!this.audioChannels) {
+      if (samples?.length) throw Error('audio is disabled for this encoder');
+      return [];
+    }
+    if (!(samples instanceof Int16Array)) samples = new Int16Array(samples);
+    if (!samples.length) return [];
+    if (samples.length % this.audioChannels) throw Error('PCM samples are not aligned to the configured channel count');
+    const ptr = this.ex.av_stream_encoder_audio_reserve(this.handle, samples.length);
+    if (!ptr) throw Error(streamAvEncoderError(this.ex, this.handle));
+    new Int16Array(this.ex.memory.buffer, ptr, samples.length).set(samples);
+    if (this.ex.av_stream_encoder_push_audio(this.handle, samples.length) !== 0) throw Error(streamAvEncoderError(this.ex, this.handle));
+    return this.#drainReady();
+  }
+
+  finish() {
+    if (!this.handle) throw Error('streaming A/V encoder is destroyed');
+    if (this.ex.av_stream_encoder_finish(this.handle) !== 0) throw Error(streamAvEncoderError(this.ex, this.handle));
+    const epochs = this.#drainReady();
+    const ptr = this.ex.av_stream_encoder_prefix_ptr(this.handle), len = this.ex.av_stream_encoder_prefix_len(this.handle);
+    if (!len) throw Error(streamAvEncoderError(this.ex, this.handle));
+    return {prefix: new Uint8Array(this.ex.memory.buffer, ptr, len).slice(), epochs};
+  }
+}
+
+async function loadStreamingAvEncoderArtifact(url, artifact, options, signal) {
+  return new AveluneStreamingAvEncoder(await instantiateArtifact(url, signal), artifact, options);
+}
+
+export async function createAveluneStreamingAvEncoder(options, {artifact = 'auto', simdUrl = DEFAULT_SIMD, scalarUrl = DEFAULT_SCALAR, signal} = {}) {
+  if (artifact === 'scalar') return loadStreamingAvEncoderArtifact(scalarUrl, 'scalar', options, signal);
+  if (artifact === 'simd128') return loadStreamingAvEncoderArtifact(simdUrl, 'simd128', options, signal);
+  if (artifact !== 'auto') throw Error(`unknown WASM artifact selection: ${artifact}`);
+  let simdFailure;
+  try { return await loadStreamingAvEncoderArtifact(simdUrl, 'simd128', options, signal); }
+  catch (error) { simdFailure = error; }
+  try { return await loadStreamingAvEncoderArtifact(scalarUrl, 'scalar', options, signal); }
+  catch (scalarFailure) { throw new AggregateError([simdFailure, scalarFailure], 'neither Avelune WASM streaming A/V encoder artifact could be loaded'); }
 }
