@@ -3,171 +3,214 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 ---
 <BaseLayout
-  title="Browser demo"
-  description="Play, inspect, seek, and range-fetch Avelune media directly in the browser with the canonical Rust decoder compiled to WebAssembly."
+  title="Demo"
+  description="Play Avelune files or convert ordinary video to Avelune in your browser."
   mode="grid"
   current="demo"
 >
   <div class="demo-shell" id="drop-target">
     <header class="demo-header">
-      <div>
-        <p class="eyebrow">BROWSER CODEC WORKBENCH</p>
-        <h1>Play and inspect Avelune.</h1>
-      </div>
-      <div class="demo-intro">
-        <p>
-          The canonical Rust codec runs in WebAssembly. Open an existing <code>.avl</code>, or drop ordinary media such as MP4, MKV, WebM, MOV, or Y4M and convert it to Avelune directly in this tab. The resulting file is loaded into the player and can be downloaded immediately.
-        </p>
-        <p class="fixture-note">
-          The tiny 160×90 files remain deterministic regression vectors. Larger procedural showcase clips exercise gameplay-like motion, perspective, hard text edges, audio, seeking, and real browser decode paths without third-party media.
-        </p>
-      </div>
+      <h1>Avelune demo</h1>
+      <p>Play an <code>.avl</code> file, or convert ordinary video to Avelune without uploading it.</p>
     </header>
 
-    <div class="instrument">
-      <section class="viewport-panel" aria-label="Video output">
-        <div class="viewport-head">
-          <div>
-            <span>OUTPUT</span>
-            <strong id="state-label">IDLE</strong>
+    <section class="player-shell" aria-label="Avelune player">
+      <div class="viewport-head">
+        <strong id="state-label">IDLE</strong>
+        <p id="state-detail" role="status" aria-live="polite">Loading a synthetic sample…</p>
+      </div>
+
+      <div class="viewport">
+        <canvas id="c" width="640" height="360">Decoded Avelune video appears here.</canvas>
+        <div id="viewport-state" class="viewport-state">Open a video or .avl file, or choose a sample below.</div>
+        <div class="drop-message" aria-hidden="true">Drop video to convert · drop .avl to play</div>
+      </div>
+
+      <div class="play-control">
+        <button id="play" class="play-button" type="button" disabled>Play</button>
+        <div class="timeline">
+          <label class="sr-only" for="seek">Seek position</label>
+          <input id="seek" type="range" min="0" max="1" step=".001" value="0" disabled />
+          <div class="timeline-meta">
+            <output id="time" for="seek">0.00s</output>
+            <span>Space · ←/→ 5s · Home/End</span>
           </div>
-          <p id="state-detail" role="status" aria-live="polite">Preparing the bundled 640×360 showcase…</p>
         </div>
+        <label for="volume">Volume</label>
+        <input id="volume" class="volume" type="range" min="0" max="1" step=".01" value="1" />
+      </div>
+    </section>
 
-        <div class="viewport">
-          <canvas id="c" width="640" height="360">Decoded Avelune video appears here.</canvas>
-          <div id="viewport-state" class="viewport-state">Drop a video to convert, open an .avl, or play a bundled showcase.</div>
-          <div class="drop-message" aria-hidden="true">DROP .AVL TO OPEN · MEDIA TO CONVERT</div>
+    <section class="media-import" id="media-import" aria-labelledby="convert-heading">
+      <header class="section-header">
+        <h2 id="convert-heading">Open or convert media</h2>
+        <p>Choose an Avelune file to play it directly, or choose a video that FFmpeg can read to convert it to <code>.avl</code>.</p>
+      </header>
+
+      <div class="media-file-row">
+        <label for="media-file">Video or .avl file</label>
+        <input id="media-file" type="file" accept=".avl,application/octet-stream,video/*,.mp4,.mkv,.webm,.mov,.avi,.m4v,.ts,.m2ts,.flv,.ogv,.mpg,.mpeg,.y4m" />
+        <span id="media-file-name">No file selected.</span>
+      </div>
+
+      <div class="media-options">
+        <label class="media-field" for="media-video-q">
+          <span>Video quantizer</span>
+          <input id="media-video-q" type="number" min="1" max="65535" value="112" inputmode="numeric" />
+          <small>Lower is finer. 1 uses lossless residual coding.</small>
+        </label>
+        <label class="media-field" for="media-preset">
+          <span>Encoder effort</span>
+          <select id="media-preset">
+            <option value="fast">Fast</option>
+            <option value="balanced" selected>Balanced</option>
+            <option value="quality">Thorough</option>
+          </select>
+          <small>Changes encoder search effort, not the quantizer.</small>
+        </label>
+        <label class="media-field" for="media-resolution">
+          <span>Output resolution</span>
+          <select id="media-resolution">
+            <option value="source" selected>Keep source size</option>
+            <option value="1920x1080">1920×1080 · fit + letterbox</option>
+            <option value="1280x720">1280×720 · fit + letterbox</option>
+            <option value="854x480">854×480 · fit + letterbox</option>
+            <option value="640x360">640×360 · fit + letterbox</option>
+          </select>
+          <small>Source dimensions are rounded down to even values when required by 4:2:0.</small>
+        </label>
+        <label class="media-field" for="media-fps">
+          <span>Output frame rate</span>
+          <select id="media-fps">
+            <option value="source" selected>Keep source rate</option>
+            <option value="60">60 fps</option>
+            <option value="30">30 fps</option>
+            <option value="24">24 fps</option>
+          </select>
+        </label>
+        <label class="media-field" for="media-epoch">
+          <span>Epoch length</span>
+          <select id="media-epoch">
+            <option value="1">1 second</option>
+            <option value="2" selected>2 seconds</option>
+            <option value="4">4 seconds</option>
+            <option value="8">8 seconds</option>
+          </select>
+          <small>Shorter epochs provide more independent seek points.</small>
+        </label>
+        <label class="media-field" for="media-audio-channels">
+          <span>Output audio</span>
+          <select id="media-audio-channels">
+            <option value="2" selected>Stereo</option>
+            <option value="1">Mono</option>
+            <option value="0">Disabled</option>
+          </select>
+        </label>
+        <label class="media-field" for="media-audio-rate">
+          <span>Audio sample rate</span>
+          <select id="media-audio-rate">
+            <option value="48000" selected>48 kHz</option>
+            <option value="44100">44.1 kHz</option>
+            <option value="32000">32 kHz</option>
+          </select>
+        </label>
+        <label class="media-field" for="media-audio-q">
+          <span>Audio quantizer</span>
+          <input id="media-audio-q" type="number" min="1" max="65535" value="1" inputmode="numeric" />
+          <small>1 is lossless. Lossy ALA1 is experimental.</small>
+        </label>
+        <label class="media-field" for="media-start">
+          <span>Start time</span>
+          <input id="media-start" type="number" min="0" step="0.1" value="0" inputmode="decimal" />
+          <small>Seconds from the beginning.</small>
+        </label>
+        <label class="media-field" for="media-duration">
+          <span>Length</span>
+          <input id="media-duration" type="number" min="0" step="0.1" value="0" inputmode="decimal" />
+          <small>Seconds. 0 converts to the end of the file.</small>
+        </label>
+      </div>
+
+      <div class="media-actions">
+        <button id="media-convert" type="button" disabled>Convert to Avelune</button>
+        <button id="media-cancel" class="secondary-button" type="button" disabled>Cancel</button>
+        <a id="media-download" hidden>Download converted .avl</a>
+        <span id="media-status" role="status" aria-live="polite">Choose or drop a video or .avl file.</span>
+        <progress id="media-progress" max="1" value="0" hidden></progress>
+      </div>
+
+      <p class="privacy-note">Your media stays in this browser. Conversion uses the bundled FFmpeg build; the page does not upload the source file.</p>
+      <details class="media-log-panel">
+        <summary>Conversion log</summary>
+        <pre id="media-log"></pre>
+      </details>
+    </section>
+
+    <div class="secondary-grid">
+      <section class="secondary-section">
+        <h2>Samples</h2>
+        <p>The current samples are synthetic test scenes. They are useful for exercising playback, not as a representative codec-quality corpus.</p>
+        <label class="sr-only" for="sample">Bundled sample</label>
+        <div class="control-row sample-row">
+          <select id="sample">
+            <optgroup label="Synthetic scenes">
+              <option selected value="showcase-2d.avl" data-description="640×360 · 4 s · 30 fps · stereo · synthetic 2D scene">Synthetic 2D scene · 640×360</option>
+              <option value="showcase-3d.avl" data-description="640×360 · 4 s · 30 fps · stereo · synthetic perspective scene">Synthetic perspective scene · 640×360</option>
+              <option value="showcase-text.avl" data-description="640×360 · 4 s · 30 fps · stereo · synthetic text and UI scene">Synthetic text / UI scene · 640×360</option>
+            </optgroup>
+            <optgroup label="Regression vectors">
+              <option value="demo.avl" data-description="320×180 · audio + video · compact browser regression vector">A/V regression vector · 320×180</option>
+              <option value="motion.avl" data-description="160×90 · 90 frames · tiny motion regression vector">Motion regression vector · 160×90</option>
+              <option value="screen.avl" data-description="160×90 · 90 frames · tiny hard-edge regression vector">Text regression vector · 160×90</option>
+            </optgroup>
+          </select>
+          <button id="load-sample" type="button">Load sample</button>
         </div>
+        <p id="sample-description" class="source-description"></p>
+      </section>
 
-        <div class="performance-strip" aria-label="Current session measurements">
-          <div><span>INDEX LOAD</span><strong id="metric-index">—</strong></div>
-          <div><span>RANGE REQUESTS</span><strong id="metric-ranges">0</strong></div>
-          <div><span>FETCHED</span><strong id="metric-bytes">0 B</strong></div>
-          <div><span>FRAMES SHOWN</span><strong id="metric-frames">0</strong></div>
+      <section class="secondary-section">
+        <h2>Remote .avl</h2>
+        <p>Open an Avelune file from a server that supports byte ranges. Cross-origin URLs must also allow the browser's CORS request.</p>
+        <label class="sr-only" for="url">Avelune URL</label>
+        <div class="control-row">
+          <input id="url" type="url" placeholder="https://example.invalid/video.avl" spellcheck="false" />
+          <button id="load-url" type="button">Open URL</button>
         </div>
       </section>
 
-      <section class="transport" aria-label="Playback and source controls">
-        <div class="play-control">
-          <button id="play" class="play-button" type="button" disabled>Play</button>
-          <div class="timeline">
-            <label class="sr-only" for="seek">Seek position</label>
-            <input id="seek" type="range" min="0" max="1" step=".001" value="0" disabled />
-            <div class="timeline-meta">
-              <output id="time" for="seek">0.00s</output>
-              <span>Space · ←/→ 5s · Home/End</span>
-            </div>
-          </div>
-          <label class="compact-label" for="volume">Volume</label>
-          <input id="volume" class="volume" type="range" min="0" max="1" step=".01" value="1" />
+      <section class="secondary-section engine-controls" aria-labelledby="engine-heading">
+        <h2 id="engine-heading">Browser execution</h2>
+        <p>Codec execution and video presentation are separate choices. WebGPU is used for presentation, not as the ALV1/ALA1 decoder.</p>
+        <div class="engine-grid">
+          <label for="wasm-artifact">Codec WASM</label>
+          <select id="wasm-artifact">
+            <option value="auto">Auto · prefer SIMD128</option>
+            <option value="simd128">SIMD128</option>
+            <option value="scalar">Scalar</option>
+          </select>
+
+          <label for="renderer-choice">Video renderer</label>
+          <select id="renderer-choice">
+            <option value="auto">Auto · prefer WebGPU</option>
+            <option value="webgpu">WebGPU</option>
+            <option value="canvas">Canvas 2D</option>
+          </select>
         </div>
-
-        <section class="source-section media-import" id="media-import">
-          <div class="section-heading">
-            <span>01</span>
-            <div>
-              <h2>Open or convert media</h2>
-              <p>Drop MP4, MKV, WebM, MOV, AVI, Y4M, or most other FFmpeg-readable video. Conversion stays in this tab and produces a playable, downloadable <code>.avl</code>.</p>
-            </div>
-          </div>
-          <div class="media-file-row">
-            <label for="media-file">Media or .avl</label>
-            <input id="media-file" type="file" accept=".avl,application/octet-stream,video/*,.mp4,.mkv,.webm,.mov,.avi,.m4v,.ts,.m2ts,.flv,.ogv,.mpg,.mpeg,.y4m" />
-            <span id="media-file-name">No file selected.</span>
-          </div>
-          <div class="media-options">
-            <label class="media-field" for="media-video-q"><span>Video quantizer <small>1 = lossless residuals</small></span><input id="media-video-q" type="number" min="1" max="65535" value="112" inputmode="numeric" /></label>
-            <label class="media-field" for="media-preset"><span>Preset</span><select id="media-preset"><option value="fast">Fast</option><option value="balanced" selected>Balanced</option><option value="quality">Quality</option></select></label>
-            <label class="media-field" for="media-resolution"><span>Resolution</span><select id="media-resolution"><option value="source">Source · even dimensions</option><option value="1920x1080">1920×1080</option><option value="1280x720">1280×720 max canvas</option><option value="854x480">854×480</option><option value="640x360" selected>640×360</option></select></label>
-            <label class="media-field" for="media-fps"><span>Frame rate</span><select id="media-fps"><option value="source">Source</option><option value="60">60 fps</option><option value="30" selected>30 fps</option><option value="24">24 fps</option></select></label>
-            <label class="media-field" for="media-epoch"><span>Epoch length</span><select id="media-epoch"><option value="1">1 second</option><option value="2" selected>2 seconds</option><option value="4">4 seconds</option><option value="8">8 seconds</option></select></label>
-            <label class="media-field" for="media-audio-channels"><span>Audio</span><select id="media-audio-channels"><option value="2" selected>Stereo</option><option value="1">Mono</option><option value="0">Disabled</option></select></label>
-            <label class="media-field" for="media-audio-rate"><span>Audio rate</span><select id="media-audio-rate"><option value="48000" selected>48 kHz</option><option value="44100">44.1 kHz</option><option value="32000">32 kHz</option></select></label>
-            <label class="media-field" for="media-audio-q"><span>Audio quantizer <small>1 = lossless</small></span><input id="media-audio-q" type="number" min="1" max="65535" value="64" inputmode="numeric" /></label>
-            <label class="media-field" for="media-start"><span>Start time <small>seconds</small></span><input id="media-start" type="number" min="0" step="0.1" value="0" inputmode="decimal" /></label>
-            <label class="media-field" for="media-duration"><span>Length <small>seconds · 0 = entire file</small></span><input id="media-duration" type="number" min="0" step="0.1" value="0" inputmode="decimal" /></label>
-          </div>
-          <div class="media-actions">
-            <button id="media-convert" type="button" disabled>Convert → Avelune</button>
-            <button id="media-cancel" class="secondary-button" type="button" disabled>Cancel</button>
-            <progress id="media-progress" max="1" value="0" hidden></progress>
-            <span id="media-status" role="status" aria-live="polite">Choose or drop a media file or .avl.</span>
-            <a id="media-download" hidden>Download converted .avl</a>
-          </div>
-          <p class="media-privacy"><strong>Streaming path:</strong> the source file is mounted directly from browser storage, FFmpeg writes raw video/audio into bounded in-process sinks, Avelune emits completed epochs incrementally, and supported browsers spool encoded output through OPFS. Conversion does not upload your media. A compressed-memory fallback is used only when OPFS is unavailable.</p>
-          <details class="media-log-panel">
-            <summary>Conversion log</summary>
-            <pre id="media-log"></pre>
-          </details>
-        </section>
-
-        <div class="source-section">
-          <div class="section-heading">
-            <span>02</span>
-            <div><h2>Bundled Avelune demos</h2><p>Use these to compare playback immediately; the baseline index loads automatically.</p></div>
-          </div>
-          <div class="control-row sample-row">
-            <label class="sr-only" for="sample">Bundled example</label>
-            <select id="sample">
-              <option selected value="showcase-2d.avl" data-description="640×360 · 4 s · 30 fps · stereo audio · procedural platform/action showcase">2D gameplay · 640×360 · A/V</option>
-              <option value="showcase-3d.avl" data-description="640×360 · 4 s · 30 fps · stereo audio · procedural pseudo-3D racing showcase">3D racing · 640×360 · A/V</option>
-              <option value="showcase-text.avl" data-description="640×360 · 4 s · 30 fps · stereo audio · editor/terminal/text/UI showcase">Text / UI · 640×360 · A/V</option>
-              <option value="demo.avl" data-description="320×180 · audio + video · 60 video frames · compact baseline browser regression fixture">Compact baseline · 320×180 · A/V</option>
-              <option value="motion.avl" data-description="160×90 · 90 frames · procedural motion and texture regression vector; intentionally tiny">Regression: motion · 160×90</option>
-              <option value="screen.avl" data-description="160×90 · 90 frames · procedural text and hard-edge regression vector; intentionally tiny">Regression: screen/text · 160×90</option>
-            </select>
-            <button id="load-sample" type="button">Load fixture</button>
-          </div>
-          <p id="sample-description" class="source-description"></p>
-        </div>
-
-        <div class="source-section">
-          <div class="section-heading">
-            <span>03</span>
-            <div><h2>HTTP Range .avl</h2><p>Stream an Avelune file without downloading it in full. The server must return valid <code>206</code> byte ranges.</p></div>
-          </div>
-          <div class="control-row source-control-indent">
-            <label class="sr-only" for="url">HTTP Range source URL</label>
-            <input id="url" type="url" placeholder="https://example.invalid/video.avl" spellcheck="false" />
-            <button id="load-url" type="button">Load URL</button>
-          </div>
-        </div>
-
-        <section class="source-section engine-controls" aria-labelledby="engine-heading">
-          <div class="section-heading">
-            <span>04</span>
-            <div>
-              <h2 id="engine-heading">Browser engine</h2>
-              <p>These are live controls, not hidden expert settings. Auto prefers SIMD128 and WebGPU when the browser supports them.</p>
-            </div>
-          </div>
-          <div class="engine-status" aria-live="polite">Active codec: <strong id="engine-wasm-active">loading…</strong></div>
-          <div class="engine-grid">
-            <label for="wasm-artifact">Codec WASM</label>
-            <select id="wasm-artifact">
-              <option value="auto">Auto · prefer SIMD128</option>
-              <option value="simd128">SIMD128</option>
-              <option value="scalar">Scalar</option>
-            </select>
-
-            <label for="renderer-choice">Video renderer</label>
-            <select id="renderer-choice">
-              <option value="auto">Auto · prefer WebGPU</option>
-              <option value="webgpu">WebGPU</option>
-              <option value="canvas">Canvas 2D</option>
-            </select>
-          </div>
-          <p class="engine-note">The inspector shows the artifact and renderer that were actually selected. Imported media uses the same codec-WASM choice for Avelune encoding.</p>
-        </section>
+        <p class="engine-status" aria-live="polite">Active codec: <strong id="engine-wasm-active">loading…</strong></p>
       </section>
+    </div>
 
-      <aside class="inspector" aria-label="Stream inspector">
-        <header>
-          <span>LIVE INSPECTOR</span>
-          <span>KNOWN FACTS ONLY</span>
-        </header>
+    <details class="diagnostics">
+      <summary>Playback diagnostics</summary>
+      <div class="performance-strip" aria-label="Current playback measurements">
+        <div><span>Open time</span><strong id="metric-index">—</strong></div>
+        <div><span>Range reads</span><strong id="metric-ranges">0</strong></div>
+        <div><span>Bytes read</span><strong id="metric-bytes">0 B</strong></div>
+        <div><span>Video frames</span><strong id="metric-frames">0</strong></div>
+      </div>
 
+      <div class="inspector" aria-label="Stream inspector">
         <section>
           <h2>Source</h2>
           <dl>
@@ -177,7 +220,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
             <div><dt>Renderer</dt><dd id="format-renderer">—</dd></div>
           </dl>
         </section>
-
         <section>
           <h2>Streams</h2>
           <pre id="stream-list" class="stream-list">—</pre>
@@ -187,7 +229,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
             <div><dt>Dimensions</dt><dd id="format-dimensions">—</dd></div>
           </dl>
         </section>
-
         <section>
           <h2>Container</h2>
           <dl>
@@ -196,7 +237,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
             <div><dt>Front index</dt><dd id="container-front">—</dd></div>
           </dl>
         </section>
-
         <section>
           <h2>Playback</h2>
           <dl>
@@ -207,13 +247,13 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
             <div><dt>Time</dt><dd id="playback-time">0.00s</dd></div>
           </dl>
         </section>
+      </div>
 
-        <details class="event-panel">
-          <summary>Request / decoder log</summary>
-          <pre id="event-log"></pre>
-        </details>
-      </aside>
-    </div>
+      <details class="event-panel">
+        <summary>Request and decoder log</summary>
+        <pre id="event-log"></pre>
+      </details>
+    </details>
   </div>
   <script type="module" src={`${base}/demo/player.js`}></script>
 </BaseLayout>
@@ -221,94 +261,64 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 <style>
   @layer page {
     .demo-shell {
-      width: min(calc(100% - 2rem), var(--shell));
+      width: min(calc(100% - 2rem), 1120px);
       margin-inline: auto;
       padding: clamp(2.5rem, 6vw, 5rem) 0 5rem;
     }
 
     .demo-header {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(24rem, 1fr);
-      gap: clamp(2rem, 7vw, 6rem);
-      align-items: end;
-      margin-bottom: 2.5rem;
+      max-width: 760px;
+      margin-bottom: 2rem;
     }
     .demo-header h1 {
-      max-width: 10ch;
-      margin: .45rem 0 0;
-      font-size: clamp(2.8rem, 6vw, 5.6rem);
-      line-height: .96;
-      letter-spacing: -.045em;
-    }
-    .demo-intro {
-      align-self: end;
-      max-width: 68ch;
-    }
-    .demo-intro p {
       margin: 0;
+      font-size: clamp(2.8rem, 7vw, 5rem);
+      letter-spacing: -.04em;
+    }
+    .demo-header p {
+      max-width: 62ch;
+      margin: .8rem 0 0;
       color: var(--muted);
-      line-height: 1.55;
+      font-size: 1.08rem;
     }
-    .demo-intro .fixture-note {
-      margin-top: .9rem;
-      padding-top: .9rem;
+
+    .player-shell,
+    .media-import,
+    .secondary-grid,
+    .diagnostics {
       border-top: 1px solid var(--rule);
-      font-size: .84rem;
     }
 
-    .instrument {
-      display: grid;
-      grid-template-columns: minmax(0, 3fr) minmax(270px, 1fr);
-      grid-template-areas:
-        "viewport inspector"
-        "transport inspector";
-      border-block: 1px solid var(--rule);
-    }
-
-    .viewport-panel {
-      grid-area: viewport;
-      min-width: 0;
-      border-right: 1px solid var(--rule);
-    }
     .viewport-head {
-      min-height: 52px;
       display: flex;
       justify-content: space-between;
       gap: 1rem;
       align-items: center;
-      padding: .65rem 1rem .65rem 0;
-      border-bottom: 1px solid var(--rule);
+      min-height: 52px;
+      padding: .7rem 0;
     }
-    .viewport-head > div {
-      display: flex;
-      align-items: baseline;
-      gap: .65rem;
-      font: .66rem var(--font-mono);
-      letter-spacing: .08em;
+    #state-label {
+      color: var(--warm);
+      font: 600 .78rem var(--font-mono);
     }
-    .viewport-head span { color: var(--muted); }
-    #state-label { color: var(--warm); }
     .viewport-head p {
-      max-width: 58ch;
       margin: 0;
-      overflow-wrap: anywhere;
       color: var(--muted);
-      font-size: .76rem;
+      font-size: .84rem;
       text-align: right;
+      overflow-wrap: anywhere;
     }
 
     .viewport {
       position: relative;
       display: grid;
       place-items: center;
+      width: 100%;
       aspect-ratio: 16 / 9;
-      min-height: 360px;
-      max-height: 72vh;
       overflow: hidden;
       background: #050505;
     }
     .viewport canvas {
-      display: block;
       width: 100%;
       height: 100%;
       object-fit: contain;
@@ -317,74 +327,36 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     .viewport-state {
       position: absolute;
       inset: auto 1rem 1rem;
-      max-width: 44rem;
-      padding: .65rem .8rem;
+      max-width: min(42rem, calc(100% - 2rem));
+      padding: .7rem .8rem;
       border: 1px solid var(--rule);
-      background: rgba(5, 5, 5, .88);
+      background: rgba(5, 5, 5, .9);
       color: var(--muted);
-      font: .7rem/1.45 var(--font-mono);
+      font-size: .8rem;
     }
-    .viewport-state[data-state="error"] {
-      border-color: var(--warm);
-      color: var(--ink);
-    }
+    .viewport-state[data-state="error"] { border-color: var(--warm); color: var(--ink); }
     .drop-message {
       position: absolute;
       inset: 1rem;
       display: none;
       place-items: center;
       border: 1px dashed var(--cool);
-      background: rgba(17, 18, 17, .92);
+      background: rgba(17, 18, 17, .94);
       color: var(--cool);
-      font: .72rem var(--font-mono);
-      letter-spacing: .08em;
+      font: .82rem var(--font-mono);
+      text-align: center;
     }
     .demo-shell[data-drop="true"] .drop-message { display: grid; }
 
-    .performance-strip {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      border-top: 1px solid var(--rule);
-    }
-    .performance-strip div {
-      min-width: 0;
-      padding: .65rem .8rem;
-      border-right: 1px solid var(--rule);
-    }
-    .performance-strip div:last-child { border-right: 0; }
-    .performance-strip span {
-      display: block;
-      margin-bottom: .25rem;
-      color: var(--muted);
-      font: .6rem var(--font-mono);
-      letter-spacing: .05em;
-    }
-    .performance-strip strong {
-      display: block;
-      overflow-wrap: anywhere;
-      font: 500 .78rem var(--font-mono);
-    }
-
-    .transport {
-      grid-area: transport;
-      min-width: 0;
-      border-top: 1px solid var(--rule);
-      border-right: 1px solid var(--rule);
-    }
-
     .play-control {
       display: grid;
-      grid-template-columns: auto minmax(12rem, 1fr) auto minmax(6rem, 8rem);
+      grid-template-columns: auto minmax(12rem, 1fr) auto minmax(7rem, 9rem);
       gap: .8rem;
       align-items: center;
-      padding: 1rem 1rem 1rem 0;
-      border-bottom: 1px solid var(--rule);
+      padding: 1rem 0;
     }
-    .play-button {
-      min-width: 7rem;
-      min-height: 48px;
-      font-weight: 600;
-    }
+    .play-button { min-width: 7rem; min-height: 44px; font-weight: 600; }
+    .play-control > label { color: var(--muted); font-size: .82rem; }
     .timeline { min-width: 0; }
     .timeline-meta {
       display: flex;
@@ -392,67 +364,137 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       gap: 1rem;
       margin-top: .35rem;
       color: var(--muted);
-      font: .63rem var(--font-mono);
+      font: .76rem var(--font-mono);
     }
-    .timeline-meta output {
-      min-width: 4.5rem;
-      color: var(--ink);
-      font: inherit;
+    .timeline-meta output { color: var(--ink); font: inherit; }
+
+    .media-import {
+      padding: 2rem 0;
     }
-    .compact-label {
+    .section-header,
+    .secondary-section > h2 {
+      max-width: 68ch;
+    }
+    .section-header h2,
+    .secondary-section h2 {
+      margin: 0;
+      font-size: 1.35rem;
+    }
+    .section-header p,
+    .secondary-section > p {
+      margin: .45rem 0 0;
       color: var(--muted);
-      font: .63rem var(--font-mono);
-      letter-spacing: .04em;
-      text-transform: uppercase;
     }
 
-    .source-section {
-      padding: 1rem 1rem 1rem 0;
-      border-bottom: 1px solid var(--rule);
-    }
-    .source-grid {
+    .media-file-row {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 1.25rem;
+      grid-template-columns: minmax(9rem, auto) minmax(15rem, 1fr) minmax(12rem, .8fr);
+      gap: .75rem;
+      align-items: center;
+      margin-top: 1.4rem;
     }
-    .source-grid > div + div {
+    .media-file-row > label,
+    .engine-grid > label {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    #media-file-name {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      color: var(--muted);
+      font: .78rem var(--font-mono);
+    }
+
+    .media-options {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 12.5rem), 1fr));
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+    .media-field {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: .4rem;
+    }
+    .media-field > span { font-size: .82rem; font-weight: 500; }
+    .media-field small {
+      color: var(--muted);
+      font-size: .74rem;
+      line-height: 1.35;
+    }
+    .media-field input,
+    .media-field select { width: 100%; }
+
+    .media-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .65rem 1rem;
+      align-items: center;
+      margin-top: 1.25rem;
+    }
+    #media-status {
+      flex: 1 1 20rem;
+      min-width: min(100%, 16rem);
+      color: var(--muted);
+      font-size: .8rem;
+      overflow-wrap: anywhere;
+    }
+    #media-download { font-size: .82rem; }
+    .media-actions progress {
+      order: 5;
+      width: 100%;
+      height: .5rem;
+      accent-color: var(--cool);
+    }
+    .privacy-note {
+      max-width: 72ch;
+      margin: 1rem 0 0;
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .media-log-panel { margin-top: .8rem; }
+
+    .secondary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .secondary-section {
+      min-width: 0;
+      padding: 1.5rem 1.25rem 1.5rem 0;
+    }
+    .secondary-section + .secondary-section {
       padding-left: 1.25rem;
       border-left: 1px solid var(--rule);
     }
-    .section-heading {
-      display: grid;
-      grid-template-columns: 2rem minmax(0, 1fr);
-      gap: .5rem;
-      margin-bottom: .7rem;
-    }
-    .section-heading > span {
-      color: var(--cool);
-      font: .63rem var(--font-mono);
-    }
-    .section-heading h2 {
-      margin: 0;
-      font-size: .9rem;
-    }
-    .section-heading p {
-      margin: .15rem 0 0;
-      color: var(--muted);
-      font-size: .75rem;
-      line-height: 1.45;
-    }
-    .source-description {
-      margin: .55rem 0 0 2.5rem;
-      color: var(--muted);
-      font: .68rem/1.45 var(--font-mono);
-    }
-
-    .source-control-indent { margin-left: 2.5rem; }
-
     .control-row {
       display: flex;
       min-width: 0;
-      gap: .5rem;
+      gap: .55rem;
       align-items: center;
+      margin-top: 1rem;
     }
+    .control-row input,
+    .control-row select { flex: 1; min-width: 0; }
+    .source-description {
+      margin: .65rem 0 0;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .engine-grid {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: .65rem .8rem;
+      align-items: center;
+      margin-top: 1rem;
+    }
+    .engine-status {
+      margin: .9rem 0 0;
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .engine-status strong { color: var(--cool); }
+
     input, select, button {
       min-height: 42px;
       border: 1px solid var(--control-rule);
@@ -460,17 +502,12 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       background: var(--surface);
       color: var(--ink);
     }
-    input[type="url"], input[type="number"], select {
-      min-width: 0;
-      padding: .45rem .6rem;
-      font-family: var(--font-mono);
-    }
-    input[type="url"], .sample-row select { flex: 1; }
+    input[type="url"], input[type="number"], select { padding: .48rem .6rem; }
     input[type="file"] {
       width: 100%;
       min-width: 0;
       padding: .35rem;
-      font: .72rem var(--font-mono);
+      font-size: .8rem;
     }
     input[type="file"]::file-selector-button {
       min-height: 32px;
@@ -487,207 +524,82 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       background: transparent;
       accent-color: var(--cool);
     }
-    button {
-      padding: .45rem .85rem;
-      white-space: nowrap;
-      cursor: pointer;
-    }
-    button:not(:disabled):hover,
-    select:hover,
-    input:hover { border-color: var(--cool); }
-    button:disabled {
-      cursor: default;
-      color: var(--muted);
-    }
-    button:focus-visible,
-    input:focus-visible,
-    select:focus-visible,
-    summary:focus-visible {
-      outline: 2px solid var(--cool);
-      outline-offset: 2px;
-    }
+    button { padding: .48rem .85rem; white-space: nowrap; cursor: pointer; }
+    button:disabled { cursor: default; color: var(--muted); }
+    button:not(:disabled):hover, select:hover, input:hover { border-color: var(--cool); }
 
-    .media-import {
-      border-top: 1px solid var(--rule);
-    }
-    .media-file-row {
-      display: grid;
-      grid-template-columns: auto minmax(14rem, 1fr) minmax(10rem, .8fr);
-      gap: .65rem;
-      align-items: center;
-      margin: .9rem 0 0 2.5rem;
-    }
-    .media-file-row > label,
-    .engine-grid > label {
-      color: var(--muted);
-      font: .63rem var(--font-mono);
-      text-transform: uppercase;
-    }
-    #media-file-name {
-      overflow-wrap: anywhere;
-      color: var(--muted);
-      font: .66rem var(--font-mono);
-    }
-    .media-options {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
-      gap: .75rem;
-      margin: .9rem 0 0 2.5rem;
-    }
-    .media-field {
-      display: flex;
-      min-width: 0;
-      flex-direction: column;
-      gap: .35rem;
-      color: var(--muted);
-      font: .63rem var(--font-mono);
-      text-transform: uppercase;
-    }
-    .media-field > span {
-      min-height: 2.1em;
-      line-height: 1.25;
-    }
-    .media-field small {
-      display: block;
-      margin-top: .12rem;
-      color: color-mix(in srgb, var(--muted) 72%, transparent);
-      font: .58rem/1.2 var(--font-mono);
-      text-transform: none;
-    }
-    .media-field input,
-    .media-field select {
-      width: 100%;
-      max-width: 100%;
-    }
-    .media-actions {
-      display: flex;
-      min-width: 0;
-      flex-wrap: wrap;
-      gap: .65rem;
-      align-items: center;
-      margin: .9rem 0 0 2.5rem;
-    }
-    .media-actions progress {
-      order: 4;
-      width: 100%;
-      height: .45rem;
-      accent-color: var(--cool);
-    }
-    #media-status {
-      min-width: min(100%, 16rem);
-      flex: 1 1 18rem;
-    }
-    #media-download { flex: 0 1 auto; }
-    #media-status { color: var(--muted); font: .68rem/1.45 var(--font-mono); }
-    #media-download { color: var(--cool); font: .68rem var(--font-mono); }
-    .media-privacy,
-    .engine-note {
-      margin: .75rem 0 0 2.5rem;
-      color: var(--muted);
-      font-size: .74rem;
-      line-height: 1.5;
-    }
-    .media-log-panel { margin: .75rem 0 0 2.5rem; }
+    details > summary { cursor: pointer; }
     .media-log-panel summary,
-    .event-panel summary {
-      cursor: pointer;
-      color: var(--muted);
-      font: .68rem var(--font-mono);
-    }
-    #media-log {
-      max-height: 13rem;
+    .event-panel summary { color: var(--muted); font-size: .8rem; }
+    #media-log,
+    #event-log {
+      max-height: 15rem;
       overflow: auto;
-      margin: .6rem 0 0;
-      padding: .65rem;
+      margin: .65rem 0 0;
+      padding: .75rem;
       border: 1px solid var(--rule);
       background: #0b0c0b;
       color: var(--muted);
       white-space: pre-wrap;
-      font: .61rem/1.45 var(--font-mono);
+      font: .76rem/1.5 var(--font-mono);
     }
 
-    .engine-controls {
-      border-bottom: 0;
+    .diagnostics {
+      padding: 1.4rem 0;
     }
-    .engine-status {
-      margin: .8rem 0 0 2.5rem;
-      color: var(--muted);
-      font: .68rem var(--font-mono);
-    }
-    .engine-status strong { color: var(--cool); font-weight: 600; }
-    .engine-grid {
+    .diagnostics > summary { font-weight: 500; }
+    .performance-strip {
       display: grid;
-      grid-template-columns: auto minmax(11rem, 1fr) auto minmax(11rem, 1fr);
-      gap: .55rem .8rem;
-      align-items: center;
-      margin: .8rem 0 0 2.5rem;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-top: 1rem;
+      border-block: 1px solid var(--rule);
+    }
+    .performance-strip div { padding: .75rem; }
+    .performance-strip div + div { border-left: 1px solid var(--rule); }
+    .performance-strip span {
+      display: block;
+      color: var(--muted);
+      font-size: .75rem;
+    }
+    .performance-strip strong {
+      display: block;
+      margin-top: .25rem;
+      overflow-wrap: anywhere;
+      font: 500 .84rem var(--font-mono);
     }
 
     .inspector {
-      grid-area: inspector;
-      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      border-bottom: 1px solid var(--rule);
     }
-    .inspector > header {
-      display: flex;
-      justify-content: space-between;
-      gap: 1rem;
-      padding: .8rem;
-      color: var(--muted);
-      font: .61rem var(--font-mono);
-      letter-spacing: .06em;
-    }
-    .inspector section {
-      padding: .9rem;
-      border-top: 1px solid var(--rule);
-    }
-    .inspector h2 {
-      margin: 0 0 .65rem;
-      color: var(--muted);
-      font: .62rem var(--font-mono);
-      letter-spacing: .08em;
-      text-transform: uppercase;
-    }
+    .inspector section { min-width: 0; padding: 1rem .9rem 1rem 0; }
+    .inspector section + section { padding-left: .9rem; border-left: 1px solid var(--rule); }
+    .inspector h2 { margin: 0 0 .7rem; font-size: .88rem; }
     .inspector dl { margin: 0; }
     .inspector dl div {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
-      gap: .6rem;
-      padding: .28rem 0;
+      grid-template-columns: minmax(0, .9fr) minmax(0, 1.2fr);
+      gap: .55rem;
+      padding: .25rem 0;
     }
-    .inspector dt {
-      color: var(--muted);
-      font-size: .73rem;
-    }
+    .inspector dt { color: var(--muted); font-size: .76rem; }
     .inspector dd {
       margin: 0;
       overflow-wrap: anywhere;
       text-align: right;
-      font: .69rem var(--font-mono);
+      font: .75rem var(--font-mono);
     }
     .stream-list {
-      margin: 0 0 .65rem;
-      padding: 0 0 .65rem;
+      margin: 0 0 .6rem;
+      padding-bottom: .6rem;
       border-bottom: 1px solid var(--rule);
       background: none;
       color: var(--ink);
       white-space: pre-wrap;
-      font: .67rem/1.55 var(--font-mono);
+      font: .74rem/1.45 var(--font-mono);
     }
-    .event-panel {
-      padding: .9rem;
-      border-top: 1px solid var(--rule);
-    }
-    #event-log {
-      max-height: 16rem;
-      overflow: auto;
-      margin: .75rem 0 0;
-      padding: .65rem;
-      border: 1px solid var(--rule);
-      background: #0b0c0b;
-      color: var(--muted);
-      white-space: pre-wrap;
-      font: .62rem/1.5 var(--font-mono);
-    }
+    .event-panel { margin-top: 1rem; }
 
     .sr-only {
       position: absolute;
@@ -701,78 +613,42 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       border: 0;
     }
 
-    @media (max-width: 980px) {
-      .demo-header {
-        grid-template-columns: 1fr 1fr;
-        gap: 2rem;
-      }
-      .instrument {
-        grid-template-columns: minmax(0, 1fr) 250px;
-      }
-      .performance-strip { grid-template-columns: repeat(2, 1fr); }
-      .performance-strip div:nth-child(2) { border-right: 0; }
-      .performance-strip div:nth-child(n+3) { border-top: 1px solid var(--rule); }
-      .source-grid { grid-template-columns: 1fr; }
-      .source-grid > div + div {
-        padding: 1rem 0 0;
-        border-top: 1px solid var(--rule);
-        border-left: 0;
-      }
-      .engine-grid { grid-template-columns: auto minmax(0, 1fr); }
+    @media (max-width: 900px) {
+      .secondary-grid { grid-template-columns: 1fr; }
+      .secondary-section { padding: 1.35rem 0; }
+      .secondary-section + .secondary-section { padding-left: 0; border-top: 1px solid var(--rule); border-left: 0; }
+      .inspector { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .inspector section:nth-child(3) { border-left: 0; border-top: 1px solid var(--rule); }
+      .inspector section:nth-child(4) { border-top: 1px solid var(--rule); }
     }
 
-    @media (max-width: 760px) {
-      .demo-shell { padding-top: 2rem; }
-      .demo-header { display: block; }
-      .demo-header h1 { margin-bottom: 1.2rem; }
-      .instrument { display: flex; flex-direction: column; }
-      .viewport-panel { order: 1; border-right: 0; }
-      .transport { order: 2; border-right: 0; }
-      .inspector { order: 3; }
-      .viewport-head {
-        align-items: flex-start;
-        padding-right: 0;
-      }
-      .viewport-head p { max-width: 55%; }
-      .viewport {
-        min-height: 0;
-        max-height: none;
-      }
-      .play-control {
-        grid-template-columns: auto minmax(0, 1fr);
-        padding-right: 0;
-      }
-      .compact-label { grid-column: 1; }
+    @media (max-width: 700px) {
+      .demo-shell { width: min(calc(100% - 1.25rem), 1120px); padding-top: 2.2rem; }
+      .viewport-head { align-items: flex-start; flex-direction: column; gap: .3rem; }
+      .viewport-head p { text-align: left; }
+      .play-control { grid-template-columns: auto minmax(0, 1fr); }
+      .play-control > label { grid-column: 1; }
       .volume { grid-column: 2; }
-      .source-section { padding-right: 0; }
-      .source-control-indent,
-      .media-file-row,
-      .media-options,
-      .media-actions,
-      .media-privacy,
-      .media-log-panel,
-      .engine-status,
-      .engine-grid,
-      .engine-note { margin-left: 0; }
-      .media-file-row { grid-template-columns: auto minmax(0, 1fr); }
-      #media-file-name { grid-column: 2; }
-      .engine-grid { grid-template-columns: auto minmax(0, 1fr); }
+      .media-file-row { grid-template-columns: 1fr; }
+      .media-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .performance-strip { grid-template-columns: repeat(2, 1fr); }
+      .performance-strip div:nth-child(3) { border-left: 0; border-top: 1px solid var(--rule); }
+      .performance-strip div:nth-child(4) { border-top: 1px solid var(--rule); }
+      .inspector { grid-template-columns: 1fr; }
+      .inspector section,
+      .inspector section + section,
+      .inspector section:nth-child(3),
+      .inspector section:nth-child(4) { padding: .9rem 0; border-top: 1px solid var(--rule); border-left: 0; }
     }
 
     @media (max-width: 480px) {
-      .demo-shell { width: min(calc(100% - 1.25rem), var(--shell)); }
-      .demo-header h1 { font-size: 2.65rem; }
-      .fixture-note { display: none; }
-      .performance-strip { grid-template-columns: 1fr 1fr; }
-      .sample-row,
-      .control-row { align-items: stretch; flex-direction: column; }
-      .sample-row button,
-      .control-row button { width: 100%; }
-      .source-description { margin-left: 0; }
+      .demo-header h1 { font-size: 2.7rem; }
       .timeline-meta span { display: none; }
-      .inspector > header span:last-child { display: none; }
-      .media-file-row { grid-template-columns: 1fr; }
-      #media-file-name { grid-column: 1; }
+      .media-options { grid-template-columns: 1fr; }
+      .media-actions { align-items: stretch; flex-direction: column; }
+      .media-actions button, .media-actions a { width: 100%; }
+      .control-row { align-items: stretch; flex-direction: column; }
+      .control-row button { width: 100%; }
       .engine-grid { grid-template-columns: 1fr; }
     }
   }
