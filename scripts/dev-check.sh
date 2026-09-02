@@ -17,9 +17,19 @@ RUSTDOCFLAGS='-D warnings' cargo doc -p avelune --no-deps --locked
 
 echo '[5/9] script/source syntax'
 node --check web/player/player.js
+node --check web/player/playback-buffer.js
+node --check web/player/audio-sink.js
+node --check web/player/audio-timeline.js
+node --check web/player/audio-worklet.js
 node --check web/player/avelune-loader.js
 node --check web/player/renderers.js
 node --check scripts/browser-loader-smoke.mjs
+node --check scripts/browser-epoch-matrix-smoke.mjs
+node --check scripts/browser-audio-continuity-smoke.mjs
+node --check scripts/playback-buffer-smoke.mjs
+node --check scripts/playback-long-run-smoke.mjs
+node --check scripts/audio-timeline-smoke.mjs
+node --check scripts/renderers-smoke.mjs
 node --check scripts/wasm-smoke.mjs
 node --check scripts/wasm-encoder-smoke.mjs
 node --check scripts/chromium-wasm-smoke.mjs
@@ -27,6 +37,10 @@ node --check scripts/site-browser-smoke.mjs
 node --check scripts/browser-media-import-smoke.mjs
 node --check scripts/check-demo-defaults.mjs
 node --check scripts/validate-content.mjs
+node scripts/playback-buffer-smoke.mjs
+node scripts/playback-long-run-smoke.mjs
+node scripts/audio-timeline-smoke.mjs
+node scripts/renderers-smoke.mjs
 node scripts/check-demo-defaults.mjs
 python3 -m py_compile scripts/benchmark-real.py scripts/benchmark-real-audio.py scripts/benchmark-xiph.py scripts/check-site-links.py scripts/format-experiments.py scripts/encoder-curves.py scripts/ci-media-regression.py scripts/compare-ci-media.py scripts/test-ci-regression-tools.py scripts/generate-demo-fixtures.py scripts/generate-showcase-media.py
 python3 scripts/test-ci-regression-tools.py
@@ -53,6 +67,8 @@ if [[ -n $WASM_LIBDIR && -d $WASM_LIBDIR ]]; then
   node scripts/wasm-encoder-smoke.mjs web/player/avelune-scalar.wasm
   node scripts/wasm-encoder-smoke.mjs web/player/avelune-simd128.wasm
   node scripts/browser-loader-smoke.mjs
+  node scripts/browser-epoch-matrix-smoke.mjs web/player/avelune-scalar.wasm
+  node scripts/browser-audio-continuity-smoke.mjs web/player/avelune-scalar.wasm web/player/avelune-simd128.wasm
   if [[ -f node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.js ]]; then node scripts/browser-media-import-smoke.mjs; else echo 'SKIP: @ffmpeg/core is not installed for media-import smoke'; fi
 else
   echo 'SKIP: wasm32-unknown-unknown stdlib is not installed'

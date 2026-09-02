@@ -1,10 +1,15 @@
 import {BlobRangeSource, HttpRangeSource, StaleDecodeGenerationError, createAveluneDecoder} from './avelune-loader.js';
+import {AudioSink, AudioUnderrunError} from './audio-sink.js';
+import {PlaybackBuffer} from './playback-buffer.js';
 import {createRenderer} from './renderers.js';
 
 const $ = id => document.getElementById(id);
 const setText = (id, value) => { const node = $(id); if (node) node.textContent = value; };
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const seconds = value => Number(value) / 1e6;
+const PLAYBACK_START_DELAY = 0.12;
+const AUDIO_SCHEDULE_AHEAD = 0.75;
+const PLAYBACK_POLL_MS = 12;
 
 function formatBytes(value) {
   if (value === null || value === undefined) return 'unknown';
@@ -31,6 +36,30 @@ function streamFormat(stream) {
     : `#${stream.id} · ${codec} · ${stream.param0} Hz · ${stream.param1} ch`;
 }
 
+function ensurePlaybackInspectorMetrics() {
+  const list = $('playback-time')?.closest('dl');
+  if (!list) return;
+  const rows = [
+    ['Audio output', 'playback-audio-output', '—'],
+    ['Audio queued', 'playback-audio-buffer', '—'],
+    ['Audio decode-ahead', 'playback-audio-decode', '—'],
+    ['Video queued', 'playback-video-buffer', '—'],
+    ['Late audio', 'playback-audio-late', '0'],
+    ['Underruns', 'playback-audio-underruns', '0'],
+  ];
+  for (const [label, id, initial] of rows) {
+    if ($(id)) continue;
+    const row = document.createElement('div');
+    const term = document.createElement('dt');
+    const value = document.createElement('dd');
+    term.textContent = label;
+    value.id = id;
+    value.textContent = initial;
+    row.append(term, value);
+    list.append(row);
+  }
+}
+
 class EventLog {
   constructor(node, limit = 160) { this.node = node; this.limit = limit; this.lines = []; }
   clear() { this.lines = []; this.#render(); }
@@ -47,55 +76,9 @@ class EventLog {
   }
 }
 
-class AudioScheduler {
-  constructor() { this.context = null; this.sources = new Set(); this.volume = 1; this.gain = null; }
-  async ensure() {
-    if (!this.context) {
-      this.context = new AudioContext();
-      this.gain = this.context.createGain();
-      this.gain.gain.value = this.volume;
-      this.gain.connect(this.context.destination);
-    }
-    await this.context.resume();
-  }
-  setVolume(value) { this.volume = value; if (this.gain) this.gain.gain.value = value; }
-  stopAll() {
-    for (const source of this.sources) { try { source.stop(); } catch {} }
-    this.sources.clear();
-  }
-  async schedule(packet, mediaStart, contextStart, signal) {
-    await this.ensure();
-    let packetStart = seconds(packet.pts);
-    const packetDuration = packet.pcm.length / packet.channels / packet.rate;
-    let skipFrames = 0;
-    if (packetStart + packetDuration <= mediaStart) return;
-    if (packetStart < mediaStart) {
-      skipFrames = Math.min(packet.pcm.length / packet.channels, Math.floor((mediaStart - packetStart) * packet.rate));
-      packetStart += skipFrames / packet.rate;
-    }
-    const when = contextStart + Math.max(0, packetStart - mediaStart);
-    while (when - this.context.currentTime > 0.75) {
-      if (signal.aborted) throw signal.reason;
-      await sleep(Math.min(100, (when - this.context.currentTime - 0.6) * 1000));
-    }
-    const frameCount = packet.pcm.length / packet.channels - skipFrames;
-    if (frameCount <= 0) return;
-    const buffer = this.context.createBuffer(packet.channels, frameCount, packet.rate);
-    for (let channel = 0; channel < packet.channels; channel++) {
-      const out = buffer.getChannelData(channel);
-      for (let i = 0; i < frameCount; i++) out[i] = packet.pcm[(i + skipFrames) * packet.channels + channel] / 32768;
-    }
-    const source = this.context.createBufferSource();
-    source.buffer = buffer;
-    source.connect(this.gain);
-    source.addEventListener('ended', () => this.sources.delete(source), {once: true});
-    this.sources.add(source);
-    source.start(Math.max(this.context.currentTime, when));
-  }
-}
-
 class PlayerController {
   constructor() {
+    ensurePlaybackInspectorMetrics();
     this.decoder = null;
     this.source = null;
     this.index = null;
@@ -106,11 +89,14 @@ class PlayerController {
     this.playStartMedia = 0;
     this.playStartWall = 0;
     this.playStartAudioContext = 0;
-    this.audio = new AudioScheduler();
+    this.audio = new AudioSink();
+    this.playbackBuffer = null;
     this.log = new EventLog($('event-log'));
     this.frameId = null;
     this.videoStreamId = null;
     this.audioStreamId = null;
+    this.audioRate = null;
+    this.audioChannels = null;
     this.rangeRequests = 0;
     this.rangeBytes = 0n;
     this.framesRendered = 0;
@@ -135,10 +121,29 @@ class PlayerController {
     this.rangeRequests = 0;
     this.rangeBytes = 0n;
     this.framesRendered = 0;
+    this.playbackBuffer = null;
     setText('metric-index', '—');
     setText('metric-ranges', '0');
     setText('metric-bytes', '0 B');
     setText('metric-frames', '0');
+    setText('playback-audio-output', '—');
+    setText('playback-audio-buffer', '—');
+    setText('playback-audio-decode', '—');
+    setText('playback-video-buffer', '—');
+    setText('playback-audio-late', '0');
+    setText('playback-audio-underruns', '0');
+  }
+
+  updatePlaybackMetrics(queue, at) {
+    if (!queue) return;
+    const metrics = queue.metrics(at);
+    const audio = this.audio.metrics();
+    setText('playback-audio-output', this.audioStreamId === null ? '—' : audio.mode);
+    setText('playback-audio-buffer', this.audioStreamId === null ? '—' : `${metrics.audioQueuedSeconds.toFixed(2)} s · ${metrics.audioPackets} packets`);
+    setText('playback-audio-decode', this.audioStreamId === null ? '—' : `${metrics.audioDecodedAheadSeconds.toFixed(2)} s`);
+    setText('playback-video-buffer', this.videoStreamId === null ? '—' : `${metrics.videoFrames} frames · ${metrics.videoQueuedSeconds.toFixed(2)} s`);
+    setText('playback-audio-late', this.audioStreamId === null ? '—' : `${metrics.lateAudioPackets} packets · ${audio.workletLateFrames} worklet frames`);
+    setText('playback-audio-underruns', this.audioStreamId === null ? '—' : String(metrics.audioUnderruns));
   }
 
   cancelPlayback() {
@@ -176,6 +181,8 @@ class PlayerController {
     this.index = null;
     this.videoStreamId = null;
     this.audioStreamId = null;
+    this.audioRate = null;
+    this.audioChannels = null;
     this.source = source;
     this.duration = 0;
     this.resetMetrics();
@@ -210,6 +217,8 @@ class PlayerController {
       const video = videos[0], audio = audios[0];
       this.videoStreamId = video?.id ?? null;
       this.audioStreamId = audio?.id ?? null;
+      this.audioRate = audio?.param0 ?? null;
+      this.audioChannels = audio?.param1 ?? null;
       const renderer = await createRenderer($('c'), video?.meta0 ?? 0, $('renderer-choice').value);
       if (generation !== this.loadGeneration || decoder !== this.decoder) {
         renderer.renderer.destroy?.();
@@ -268,72 +277,157 @@ class PlayerController {
     this.cancelPlayback();
     const controller = new AbortController();
     this.playAbort = controller;
+    const hasAudio = this.audioStreamId !== null;
+    const hasVideo = this.videoStreamId !== null;
+    // Each playback generation owns its buffer. An aborted producer may finish later, but it can
+    // only mark its own queue complete and therefore cannot poison a new seek/replay generation.
+    const queue = new PlaybackBuffer({prebufferSeconds: 0.5, maxAudioSeconds: 4, maxVideoSeconds: 4});
+    queue.reset(start);
+    this.playbackBuffer = queue;
 
-    // Video-only playback does not need to wake an AudioContext. Apart from
-    // avoiding needless work, this keeps video-only samples usable on browsers
-    // with strict user-activation rules for audio.
-    let contextStart = 0;
-    if (this.audioStreamId !== null) {
-      await this.audio.ensure();
+    // Wake WebAudio synchronously from the user gesture before any decode/prebuffer waits.
+    if (hasAudio) {
+      await this.audio.ensure(this.audioRate, this.audioChannels);
       if (controller.signal.aborted || this.playAbort !== controller) return;
-      contextStart = this.audio.context.currentTime + 0.05;
-      this.playStartAudioContext = contextStart;
     }
 
-    this.playStartMedia = start;
-    this.playStartWall = performance.now() + (this.audioStreamId !== null ? 50 : 0);
-    this.setState('playing');
+    let clockStarted = false;
+    let contextStart = 0;
+    let wallStart = 0;
+    const mediaNow = () => {
+      if (!clockStarted) return start;
+      const elapsed = hasAudio
+        ? this.audio.context.currentTime - contextStart
+        : (performance.now() - wallStart) / 1000;
+      return Math.min(this.duration, start + Math.max(0, elapsed));
+    };
+    const waitForQueueSpace = async kind => {
+      // Before the clock starts, allow the first independently-decodable epoch to establish a
+      // usable A/V prebuffer. Some decoder drains expose all audio packets before video; applying
+      // the steady-state audio high-water mark there could prevent the first video frame from ever
+      // reaching the queue. Once playback starts, backpressure is per stream so one full queue does
+      // not prevent the decoder from draining the other stream.
+      if (!clockStarted) return;
+      const capacity = kind === 'audio'
+        ? {hasAudio: true, hasVideo: false, at: mediaNow()}
+        : {hasAudio: false, hasVideo: true, at: mediaNow()};
+      while (queue.atCapacity(capacity)) {
+        if (controller.signal.aborted) throw controller.signal.reason;
+        capacity.at = mediaNow();
+        await sleep(PLAYBACK_POLL_MS);
+      }
+    };
+
+    let producerError = null;
     const firstEpoch = Math.max(0, this.index.epochs.findLastIndex(epoch => seconds(epoch.pts) <= start));
+    const producer = (async () => {
+      try {
+        for (let i = firstEpoch; i < this.index.epochs.length; i++) {
+          if (controller.signal.aborted) throw controller.signal.reason;
+          const epoch = this.index.epochs[i];
+          setText('playback-epoch', `${i + 1} / ${this.index.epochs.length} · id ${epoch.id}`);
+          await this.decoder.decodeEpoch(this.source, epoch, {
+            signal: controller.signal,
+            onRange: range => this.rangeEvent(range),
+            onEvent: event => this.epochEvent(event),
+            onAudio: async packet => {
+              if (packet.streamId !== this.audioStreamId) return;
+              await waitForQueueSpace('audio');
+              queue.pushAudio(packet);
+            },
+            onVideo: async frame => {
+              if (frame.streamId !== this.videoStreamId) return;
+              await waitForQueueSpace('video');
+              queue.pushVideo(frame);
+            },
+          });
+        }
+      } catch (error) {
+        producerError = error;
+      } finally {
+        queue.markDecodeFinished();
+      }
+    })();
 
     try {
-      for (let i = firstEpoch; i < this.index.epochs.length; i++) {
+      this.setState('buffering', 'Buffering decoded media…');
+      while (!queue.readyToStart({hasAudio, hasVideo, at: start})) {
         if (controller.signal.aborted) throw controller.signal.reason;
-        const epoch = this.index.epochs[i];
-        setText('playback-epoch', `${i + 1} / ${this.index.epochs.length} · id ${epoch.id}`);
-        await this.decoder.decodeEpoch(this.source, epoch, {
-          signal: controller.signal,
-          onRange: range => this.rangeEvent(range),
-          onEvent: event => this.epochEvent(event),
-          onAudio: packet => packet.streamId === this.audioStreamId ? this.audio.schedule(packet, start, contextStart, controller.signal) : undefined,
-          onVideo: async frame => {
-            if (frame.streamId !== this.videoStreamId) return;
-            const frameTime = seconds(frame.pts);
-            if (frameTime < start) return;
-            if (this.audioStreamId !== null) {
-              const target = contextStart + (frameTime - start);
-              while (this.audio.context.currentTime + 0.001 < target) {
-                if (controller.signal.aborted) throw controller.signal.reason;
-                await sleep(Math.min(40, (target - this.audio.context.currentTime) * 1000));
-              }
-            } else {
-              const target = this.playStartWall + (frameTime - start) * 1000;
-              while (performance.now() + 1 < target) {
-                if (controller.signal.aborted) throw controller.signal.reason;
-                await sleep(Math.min(40, target - performance.now()));
-              }
-            }
-            this.renderer.render(frame);
-            this.frameId = frame.id;
+        if (producerError) throw producerError;
+        this.updatePlaybackMetrics(queue, start);
+        await sleep(PLAYBACK_POLL_MS);
+      }
+      if (producerError) throw producerError;
+
+      let outputMode = 'video clock';
+      if (hasAudio) {
+        contextStart = this.audio.context.currentTime + PLAYBACK_START_DELAY;
+        this.playStartAudioContext = contextStart;
+        outputMode = this.audio.begin(this.audioChannels);
+      } else {
+        wallStart = performance.now() + PLAYBACK_START_DELAY * 1000;
+        this.playStartWall = wallStart;
+      }
+      this.playStartMedia = start;
+      clockStarted = true;
+      this.updatePlaybackMetrics(queue, start);
+      this.setState('playing', `Buffered ${queue.bufferedAudioSeconds(start).toFixed(2)}s audio · ${queue.video.length} video frames`);
+      this.log.add(`playback start prebuffer audio=${queue.bufferedAudioSeconds(start).toFixed(3)}s video=${queue.video.length} output=${outputMode}`);
+
+      while (!controller.signal.aborted) {
+        if (producerError) throw producerError;
+        const audioFault = hasAudio ? this.audio.takeFault() : null;
+        if (audioFault) throw audioFault;
+        const now = mediaNow();
+
+        if (hasAudio) {
+          const scheduleUntil = Math.min(this.duration, now + AUDIO_SCHEDULE_AHEAD);
+          for (const item of queue.takeAudioThrough(scheduleUntil)) {
+            this.audio.schedule(item.packet, start, contextStart);
+          }
+          if (queue.noteAudioPlaybackPosition(now)) {
+            const metrics = queue.metrics(now);
+            throw new AudioUnderrunError(`decoded audio ran dry at ${formatTime(now)} (frontier ${formatTime(metrics.audioFrontier)})`);
+          }
+        }
+
+        if (hasVideo) {
+          const due = queue.takeVideoForTime(now + 0.001);
+          if (due) {
+            this.renderer.render(due.frame);
+            this.frameId = due.frame.id;
             this.framesRendered++;
             setText('metric-frames', String(this.framesRendered));
-            setText('playback-frame', `stream ${frame.streamId} · frame ${frame.id}`);
-            this.updateTime(frameTime);
-          },
-        });
-        this.updateTime(this.currentTime());
+            setText('playback-frame', `stream ${due.frame.streamId} · frame ${due.frame.id}`);
+          }
+        }
+
+        this.updateTime(now);
+        this.updatePlaybackMetrics(queue, now);
+        if (now >= this.duration) break;
+        await sleep(PLAYBACK_POLL_MS);
       }
 
-      while (!controller.signal.aborted && this.currentTime() < this.duration) {
-        this.updateTime(this.currentTime());
-        await sleep(50);
-      }
       if (!controller.signal.aborted) {
+        await producer;
+        if (producerError) throw producerError;
+        const audioFault = hasAudio ? this.audio.takeFault() : null;
+        if (audioFault) throw audioFault;
         this.updateTime(this.duration);
-        this.setState('ended', `${this.framesRendered} video frame${this.framesRendered === 1 ? '' : 's'} presented`);
+        this.updatePlaybackMetrics(queue, this.duration);
+        const metrics = queue.metrics(this.duration);
+        const audioMetrics = this.audio.metrics();
+        this.audio.stopAll();
+        this.log.add(`playback complete underruns=${metrics.audioUnderruns} late=${metrics.lateAudioPackets} workletLateFrames=${audioMetrics.workletLateFrames}`);
+        this.setState('ended', `${this.framesRendered} video frame${this.framesRendered === 1 ? '' : 's'} presented · ${metrics.audioUnderruns} audio underruns`);
       }
     } catch (error) {
       if (error?.name === 'AbortError' || error instanceof StaleDecodeGenerationError) return;
-      this.log.add(`playback error: ${error.message ?? error}`);
+      controller.abort(error);
+      this.audio.stopAll();
+      const metrics = queue.metrics(mediaNow());
+      this.updatePlaybackMetrics(queue, mediaNow());
+      this.log.add(`playback error: ${error.message ?? error} · underruns=${metrics.audioUnderruns} late=${metrics.lateAudioPackets}`);
       this.setState('error', error.message ?? String(error));
     } finally {
       if (this.playAbort === controller) this.playAbort = null;
@@ -345,6 +439,7 @@ class PlayerController {
     const at = this.currentTime();
     this.cancelPlayback();
     this.updateTime(at);
+    this.updatePlaybackMetrics(this.playbackBuffer, at);
     this.setState('paused', `Paused at ${formatTime(at)}`);
   }
 

@@ -22,6 +22,13 @@ may be incompatible until a stable major line is explicitly declared.
 - Added source-neutral browser playback for exact HTTP ranges and local `Blob`/`File` sources,
   plus motion and screen-content demo fixtures, a local Y4M video-encoder lab, and a technical
   request/decoder inspector.
+- Added deterministic playback-buffer and PCM-timeline tests plus Chromium regressions that inject
+  delayed HTTP ranges while exercising playback, pause/resume, seek, replay, and an explicit
+  scalar-WASM/Canvas2D presentation path.
+- Added a synthetic q1 A/V browser-encoder matrix that validates exact decoded audio length and
+  canonical index timing at 1, 2, 4, and 8 second epoch durations without an FFmpeg dependency.
+- Added live browser playback diagnostics for audio output mode, queued and decoded-ahead audio,
+  queued video, late PCM, and underrun counts.
 
 ### Changed
 
@@ -44,6 +51,11 @@ may be incompatible until a stable major line is explicitly declared.
   implementations into cohesive source modules instead of monolithic implementation files.
 - Reworked the browser player around owned playback generations, cancellable transport/audio,
   bounded presentation backpressure, reusable WebGPU resources, and explicit play/pause/seek.
+- Decoupled browser decode from presentation pacing. A/V playback now decodes ahead into bounded
+  queues, uses audio as the master clock, and reports missed audio deadlines as underruns instead
+  of silently clamping late packets to the current WebAudio time. Matching-rate browsers use a
+  continuous AudioWorklet PCM timeline; a precisely timestamped AudioBuffer path remains as the
+  fallback when the worklet or requested stream sample rate is unavailable.
 - Bumped the browser WASM ABI to `0x0002_0000` for the canonical decoder/encoder interface,
   including explicit input finalization and retained encoder-creation diagnostics.
 - Simplified CI, benchmark, WASM, rustdoc, and validation tooling around the canonical
