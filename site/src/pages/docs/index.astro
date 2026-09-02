@@ -8,37 +8,32 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 const groupDefinitions = [
   {
     id: "use",
-    label: "USE",
-    title: "Use Avelune",
-    summary: "Start with the command-line tools for encoding, decoding, inspection, and verification.",
+    title: "Using Avelune",
+    summary: "Install the command-line tools and encode, decode, inspect, or verify media.",
     matches: (sourcePath) => sourcePath.startsWith("docs/user/"),
   },
   {
     id: "browser",
-    label: "INTEGRATE",
-    title: "Integrate in a browser",
-    summary: "Understand byte-range loading, the WebAssembly boundary, presentation, and optional acceleration.",
+    title: "Browser integration",
+    summary: "Byte-range playback, WebAssembly codec APIs, media import, presentation, and browser acceleration.",
     matches: (sourcePath) => sourcePath.startsWith("docs/browser/"),
   },
   {
     id: "architecture",
-    label: "UNDERSTAND",
-    title: "Understand the system",
-    summary: "Read non-normative architecture direction and the engineering decisions around the codec.",
+    title: "Architecture",
+    summary: "Non-normative design direction and engineering decisions around the codec.",
     matches: (sourcePath) => sourcePath.startsWith("docs/architecture/"),
   },
   {
     id: "development",
-    label: "CONTRIBUTE",
-    title: "Build and verify",
-    summary: "Work with the conformance boundary, test strategy, version policy, publication system, and release process.",
+    title: "Development",
+    summary: "Conformance, testing, versioning, documentation, and release processes.",
     matches: (sourcePath) => sourcePath.startsWith("docs/development/"),
   },
   {
     id: "history",
-    label: "HISTORY",
-    title: "Historical record",
-    summary: "Superseded material retained for context; it is not a current compatibility or implementation target.",
+    title: "History",
+    summary: "Superseded material kept for project history. These documents are not current implementation guidance.",
     matches: (sourcePath) => sourcePath.startsWith("docs/history/"),
   },
 ];
@@ -60,31 +55,31 @@ const currentGroups = groups.filter((group) => group.id !== "history");
 const historyGroup = groups.find((group) => group.id === "history");
 
 const paths = [
-  { label: "DEMO", title: "Open the browser demo", summary: "Load a bundled example or a local Avelune file.", route: "/demo/" },
-  { label: "CLI", title: "Build and encode", summary: "Encode, decode, inspect, and verify media.", route: "/docs/cli/" },
-  { label: "SPECIFICATION", title: "Read the format", summary: "Consult the authoritative Draft Generation 1 definitions.", route: "/spec/" },
+  { title: "Try the browser demo", summary: "Play .avl files or convert ordinary video to Avelune in your browser.", route: "/demo/" },
+  { title: "Use the CLI", summary: "Build Avelune and encode, decode, inspect, or verify media.", route: "/docs/cli/" },
+  { title: "Read the specification", summary: "Consult the Draft Generation 1 format definitions.", route: "/spec/" },
 ];
 
 const projectLinks = [
-  { title: "Project status", summary: "Implemented scope, interpretation, and known limitations.", route: "/project/status/", type: "status" },
-  { title: "Contributing", summary: "Development workflow and review expectations.", route: "/project/contributing/", type: "contribute" },
-  { title: "Support", summary: "Where to ask questions and report problems.", route: "/project/support/", type: "support" },
-  { title: "Security", summary: "Security support and vulnerability reporting.", route: "/project/security/", type: "security" },
+  { title: "Project status", summary: "Implemented scope and known limitations.", route: "/project/status/" },
+  { title: "Contributing", summary: "Development workflow and review expectations.", route: "/project/contributing/" },
+  { title: "Support", summary: "Information to include when reporting problems.", route: "/project/support/" },
+  { title: "Security", summary: "Security posture and vulnerability reporting.", route: "/project/security/" },
 ];
 ---
 <BaseLayout title="Documentation" current="docs">
   <div class="index-shell docs-index">
     <header class="index-header">
-      <p class="eyebrow">DOCUMENTATION</p>
       <h1>Documentation</h1>
-      <p class="index-summary">Build the tools, encode a first file, understand the browser integration, or go deeper into Avelune’s architecture and validation.</p>
-      <p class="index-status">Draft Generation 1 is experimental and unfrozen.</p>
+      <p class="index-summary">Start with the demo or CLI, then use the browser, architecture, development, and specification documents as needed.</p>
     </header>
 
     <nav class="docs-paths" aria-labelledby="docs-paths-title">
       <h2 id="docs-paths-title">Start here</h2>
       <ul>
-        {paths.map((path) => <li><a href={`${base}${path.route}`}><span>{path.label}</span><strong>{path.title}</strong><small>{path.summary}</small></a></li>)}
+        {paths.map((path) => (
+          <li><a href={`${base}${path.route}`}><strong>{path.title}</strong><span>{path.summary}</span></a></li>
+        ))}
       </ul>
     </nav>
 
@@ -92,34 +87,34 @@ const projectLinks = [
       {currentGroups.map((group) => group.documents.length > 0 && (
         <section class="docs-group" aria-labelledby={`${group.id}-title`}>
           <header>
-            <p class="eyebrow">{group.label}</p>
-            <div><h2 id={`${group.id}-title`}>{group.title}</h2><p>{group.summary}</p></div>
+            <h2 id={`${group.id}-title`}>{group.title}</h2>
+            <p>{group.summary}</p>
           </header>
           <ul class="document-list">
-            {group.documents.map((doc) => <li><a href={`${base}${doc.route}`}>{doc.title}</a><p>{doc.summary}</p><span>{doc.type}</span></li>)}
+            {group.documents.map((doc) => <li><a href={`${base}${doc.route}`}>{doc.title}</a><p>{doc.summary}</p></li>)}
           </ul>
         </section>
       ))}
 
       <section class="docs-group" aria-labelledby="project-title">
         <header>
-          <p class="eyebrow">PROJECT</p>
-          <div><h2 id="project-title">Project information</h2><p>Current scope, contribution, support, security, and intellectual-property context.</p></div>
+          <h2 id="project-title">Project information</h2>
+          <p>Status, contribution, support, security, and intellectual-property information.</p>
         </header>
         <ul class="document-list">
-          {projectLinks.map((link) => <li><a href={`${base}${link.route}`}>{link.title}</a><p>{link.summary}</p><span>{link.type}</span></li>)}
-          {iprDocument && <li><a href={`${base}${iprDocument.route}`}>{iprDocument.title}</a><p>{iprDocument.summary}</p><span>{iprDocument.type}</span></li>}
+          {projectLinks.map((link) => <li><a href={`${base}${link.route}`}>{link.title}</a><p>{link.summary}</p></li>)}
+          {iprDocument && <li><a href={`${base}${iprDocument.route}`}>{iprDocument.title}</a><p>{iprDocument.summary}</p></li>}
         </ul>
       </section>
 
       {historyGroup && historyGroup.documents.length > 0 && (
-        <section class="docs-group" aria-labelledby="history-title">
+        <section class="docs-group history-group" aria-labelledby="history-title">
           <header>
-            <p class="eyebrow">{historyGroup.label}</p>
-            <div><h2 id="history-title">{historyGroup.title}</h2><p>{historyGroup.summary}</p></div>
+            <h2 id="history-title">{historyGroup.title}</h2>
+            <p>{historyGroup.summary}</p>
           </header>
           <ul class="document-list">
-            {historyGroup.documents.map((doc) => <li><a href={`${base}${doc.route}`}>{doc.title}</a><p>{doc.summary}</p><span>{doc.status || doc.type}</span></li>)}
+            {historyGroup.documents.map((doc) => <li><a href={`${base}${doc.route}`}>{doc.title}</a><p>{doc.summary}</p><span class="history-label">Historical</span></li>)}
           </ul>
         </section>
       )}
@@ -131,24 +126,49 @@ const projectLinks = [
   @layer page {
     .docs-paths { margin-top: 3rem; }
     .docs-paths h2 { margin: 0 0 1rem; font-size: 1.2rem; }
-    .docs-paths ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; border-block: 1px solid var(--rule); list-style: none; }
+    .docs-paths ul {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin: 0;
+      padding: 0;
+      border-block: 1px solid var(--rule);
+      list-style: none;
+    }
     .docs-paths li + li { border-left: 1px solid var(--rule); }
-    .docs-paths a { display: grid; align-content: start; min-height: 44px; padding: 1rem 1.2rem; color: var(--ink); text-decoration: none; }
+    .docs-paths a {
+      display: grid;
+      gap: .45rem;
+      min-height: 100%;
+      padding: 1rem 1.2rem;
+      color: var(--ink);
+      text-decoration: none;
+    }
     .docs-paths a:hover strong { color: var(--cool); text-decoration: underline; text-underline-offset: .18em; }
-    .docs-paths span { color: var(--cool); font: .65rem/1.4 var(--font-mono); letter-spacing: .08em; }
-    .docs-paths strong { margin-top: .8rem; font-size: 1rem; font-weight: 500; }
-    .docs-paths small { margin-top: .4rem; color: var(--muted); font-size: .82rem; line-height: 1.5; }
+    .docs-paths strong { font-size: 1rem; font-weight: 500; }
+    .docs-paths span { color: var(--muted); font-size: .84rem; line-height: 1.5; }
+
     .docs-groups { margin-top: clamp(4rem, 8vw, 7rem); }
     .docs-group + .docs-group { margin-top: 4rem; }
-    .docs-group > header { display: grid; grid-template-columns: minmax(9rem, 1fr) 3fr; gap: 1.5rem; align-items: start; }
+    .docs-group > header {
+      display: grid;
+      grid-template-columns: minmax(10rem, 1fr) 2fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
     .docs-group h2 { margin: 0; font-size: clamp(1.5rem, 3vw, 1.9rem); }
-    .docs-group header div p { max-width: 62ch; margin: .55rem 0 0; color: var(--muted); }
+    .docs-group header p { max-width: 62ch; margin: .15rem 0 0; color: var(--muted); }
     .docs-group .document-list { margin-top: 1.5rem; border-top: 1px solid var(--rule); }
+    .docs-group .document-list li { grid-template-columns: minmax(11rem, 1fr) 2fr; }
     .docs-group .document-list a { display: flex; align-items: center; min-height: 44px; }
+    .history-group .document-list li { grid-template-columns: minmax(11rem, 1fr) 2fr auto; }
+    .history-label { align-self: center; color: var(--warm); font: .72rem var(--font-mono); text-transform: uppercase; }
+
     @media (max-width: 700px) {
       .docs-paths ul { grid-template-columns: 1fr; }
       .docs-paths li + li { border-top: 1px solid var(--rule); border-left: 0; }
-      .docs-group > header { grid-template-columns: 1fr; gap: .5rem; }
+      .docs-group > header { grid-template-columns: 1fr; gap: .35rem; }
+      .docs-group .document-list li,
+      .history-group .document-list li { grid-template-columns: 1fr; }
       .docs-group + .docs-group { margin-top: 3rem; }
     }
   }

@@ -6,9 +6,10 @@ compatibility guarantees, and real-time performance are not currently offered.
 When reporting a media problem, include:
 
 - `avelune --version`;
-- exact command line;
+- exact command line or browser steps;
 - `ffprobe` summary of the source where relevant;
-- platform/browser;
+- platform and browser;
 - whether the issue reproduces with a short redistributable sample;
+- for browser conversion problems, whether OPFS was available and whether scalar or SIMD128 WASM was selected;
 - for performance reports, resolution, frame rate, clip duration, preset/quantizers, elapsed time,
-  CPU/GPU, and whether the path is reference native, WASM, or experimental WebGPU.
+  CPU/GPU, and whether the path is native Rust, browser/WASM, or experimental WebGPU compute.

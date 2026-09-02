@@ -4,7 +4,7 @@
 
 The software release line is `0.x`. `ALV1` and `ALA1` identify **Draft Generation 1** bitstreams;
 the `1` is a generation label, not a compatibility promise. Incompatible specification, container,
-codec, and API changes remain allowed when evidence supports them.
+codec, and API changes are allowed while the draft is under active development.
 
 ## Implemented POC
 
@@ -16,22 +16,24 @@ codec, and API changes remain allowed when evidence supports them.
 - one canonical safe Rust implementation with per-stream state and explicit input finalization;
 - a separate audited SIMD/unsafe kernel crate;
 - one independent scalar conformance oracle for differential testing;
-- native CLI and FFmpeg bridge;
-- canonical scalar/SIMD128 WASM decoder plus a video-only raw encoder ABI;
+- native CLI with FFmpeg-based ordinary-media input/output;
+- scalar and SIMD128 WASM decoding plus batch and streaming browser A/V encoder APIs;
 - browser HTTP Range and local-file playback with cancellable decode generations;
-- local 8-bit 4:2:0 Y4M → Avelune browser encoding without upload;
+- browser conversion of FFmpeg-readable media to `.avl`, with bounded raw video/PCM sinks and
+  incremental Avelune epoch output;
+- OPFS spooling of completed compressed epochs when supported, with an in-memory compressed-output
+  fallback;
 - Canvas2D and WebGPU YUV presentation;
 - property, hostile-input, mutation, differential, benchmark, and format-research tooling.
 
 ## Implementation model
 
-Applications use `crates/avelune`. `crates/avelune-reference` exists only to provide an independently
-implemented oracle for conformance and differential tests; it is not selectable as a runtime
-backend. Unsafe/intrinsic code is isolated in `crates/avelune-kernels`.
+Applications use `crates/avelune`. `crates/avelune-reference` is an independently implemented oracle
+for conformance and differential tests, not an application backend. Unsafe/intrinsic code is isolated
+in `crates/avelune-kernels`.
 
-This distinction is deliberate: sharing parser/reconstruction implementation with the oracle would
-make agreement less meaningful, while maintaining two complete application stacks created needless
-duplication and divergent semantics.
+Keeping the oracle independent makes differential agreement meaningful without maintaining a second
+application stack.
 
 ## Known limitations
 
@@ -39,7 +41,9 @@ duplication and divergent semantics.
 - lossy ALA1 needs substantially more codec research and perceptual tuning;
 - Draft Generation 1 supports only the current baseline video/audio profiles;
 - `avelune play` is a convenience FFmpeg/ffplay path, not the browser-style indexed player;
-- WebGPU compute kernels remain experimental; WebGPU presentation is separate from codec semantics;
+- the browser's embedded FFmpeg importer is single-threaded, and browsers without OPFS retain
+  completed compressed output chunks in memory until final assembly;
+- WebGPU compute kernels are experimental; WebGPU presentation is separate from codec semantics;
 - mutation/property testing does not replace sustained coverage-guided fuzzing;
 - no professional security audit or patent-freedom/legal-clearance claim exists.
 

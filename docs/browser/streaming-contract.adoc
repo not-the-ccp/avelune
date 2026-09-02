@@ -1,16 +1,18 @@
 = Browser streaming contract
 :page-type: architecture
 :page-status: current
-:summary: The canonical WASM ABI, exact byte-range contract, cancellation generations, and bounded presentation model.
+:summary: Browser decoding, media import, streaming A/V encoding, byte-range transport, and presentation boundaries.
 :nav-order: 40
 
-The browser API is incremental and container-aware. Rust/WASM owns Avelune parsing and codec
-semantics; JavaScript owns byte transport, cancellation, clocks, audio scheduling, and presentation.
+The browser player and converter use the canonical Rust codec through WebAssembly. JavaScript handles
+file and network I/O, cancellation, media clocks, browser audio, presentation, and the FFmpeg ingest
+boundary for non-Avelune media.
 
 [#browser-wasm-surface]
-== Canonical WASM surface
+== WASM surface
 
-The important operations are conceptually:
+The decoder API accepts incremental container bytes and returns validated stream metadata and decoded
+outputs. Its important operations are conceptually:
 
 [source,text]
 ----
@@ -23,58 +25,102 @@ decoder_finish_input(handle)
 decoder_seek_reset_epoch(handle, epoch_id)
 decoder_pop_video(handle)
 decoder_pop_audio(handle)
-
-video_encoder_create(width, height, fps_flags, qstep, preset, epoch_frames, meta0) -> handle
-video_encoder_create_error_ptr() / video_encoder_create_error_len()
-video_encoder_frame_ptr(handle) -> ptr
-video_encoder_push_frame(handle)
-video_encoder_finish(handle)
-video_encoder_output_ptr(handle) / video_encoder_output_len(handle)
 ----
 
-The ABI also exposes the Rust-validated front index, stream descriptors, indexed epoch byte ranges,
-and stream IDs on decoded outputs. JavaScript therefore does not implement Avelune packet framing,
-CRC, stream routing, or reference-state semantics independently.
+The ABI exposes the Rust-validated front index, stream descriptors, indexed epoch byte ranges, and
+stream IDs on decoded outputs. JavaScript does not independently implement Avelune packet framing,
+CRC checks, stream routing, or codec reference-state semantics.
 
-`decoder_finish_input` is required at an indexed-range boundary. Transport EOF by itself does not
-prove that a parser ended on a complete packet.
+`decoder_finish_input` is required at an indexed-range boundary. Transport EOF alone does not prove
+that the parser stopped on a complete packet.
 
-The video encoder surface is intentionally narrower than the decoder. It accepts complete planar
-8-bit 4:2:0 frames, uses fixed-duration epochs, and returns a video-only Draft Generation 1
-container. The demo's Y4M encoder lab is a validation/usefulness feature, not a claim that browsers
-can natively demux arbitrary MP4/WebM inputs. A general upload workflow should only be added with a
-reliable media-ingest layer; FFmpeg-WASM is not pulled in merely to make the demo appear complete.
+The browser also exposes A/V encoder APIs. The media importer uses the streaming variant:
+
+[source,text]
+----
+av_stream_encoder_create(...) -> handle
+av_stream_encoder_video_frame_ptr(handle) -> ptr
+av_stream_encoder_push_video_frame(handle)
+av_stream_encoder_audio_reserve(handle, sample_count) -> ptr
+av_stream_encoder_push_audio(handle, sample_count)
+av_stream_encoder_ready_epochs(handle) -> count
+av_stream_encoder_take_epoch(handle)
+av_stream_encoder_epoch_ptr(handle) / av_stream_encoder_epoch_len(handle)
+av_stream_encoder_finish(handle)
+av_stream_encoder_prefix_ptr(handle) / av_stream_encoder_prefix_len(handle)
+av_stream_encoder_destroy(handle)
+----
+
+Complete encoded epochs can therefore leave WASM as soon as they are ready. Finalization returns the
+container prefix/front index after the encoder knows the complete epoch table. A non-streaming A/V
+encoder API also exists for small inputs and tests; it is not the ordinary-media import path.
 
 [#browser-artifacts]
 == Scalar and SIMD128 artifacts
 
-`build-wasm.sh` produces separate `avelune-scalar.wasm` and `avelune-simd128.wasm` modules. The
-loader prefers SIMD128 in `auto` mode and falls back to scalar if the SIMD module cannot be loaded.
-This is module selection, not a second codec backend.
+`build-wasm.sh` produces separate `avelune-scalar.wasm` and `avelune-simd128.wasm` modules. `auto`
+tries SIMD128 first and falls back to scalar when the SIMD module cannot be loaded. Both implement
+the same codec/container semantics.
+
+WebGPU is separate from this choice. In the browser player it is a presentation backend; selecting
+WebGPU does not replace the ALV1/ALA1 WASM decoder.
 
 [#browser-byte-sources]
-== Byte sources
+== Avelune byte sources
 
-The player uses one range-source contract for HTTP and local files.
+Playback uses one range-source contract for HTTP and local files.
 
-For HTTP, every media range must:
+For HTTP, every requested media range must:
 
 * return status `206`;
 * return a parseable `Content-Range` matching the exact requested first and last byte;
-* remain consistent about total source size when supplied;
+* report a consistent total source size when one is supplied;
 * return the expected `Content-Length` when that header is present;
 * deliver exactly the indexed byte count, neither shorter nor longer.
 
-Local `Blob`/`File` playback uses `Blob.slice()` in bounded chunks and exercises the same epoch decode
-path without uploading the file.
+A cross-origin source must also allow the browser request through CORS, including the `Range` request
+header as required by the deployment.
+
+Local `Blob`/`File` playback uses `Blob.slice()` in bounded chunks and exercises the same indexed
+epoch decode path without uploading the file.
+
+[#browser-media-import]
+== Ordinary-media import
+
+The demo bundles a single-threaded FFmpeg WebAssembly build for foreign container/codec ingest. It is
+loaded only when conversion is requested. FFmpeg is an input boundary; ALV1, ALA1, and AVL encoding
+remain in the Avelune WASM module.
+
+The conversion path is:
+
+[source,text]
+----
+File -> FFmpeg WORKERFS input
+     -> raw yuv420p frame sink ----\
+                                 Avelune streaming A/V encoder -> completed AVL epochs
+     -> interleaved s16 PCM sink -/                              -> OPFS when available
+                                                                  -> final AVL File
+----
+
+The original `File` is mounted through Emscripten WORKERFS rather than copied into one large
+`ArrayBuffer`. FFmpeg writes raw video and PCM to bounded custom devices. JavaScript feeds complete
+video frames and aligned PCM blocks to the streaming Avelune encoder; it does not materialize a full
+Y4M or PCM intermediate.
+
+When Origin Private File System (OPFS) synchronous access is available in the worker, completed
+compressed epochs are spooled there. Otherwise the converter retains completed *compressed* epoch
+chunks in memory until final assembly. The fallback therefore preserves streaming raw-media ingest
+but does not provide storage-bounded compressed output for arbitrarily large conversions.
+
+The final result is assembled from the small front-index prefix plus the encoded epoch body and is
+returned as a browser `File`. Conversion is local to the page; the demo does not upload source media.
 
 [#browser-generations]
 == Decode generations and seeking
 
 Starting a load or epoch decode creates a new decoder generation and invalidates the previous one.
-This check is intrinsic to the loader, in addition to `AbortSignal` transport cancellation. A stale
-source that ignores cancellation is therefore stopped before its next bytes can enter the reset WASM
-decoder.
+This check supplements `AbortSignal` transport cancellation. A stale source that ignores cancellation
+is stopped before its next bytes can enter the reset WASM decoder.
 
 An epoch transaction is:
 
@@ -84,10 +130,13 @@ An epoch transaction is:
 . explicitly finalize input;
 . accept success only if the parser/session is complete and semantically valid.
 
+The media importer runs FFmpeg synchronously inside a dedicated worker. Cancelling a conversion
+terminates that worker, which also stops the current FFmpeg run and Avelune encoder instance.
+
 [#browser-presentation]
 == Presentation and buffering
 
 Decoded callbacks are awaited, so JavaScript does not need to collect an entire epoch before
-presentation. WebAudio scheduling is bounded and cancelled on pause/seek/reload. Canvas2D and WebGPU
-are presentation implementations only; they do not change codec semantics. WebGPU textures and
+presentation. WebAudio scheduling is bounded and cancelled on pause, seek, or reload. Canvas2D and
+WebGPU are presentation implementations only and do not change codec semantics. WebGPU textures and
 pipelines are reused while dimensions remain unchanged.
