@@ -88,6 +88,7 @@ export class PlaybackBuffer {
   }
 
   noteAudioPlaybackPosition(now) {
+    if (this.decodeFinished && this.audio.length === 0) return false;
     if (now > this.audioFrontier + AUDIO_GAP_TOLERANCE) {
       if (this.lastUnderrunAt === null || now - this.lastUnderrunAt > 0.05) {
         this.audioUnderruns++;
