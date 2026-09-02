@@ -18,6 +18,7 @@ RUSTDOCFLAGS='-D warnings' cargo doc -p avelune --no-deps --locked
 echo '[5/9] script/source syntax'
 node --check web/player/player.js
 node --check web/player/playback-buffer.js
+node --check web/player/audio-sink.js
 node --check web/player/audio-timeline.js
 node --check web/player/audio-worklet.js
 node --check web/player/avelune-loader.js
