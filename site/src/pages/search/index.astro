@@ -4,28 +4,39 @@ import { loadDocuments } from "../../lib/content.mjs";
 import { loadRootDocuments } from "../../lib/markdown.mjs";
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-const documents = [
+const allDocuments = [
   ...(await loadDocuments("docs")),
   ...(await loadDocuments("spec")),
   ...loadRootDocuments().map((document) => ({ ...document, route: `/project/${document.slug}/`, type: "project" })),
 ];
+const documents = [
+  ...allDocuments.filter((document) => document.type !== "historical"),
+  ...allDocuments.filter((document) => document.type === "historical"),
+];
 ---
-<BaseLayout title="Search" current="search">
+<BaseLayout title="Search" current="search" description="Search Avelune documentation, specifications, and project information.">
   <div class="index-shell search-shell">
-    <header class="index-header"><p class="eyebrow">SEARCH</p><h1>Find documentation</h1><p class="index-summary">Search documentation, specifications, and project information. Native rustdoc has its own item index.</p></header>
-    <label for="site-search">Search terms</label>
-    <input id="site-search" type="search" autocomplete="off" placeholder="Try “epoch”, “qstep”, or “WebAssembly”" />
+    <header class="index-header">
+      <h1>Search</h1>
+      <p class="index-summary">Search documentation, specification pages, and project information. Superseded historical material is marked in the results.</p>
+    </header>
+    <label for="site-search">Search</label>
+    <input id="site-search" type="search" autocomplete="off" placeholder="epoch, quantizer, WebAssembly…" />
     <p id="search-count" class="search-count" role="status">{documents.length} documents</p>
     <ol class="document-list" id="search-results">
-      {documents.map((document) => <li data-route={document.route}><a href={`${base}${document.route}`}>{document.title}</a><p>{document.summary}</p><span>{document.type}</span></li>)}
+      {documents.map((document) => (
+        <li data-route={document.route} data-historical={document.type === "historical" ? "true" : undefined}>
+          <a href={`${base}${document.route}`}>{document.title}</a>
+          <p>{document.summary}</p>
+          <span>{document.type === "historical" ? "Historical" : document.type === "project" ? "Project" : ""}</span>
+        </li>
+      ))}
     </ol>
   </div>
   <script>
     const input = document.querySelector('#site-search');
     const rows = [...document.querySelectorAll('#search-results > li')];
     const count = document.querySelector('#search-count');
-    // The full-text corpus ships as a separate JSON document so this page stays small;
-    // until it loads, matching degrades to visible title/summary text.
     let texts = new Map(rows.map((row) => [row.dataset.route, row.textContent.toLocaleLowerCase()]));
     const apply = () => {
       const terms = input.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
@@ -54,8 +65,10 @@ const documents = [
 
 <style>
   @layer page {
-    .search-shell > label { display:block; margin-top:2.5rem; color:var(--muted); font:.7rem/1.4 var(--font-mono); text-transform:uppercase; }
+    .search-shell > label { display:block; margin-top:2.5rem; color:var(--ink); font-size:.85rem; font-weight:500; }
     #site-search { width:100%; min-height:52px; margin-top:.5rem; padding:.65rem .8rem; border:1px solid var(--control-rule); border-radius:1px; background:var(--surface); color:var(--ink); font-size:1rem; }
-    .search-count { color:var(--muted); font:.72rem/1.4 var(--font-mono); }
+    .search-count { color:var(--muted); font-size:.8rem; }
+    #search-results span:empty { visibility:hidden; }
+    #search-results [data-historical="true"] { opacity:.78; }
   }
 </style>
