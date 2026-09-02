@@ -2,7 +2,8 @@
 import BaseLayout from "./BaseLayout.astro";
 
 interface TocItem { depth: number; id: string; text: string }
-interface NavItem { title: string; route: string; type?: string }
+interface NavItem { title: string; route: string; type?: string; sourcePath?: string }
+interface NavGroup { key: string; label: string; items: NavItem[] }
 interface Props {
   title: string;
   summary?: string;
@@ -17,49 +18,90 @@ const { title, summary, status, type = "guide", sourcePath, toc = [], nav = [], 
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 const sourceUrl = `https://github.com/not-the-ccp/avelune/blob/main/${sourcePath}`;
 const currentLabel = current === "spec" ? "Specification" : "Documentation";
+const isHistorical = type === "historical";
+const isNormative = type === "normative";
+const isCurrent = (item: NavItem) => item.sourcePath ? item.sourcePath === sourcePath : item.title === title;
+
 const currentDocs = nav.filter((item) => item.type !== "historical");
 const historicalDocs = nav.filter((item) => item.type === "historical");
-const isHistorical = nav.find((item) => item.title === title)?.type === "historical";
-const group = isHistorical ? historicalDocs : currentDocs;
-const groupIndex = group.findIndex((item) => item.title === title);
-const previous = groupIndex > 0 ? group[groupIndex - 1] : null;
-const next = groupIndex >= 0 && groupIndex < group.length - 1 ? group[groupIndex + 1] : null;
+const docPrefixes = [
+  ["use", "Use", "docs/user/"],
+  ["browser", "Browser", "docs/browser/"],
+  ["architecture", "Architecture", "docs/architecture/"],
+  ["development", "Development", "docs/development/"],
+] as const;
+
+let navGroups: NavGroup[];
+if (current === "docs") {
+  const assigned = new Set<NavItem>();
+  navGroups = docPrefixes.map(([key, label, prefix]) => {
+    const items = currentDocs.filter((item) => item.sourcePath?.startsWith(prefix));
+    items.forEach((item) => assigned.add(item));
+    return { key, label, items };
+  });
+  const project = currentDocs.filter((item) => !assigned.has(item));
+  if (project.length > 0) navGroups.push({ key: "project", label: "Project", items: project });
+  if (historicalDocs.length > 0) navGroups.push({ key: "history", label: "History", items: historicalDocs });
+  navGroups = navGroups.filter((group) => group.items.length > 0);
+} else {
+  navGroups = [
+    { key: "current", label: "Current draft", items: currentDocs },
+    { key: "history", label: "History", items: historicalDocs },
+  ].filter((group) => group.items.length > 0);
+}
+
+const activeGroup = navGroups.find((group) => group.items.some(isCurrent));
+const groupIndex = activeGroup?.items.findIndex(isCurrent) ?? -1;
+const previous = activeGroup && groupIndex > 0 ? activeGroup.items[groupIndex - 1] : null;
+const next = activeGroup && groupIndex >= 0 && groupIndex < activeGroup.items.length - 1 ? activeGroup.items[groupIndex + 1] : null;
+const sourceLabel = current === "spec" ? "View specification source" : "View source";
 ---
 
 <BaseLayout title={title} description={summary} mode="publication" current={current}>
   <div class="publication-shell">
     <aside class="section-nav" aria-label={`${currentLabel} navigation`}>
-      <p class="eyebrow">{currentLabel.toUpperCase()}</p>
-      <a class="section-index" href={`${base}/${current}/`}>Overview</a>
-      <details open>
-        <summary>{current === "spec" ? "Current draft" : "All documents"}</summary>
-        <ol>{currentDocs.map((item) => <li><a href={`${base}${item.route}`} aria-current={item.title === title ? "page" : undefined}>{item.title}</a></li>)}</ol>
-      </details>
-      {historicalDocs.length > 0 && <details><summary>History</summary><ol>{historicalDocs.map((item) => <li><a href={`${base}${item.route}`} aria-current={item.title === title ? "page" : undefined}>{item.title}</a></li>)}</ol></details>}
+      <a class="section-index" href={`${base}/${current}/`}>{currentLabel} overview</a>
+      {navGroups.map((group) => (
+        <details open={group.key === activeGroup?.key}>
+          <summary>{group.label}</summary>
+          <ol>{group.items.map((item) => <li><a href={`${base}${item.route}`} aria-current={isCurrent(item) ? "page" : undefined}>{item.title}</a></li>)}</ol>
+        </details>
+      ))}
     </aside>
+
     <article class:list={["publication", `publication-${type}`]}>
       <nav class="breadcrumbs" aria-label="Breadcrumb"><a href={`${base}/${current}/`}>{currentLabel}</a><span aria-hidden="true">/</span><span>{title}</span></nav>
       <header class="document-header">
-        <div class="document-meta">
-          <span>{type.replaceAll("-", " ")}</span>
-          {status && <span class="document-status">{status}</span>}
-        </div>
+        {(isNormative || isHistorical) && status && <div class="document-meta"><span class="document-status">{status}</span></div>}
         <h1>{title}</h1>
         {summary && <p class="lede">{summary}</p>}
-        <a class="source-link" href={sourceUrl}>View authoritative source</a>
+        <a class="source-link" href={sourceUrl}>{sourceLabel}</a>
       </header>
+
+      <details class="mobile-collection-nav">
+        <summary>{currentLabel} navigation</summary>
+        {navGroups.map((group) => (
+          <div class="mobile-nav-group">
+            <p>{group.label}</p>
+            <ol>{group.items.map((item) => <li><a href={`${base}${item.route}`} aria-current={isCurrent(item) ? "page" : undefined}>{item.title}</a></li>)}</ol>
+          </div>
+        ))}
+      </details>
+
+      {toc.length > 0 && <details class="mobile-toc"><summary>On this page</summary><ol>{toc.filter((item) => item.depth <= 2).map((item) => <li class:list={[`depth-${item.depth}`]}><a href={`#${item.id}`}>{item.text}</a></li>)}</ol></details>}
+
       <div class="asciidoc"><slot /></div>
       <nav class="document-pagination" aria-label="Adjacent documents">
         {previous ? <a rel="prev" href={`${base}${previous.route}`}><small>Previous</small><span>{previous.title}</span></a> : <span />}
         {next && <a rel="next" href={`${base}${next.route}`}><small>Next</small><span>{next.title}</span></a>}
       </nav>
     </article>
+
     <aside class="page-toc" aria-label="On this page">
       <p class="eyebrow">ON THIS PAGE</p>
       <ol>
         {toc.filter((item) => item.depth <= 2).map((item) => <li class:list={[`depth-${item.depth}`]}><a href={`#${item.id}`}>{item.text}</a></li>)}
       </ol>
     </aside>
-    {toc.length > 0 && <details class="mobile-toc"><summary>On this page</summary><ol>{toc.filter((item) => item.depth <= 2).map((item) => <li class:list={[`depth-${item.depth}`]}><a href={`#${item.id}`}>{item.text}</a></li>)}</ol></details>}
   </div>
 </BaseLayout>

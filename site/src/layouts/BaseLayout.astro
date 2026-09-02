@@ -14,7 +14,7 @@ interface Props {
 
 const {
   title,
-  description = "Avelune experimental audiovisual codec family and indexed streaming container.",
+  description = "Avelune is an experimental audiovisual codec and indexed streaming container written in Rust.",
   mode = "publication",
   current,
 } = Astro.props;
@@ -58,7 +58,6 @@ const links = [
     <header class="site-header">
       <div class="header-grid">
         <a class="wordmark" href={`${base}/`} aria-label="Avelune home">AVELUNE</a>
-        <span class="generation"><span aria-hidden="true">◇</span> GEN 1 / UNFROZEN</span>
         <nav class="site-nav" aria-label="Primary navigation">
           {links.map(([label, href, key]) => <a href={href} aria-current={current === key ? "page" : undefined}>{label}</a>)}
           <a href={`${base}/search/`} aria-current={current === "search" ? "page" : undefined}>Search</a>
@@ -68,8 +67,13 @@ const links = [
     </header>
     <main id="main-content"><slot /></main>
     <footer class="site-footer">
-      <div><strong>AVELUNE</strong><span>Experimental audiovisual formats. Draft Generation 1 is unfrozen.</span></div>
-      <nav aria-label="Footer navigation"><a href={`${base}/docs/`}>Documentation</a><a href={`${base}/spec/`}>Specification</a><a href="https://github.com/not-the-ccp/avelune">Repository</a></nav>
+      <div><strong>AVELUNE</strong><span>Experimental audiovisual codec and indexed container.</span></div>
+      <nav aria-label="Footer navigation">
+        <a href={`${base}/docs/`}>Documentation</a>
+        <a href={`${base}/spec/`}>Specification</a>
+        <a href={`${base}/project/status/`}>Status</a>
+        <a href="https://github.com/not-the-ccp/avelune">Repository</a>
+      </nav>
     </footer>
   </body>
 </html>

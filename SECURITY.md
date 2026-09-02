@@ -9,12 +9,15 @@ For a public repository, use the hosting platform's private vulnerability-report
 available. Until a maintainer-specific security address is configured, do not publish exploit details
 before maintainers have had a reasonable chance to assess the issue.
 
-Useful reports include the affected commit/version, minimal reproducer, expected vs actual behavior,
-and whether the issue reproduces in the scalar reference decoder, production stub, browser/WASM path,
-or container parser.
+Useful reports include the affected commit/version, a minimal reproducer, expected versus actual
+behavior, and the affected path: canonical native Rust, independent conformance oracle,
+browser/WASM, embedded-FFmpeg import boundary, or container parser.
 
 ## Current security posture
 
-Reference crates forbid unsafe Rust. Parsers enforce explicit size limits and the repository contains
-malformed-input and mutation smoke tests. This is **not** a claim that the codecs have received a
-professional security audit or sustained coverage-guided fuzzing campaign.
+The canonical implementation is safe Rust; unsafe/intrinsic code is isolated in the kernel crate.
+Parsers enforce explicit size limits and the repository contains malformed-input and mutation tests.
+The independent reference implementation provides differential coverage for codec semantics.
+
+The codecs have not received a professional security audit or a sustained coverage-guided fuzzing
+campaign suitable for a production-security claim.

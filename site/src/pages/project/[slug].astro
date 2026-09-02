@@ -9,7 +9,11 @@ const sourceUrl = `https://github.com/not-the-ccp/avelune/blob/main/${document.s
 ---
 <BaseLayout title={document.title} description={document.summary} current="project">
   <article class="root-document publication">
-    <header class="document-header"><div class="document-meta"><span>PROJECT DOCUMENT</span><span>REPOSITORY-NATIVE MARKDOWN</span></div><h1>{document.title}</h1><p class="lede">{document.summary}</p><a class="source-link" href={sourceUrl}>View authoritative source</a></header>
+    <header class="document-header">
+      <h1>{document.title}</h1>
+      <p class="lede">{document.summary}</p>
+      <a class="source-link" href={sourceUrl}>View source</a>
+    </header>
     <div class="asciidoc"><Fragment set:html={document.html} /></div>
   </article>
 </BaseLayout>

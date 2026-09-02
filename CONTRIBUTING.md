@@ -1,61 +1,43 @@
 # Contributing
 
-Avelune is experimental and welcomes design criticism, independent decoder attempts, test vectors,
-codec research, documentation fixes, and implementation work.
+Avelune is experimental. Contributions are welcome across codec research, implementation, independent
+decoders, test material, documentation, and tooling.
 
 ## Contribution workflow
 
-Use the same review-first workflow for code, specification, documentation, tests, and tooling
-changes:
-
-1. Start from an up-to-date `main` branch and create a focused feature branch. For example:
+1. Start from an up-to-date `main` branch and create a focused feature branch.
 
    ```sh
    git switch main
    git pull --ff-only origin main
-   git switch -c docs/clarify-contributing-workflow
+   git switch -c my-change
    ```
 
-2. Make the change on that branch, committing small coherent milestones as you go rather than
-   waiting until the entire task is complete. Run the narrowest relevant checks, followed by
-   `./scripts/dev-check.sh` for repository-wide changes.
-3. Push the feature branch and open a pull request targeting `main`:
+2. Make the change and run the checks that cover it. Use `./scripts/dev-check.sh` for changes that
+   affect multiple parts of the repository.
+3. Push the branch and open a pull request targeting `main`.
 
    ```sh
-   git push --set-upstream origin docs/clarify-contributing-workflow
+   git push --set-upstream origin my-change
    gh pr create --base main --fill
    ```
 
-4. Wait for CI and automated review. Resolve every CodeRabbit comment or piece of feedback; either
-   make the requested change or leave a clear explanation when the suggestion is not applicable.
-   Do not leave review feedback unresolved merely because CI is green.
-5. Wait for the appropriate review before merging. Ordinary changes may proceed once CI passes and
-   automated feedback is handled. Large, security-sensitive, architectural, release, or
-   spec/format changes also require explicit human review.
+4. Address CI failures and review feedback before merging. Large format, architectural, release, or
+   security-sensitive changes require explicit human review.
 
-CodeRabbit is the repository's automated reviewer. If CodeRabbit does not run or is unavailable,
-treat a human review as the fallback for the pull request.
-
-Never push directly to `main`, force-push it, or bypass the pull-request workflow. The repository's
-GitHub ruleset enforces pull requests and required CI for `main`; there is no documented typo
-exception. Small fixes use the same workflow.
-
-Contributors and coding agents should stop after opening the pull request and report its URL,
-validation results, and any review questions. Do not merge your own pull request unless the project
-maintainer explicitly asks you to do so.
+Do not push or force-push directly to `main`. Repository rules require the pull-request and CI path.
 
 ## Start here
 
-- [`STATUS.md`](STATUS.md) — what exists and what is not stable;
-- [`spec/README.adoc`](spec/README.adoc) — normative-draft hierarchy;
-- [`docs/development/REFERENCE_ORACLE.adoc`](docs/development/REFERENCE_ORACLE.adoc) —
-  why the independent conformance oracle exists;
+- [`STATUS.md`](STATUS.md) — implemented scope and known limitations;
+- [`spec/README.adoc`](spec/README.adoc) — specification structure and reading order;
+- [`docs/development/REFERENCE_ORACLE.adoc`](docs/development/REFERENCE_ORACLE.adoc) — conformance oracle design;
 - [`docs/development/VERSIONING.adoc`](docs/development/VERSIONING.adoc) — compatibility policy;
-- [`AGENTS.md`](AGENTS.md) — concise repository workflow for coding agents and humans.
+- [`docs/development/TESTING.adoc`](docs/development/TESTING.adoc) — validation strategy.
 
 ## Development
 
-Rust 1.97.1 is the reference toolchain. Then run:
+Rust 1.97.1 is the reference toolchain. The main Rust checks are:
 
 ```sh
 cargo fmt --all -- --check
@@ -65,16 +47,16 @@ cargo test --workspace --doc
 cargo doc -p avelune --no-deps
 ```
 
-`./scripts/dev-check.sh` runs the supported repository checks in one command.
+`./scripts/dev-check.sh` runs the repository-wide development checks, including browser/site checks
+when the required local dependencies are available.
 
 ## Format changes
 
-A syntax or decoded-semantics change is not complete until the draft spec, implementation(s),
-conformance tests/vectors, changelog, and affected docs agree. During `0.x`, backwards compatibility
-is not a goal by itself; a cleaner design can justify an incompatible change.
+A change to syntax or decoded semantics is not complete until the draft specification, affected
+implementations, conformance tests/vectors, changelog, and public documentation agree. During `0.x`,
+backwards compatibility is not by itself a reason to retain an inferior draft design.
 
-## Pull requests
-
-Keep changes focused and use the pull-request template. Include the evidence that motivated
-codec-design changes and report failed experiments as well as successful ones. Do not present
-reference-implementation throughput as the architectural limit of the format.
+Codec-design changes should include the evidence that motivated them, including failed experiments
+when those results affect the decision. Performance results should identify the implementation,
+hardware, input, settings, and measurement method rather than treating one reference implementation
+as the limit of the format.

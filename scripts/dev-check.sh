@@ -35,11 +35,13 @@ node --check scripts/wasm-encoder-smoke.mjs
 node --check scripts/chromium-wasm-smoke.mjs
 node --check scripts/site-browser-smoke.mjs
 node --check scripts/browser-media-import-smoke.mjs
+node --check scripts/check-demo-defaults.mjs
 node --check scripts/validate-content.mjs
 node scripts/playback-buffer-smoke.mjs
 node scripts/playback-long-run-smoke.mjs
 node scripts/audio-timeline-smoke.mjs
 node scripts/renderers-smoke.mjs
+node scripts/check-demo-defaults.mjs
 python3 -m py_compile scripts/benchmark-real.py scripts/benchmark-real-audio.py scripts/benchmark-xiph.py scripts/check-site-links.py scripts/format-experiments.py scripts/encoder-curves.py scripts/ci-media-regression.py scripts/compare-ci-media.py scripts/test-ci-regression-tools.py scripts/generate-demo-fixtures.py scripts/generate-showcase-media.py
 python3 scripts/test-ci-regression-tools.py
 bash -n scripts/build-wasm.sh scripts/build-site.sh scripts/fetch-xiph-corpus.sh scripts/audit-unsafe.sh scripts/disassembly-check.sh scripts/validate-release.sh scripts/ci-media-base-head.sh scripts/install.sh

@@ -5,167 +5,126 @@ const installCmd = "curl -fsSL https://not-the-ccp.github.io/avelune/install.sh 
 const scriptUrl = "https://github.com/not-the-ccp/avelune/blob/main/scripts/install.sh";
 ---
 
-<BaseLayout mode="grid" current="home">
+<BaseLayout
+  mode="grid"
+  current="home"
+  description="Avelune is an experimental audio/video codec and indexed streaming container written in Rust."
+>
   <div class="home-shell">
     <section class="hero" aria-labelledby="hero-title">
-      <div class="hero-top">
-        <div class="hero-copy">
-          <p class="eyebrow" data-reveal>EXPERIMENTAL AUDIOVISUAL FORMAT</p>
-          <h1 id="hero-title" data-reveal data-delay="60">Avelune</h1>
-          <p class="hero-summary" data-reveal data-delay="120">A spec-first audiovisual codec family and front-indexed streaming container, implemented in Rust and built for bounded decoding.</p>
-          <div class="hero-actions" data-reveal data-delay="240">
-            <a class="button-link" href={`${base}/spec/`}>Read specification</a>
-            <a class="text-link" href={`${base}/demo/`}>Try browser demo&nbsp; →</a>
-          </div>
-        </div>
-        <div class="technical-profile" data-reveal data-delay="180" aria-label="Avelune technical profile">
-          <div class="profile-head"><span>FORMAT PROFILE</span><span class="unfrozen">UNFROZEN</span></div>
-          <div class="plane-map" aria-label="Planar 4:2:0 luma and chroma structure">
-            <div class="plane plane-y"><span>Y′</span><small>8 BIT · LUMA</small></div>
-            <div class="plane plane-cb"><span>Cb</span><small>½ × ½</small></div>
-            <div class="plane plane-cr"><span>Cr</span><small>½ × ½</small></div>
-          </div>
-          <dl>
-            <div><dt>VIDEO</dt><dd><code>ALV1</code> · planar 4:2:0</dd></div>
-            <div><dt>AUDIO</dt><dd><code>ALA1</code> · lifting wavelet</dd></div>
-            <div><dt>CONTAINER</dt><dd><code>AVL</code> · front-indexed epochs</dd></div>
-            <div><dt>STATE</dt><dd>Research / proof of concept</dd></div>
-          </dl>
-        </div>
-      </div>
-
-      <div class="install" data-reveal data-delay="300">
-        <div class="install-head">
-          <span>INSTALL · BUILDS FROM SOURCE</span>
-          <button class="copy-btn" type="button" data-copy="install-command" aria-label="Copy install command">COPY</button>
-        </div>
-        <pre class="install-pre"><code id="install-command" data-cmd={installCmd}>{installCmd}</code></pre>
-        <p class="install-note">Clones the repository, builds the CLI with your Rust toolchain (1.97.1 pinned), and installs <code>avelune</code> to <code>/usr/local/bin</code>, or <code>~/.local/bin</code> if not writable. <a href={scriptUrl}>Review the script</a> · FFmpeg is required for ordinary media workflows.</p>
+      <h1 id="hero-title">Avelune</h1>
+      <p class="hero-summary">An experimental audio/video codec and indexed streaming container written in Rust.</p>
+      <p class="hero-status">Draft Generation 1 is under active development. Bitstreams, APIs, and decoded semantics may change incompatibly while the project is 0.x.</p>
+      <div class="hero-actions">
+        <a class="button-link" href={`${base}/demo/`}>Try the demo</a>
+        <a class="text-link" href={`${base}/docs/`}>Documentation</a>
+        <a class="text-link" href={`${base}/spec/`}>Specification</a>
       </div>
     </section>
 
-    <section class="registry" aria-labelledby="registry-title">
-      <header data-reveal><p class="eyebrow">DRAFT GENERATION 1</p><h2 id="registry-title">Format registry</h2></header>
-      <div class="registry-row" data-reveal data-delay="80">
-        <a href={`${base}/spec/video/alv1/`}><strong>ALV1</strong><span>video bitstream</span><small>LOSSY / LOSSLESS</small></a>
-        <a href={`${base}/spec/audio/ala1/`}><strong>ALA1</strong><span>audio bitstream</span><small>LOSSY / LOSSLESS</small></a>
-        <a href={`${base}/spec/container/avl/`}><strong>AVL</strong><span>stream container</span><small>RANGE / EPOCH INDEX</small></a>
+    <section class="start" aria-labelledby="start-title">
+      <h2 id="start-title">What you can use now</h2>
+      <div class="start-grid">
+        <a href={`${base}/demo/`}>
+          <strong>Browser demo</strong>
+          <span>Play <code>.avl</code> files or convert ordinary video to Avelune in the browser.</span>
+        </a>
+        <a href={`${base}/docs/cli/`}>
+          <strong>Command-line tools</strong>
+          <span>Encode, decode, inspect, verify, repair, and reindex Avelune media.</span>
+        </a>
+        <a href={`${base}/spec/`}>
+          <strong>Format specification</strong>
+          <span>Read the current Draft Generation 1 video, audio, container, entropy, and conformance definitions.</span>
+        </a>
       </div>
-      <p class="registry-note" data-reveal>Format identifiers describe the current draft generation, not a stable compatibility promise.</p>
     </section>
 
-    <section class="architecture" aria-labelledby="architecture-title">
-      <header data-reveal><p class="eyebrow">SYSTEM MODEL</p><h2 id="architecture-title">Designed for bounded, indexed playback</h2></header>
-      <svg data-reveal data-delay="80" viewBox="0 0 940 300" role="img" aria-labelledby="diagram-title diagram-description">
-        <title id="diagram-title">Avelune container and decoding architecture</title>
-        <desc id="diagram-description">A front index addresses independent epochs containing audio and video packets. Decoders reconstruct media for presentation.</desc>
-        <g class="diagram-rules"><path d="M120 65H340M470 65H690M205 220H430M510 220H735"/><path d="M340 65l-10-6v12zm350 0l-10-6v12zM430 220l-10-6v12zm305 0l-10-6v12z"/></g>
-        <g class="diagram-box"><rect x="15" y="25" width="105" height="80"/><rect x="340" y="25" width="130" height="80"/><rect x="690" y="25" width="145" height="80"/><rect x="100" y="180" width="105" height="80"/><rect x="430" y="180" width="80" height="80"/><rect x="735" y="180" width="135" height="80"/></g>
-        <g class="diagram-label"><text x="32" y="58">FRONT</text><text x="32" y="80">INDEX</text><text x="360" y="58">EPOCH</text><text x="360" y="80">RANGES</text><text x="712" y="58">PACKETS</text><text x="712" y="80">ALV1 / ALA1</text><text x="119" y="213">RANGE</text><text x="119" y="235">FETCH</text><text x="445" y="213">WASM</text><text x="445" y="235">DECODE</text><text x="756" y="213">Y′CbCr</text><text x="756" y="235">+ PCM</text></g>
-        <path class="diagram-link" d="M52 105v55h100v20M405 105v38H152v37M762 105v38H790v37"/>
-      </svg>
-      <div class="architecture-copy" data-reveal data-delay="120"><p>The container’s CRC-protected front index identifies independently fetchable epochs. The browser demo requests byte ranges, decodes the project’s own bitstreams in WebAssembly, and presents Y′CbCr frames with WebGPU or Canvas2D.</p><a href={`${base}/docs/browser/streaming-contract/`}>Read the streaming contract →</a></div>
+    <section class="install" aria-labelledby="install-title">
+      <div class="section-copy">
+        <h2 id="install-title">Install the CLI</h2>
+        <p>The installer clones the repository and builds the CLI from source with the pinned Rust toolchain. Ordinary media input and output also requires FFmpeg.</p>
+      </div>
+      <div class="install-command">
+        <pre><code id="install-command">{installCmd}</code></pre>
+        <button class="copy-btn" type="button" data-copy="install-command">Copy</button>
+      </div>
+      <p class="install-note"><a href={scriptUrl}>Read the install script</a> before running it, or follow the <a href={`${base}/docs/cli/`}>CLI guide</a> for a manual build.</p>
     </section>
 
-    <section class="status-strip" data-reveal aria-label="Project status">
-      <div><span>IMPLEMENTATION</span><strong>Canonical Rust crate</strong></div>
-      <div><span>CONFORMANCE</span><strong>Differential decoder checks</strong></div>
-      <div><span>LIMIT</span><strong>Not production-performance</strong></div>
-      <a href={`${base}/project/status/`}>Full project status →</a>
+    <section class="formats" aria-labelledby="formats-title">
+      <div class="section-copy">
+        <h2 id="formats-title">Formats</h2>
+        <p>Avelune currently defines separate video and audio bitstreams inside an indexed container.</p>
+      </div>
+      <dl class="format-list">
+        <div>
+          <dt><a href={`${base}/spec/video/alv1/`}>ALV1</a></dt>
+          <dd>Lossy or lossless 8-bit 4:2:0 video.</dd>
+        </div>
+        <div>
+          <dt><a href={`${base}/spec/audio/ala1/`}>ALA1</a></dt>
+          <dd>Lossy or lossless audio. The lossy mode is still an experimental research area.</dd>
+        </div>
+        <div>
+          <dt><a href={`${base}/spec/container/avl/`}>AVL</a></dt>
+          <dd>A CRC-protected container with a front index and independently addressable epochs.</dd>
+        </div>
+      </dl>
     </section>
 
-    <section class="quickstart" aria-labelledby="quickstart-title">
-      <header data-reveal><p class="eyebrow">FIRST FILE</p><h2 id="quickstart-title">Build, encode, inspect.</h2></header>
-      <pre data-reveal data-delay="80"><code>cargo build --release -p avelune-cli
-./target/release/avelune encode input.mkv output.avl
-./target/release/avelune inspect output.avl</code></pre>
-      <div data-reveal data-delay="160"><p>FFmpeg handles ordinary input and output formats. Avelune’s own codecs and container remain the encoded format.</p><a href={`${base}/docs/cli/`}>Continue with the CLI guide →</a></div>
+    <section class="streaming" aria-labelledby="streaming-title">
+      <div class="section-copy">
+        <h2 id="streaming-title">Indexed playback</h2>
+        <p>AVL puts the epoch index at the front of the file. A player can read that index first and fetch only the byte ranges needed for playback or seeking.</p>
+        <a href={`${base}/docs/browser/streaming-contract/`}>Browser streaming architecture</a>
+      </div>
+      <ol class="stream-flow" aria-label="Indexed playback sequence">
+        <li><strong>Front index</strong><span>stream descriptors and epoch byte ranges</span></li>
+        <li><strong>Epoch range</strong><span>the requested part of the file</span></li>
+        <li><strong>ALV1 / ALA1</strong><span>video and audio packets</span></li>
+        <li><strong>Decoder</strong><span>frames and PCM for presentation</span></li>
+      </ol>
+    </section>
+
+    <section class="project-state" aria-labelledby="status-title">
+      <div class="section-copy">
+        <h2 id="status-title">Project status</h2>
+        <p>Avelune is a working research implementation, not a production codec. Compression efficiency and performance are behind mature codecs on tested general video, and no compatibility or security-audit guarantee is offered during the 0.x draft phase.</p>
+        <a href={`${base}/project/status/`}>Current implementation and limitations</a>
+      </div>
+      <pre><code>avelune encode input.mkv output.avl
+avelune verify output.avl
+avelune inspect output.avl</code></pre>
     </section>
   </div>
 </BaseLayout>
 
 <script>
-  // Restrained, content-anchored motion: one-shot section reveals, a single
-  // typed install command, and data-flow dashes on the architecture diagram.
-  // Gated on prefers-reduced-motion; without JavaScript the page is static.
-  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  const typeInstall = () => {
-    const el = document.getElementById("install-command");
-    if (!el || el.dataset.typed) return;
-    el.dataset.typed = "1";
-    const full = el.dataset.cmd ?? el.textContent;
-    el.textContent = "";
-    el.classList.add("is-typing");
-    let i = 0;
-    const tick = () => {
-      i += 1;
-      el.textContent = full.slice(0, i);
-      if (i < full.length) {
-        setTimeout(tick, 10 + Math.random() * 26);
-      } else {
-        el.classList.remove("is-typing");
-      }
-    };
-    tick();
+  const flash = (button, label) => {
+    const previous = button.textContent;
+    button.textContent = label;
+    setTimeout(() => { button.textContent = previous; }, 1200);
   };
 
-  if (!reduced && "IntersectionObserver" in window) {
-    document.documentElement.classList.add("has-motion");
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          const el = entry.target;
-          io.unobserve(el);
-          el.classList.add("is-revealed");
-          const cmd = document.getElementById("install-command");
-          if (cmd && el.contains(cmd)) typeInstall();
-        }
-      },
-      { threshold: 0.2, rootMargin: "0px 0px -48px 0px" }
-    );
-    for (const el of document.querySelectorAll("[data-reveal]")) {
-      if (el.dataset.delay) el.style.transitionDelay = `${el.dataset.delay}ms`;
-      io.observe(el);
-    }
-    // Safety net: never leave content hidden if observation never fires.
-    setTimeout(() => {
-      for (const el of document.querySelectorAll("[data-reveal]:not(.is-revealed)")) el.classList.add("is-revealed");
-    }, 2500);
-  }
-
-  const flash = (btn, label) => {
-    const old = btn.textContent;
-    btn.textContent = label;
-    btn.classList.add("is-copied");
-    setTimeout(() => {
-      btn.textContent = old;
-      btn.classList.remove("is-copied");
-    }, 1400);
-  };
-
-  for (const btn of document.querySelectorAll("[data-copy]")) {
-    btn.addEventListener("click", async () => {
-      const target = document.getElementById(btn.dataset.copy);
+  for (const button of document.querySelectorAll("[data-copy]")) {
+    button.addEventListener("click", async () => {
+      const target = document.getElementById(button.dataset.copy);
       if (!target) return;
-      const text = target.dataset.cmd ?? target.textContent;
+      const text = target.textContent;
       try {
         await navigator.clipboard.writeText(text);
-        flash(btn, "COPIED");
+        flash(button, "Copied");
       } catch {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        try {
-          flash(btn, document.execCommand("copy") ? "COPIED" : "COPY FAILED");
-        } catch {
-          flash(btn, "COPY FAILED");
-        }
-        ta.remove();
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        try { flash(button, document.execCommand("copy") ? "Copied" : "Copy failed"); }
+        catch { flash(button, "Copy failed"); }
+        textarea.remove();
       }
     });
   }
@@ -173,97 +132,145 @@ const scriptUrl = "https://github.com/not-the-ccp/avelune/blob/main/scripts/inst
 
 <style>
   @layer page {
-    .home-shell { width: min(calc(100% - 2rem), var(--shell)); margin-inline: auto; }
-    .hero { padding: 4.5rem 0 0; border-bottom: 1px solid var(--rule); }
-    .hero-top { display: grid; grid-template-columns: 7fr 5fr; gap: clamp(3rem, 8vw, 7rem); align-items: center; padding-bottom: 3.5rem; }
-    .hero-copy h1 { margin: .45rem 0 1rem; }
-    .hero-summary { max-width: 590px; margin: 0; color: var(--muted); font-size: clamp(1.15rem, 2.2vw, 1.45rem); line-height: 1.5; }
-    .hero-actions { display: flex; gap: 1.5rem; align-items: center; margin-top: 2.25rem; }
-    .technical-profile { align-self: center; border-block: 1px solid var(--rule); }
-    .profile-head { display: flex; justify-content: space-between; padding: .65rem 0; color: var(--muted); font: .68rem/1.4 var(--font-mono); letter-spacing: .08em; }
-    .unfrozen { color: var(--warm); }
-    .plane-map { display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; min-height: 245px; border: 1px solid var(--rule); }
-    .plane { display: flex; flex-direction: column; justify-content: space-between; padding: .75rem; font-family: var(--font-mono); }
-    .plane span { font-size: 1.2rem; }
-    .plane small { font-size: .62rem; letter-spacing: .08em; }
-    .plane-y { grid-row: 1 / 3; color: var(--luma); background: linear-gradient(135deg, color-mix(in srgb, var(--luma) 12%, transparent), transparent); }
-    .plane-cb { border-left: 1px solid var(--rule); color: var(--cool); background: color-mix(in srgb, var(--cool) 8%, transparent); }
-    .plane-cr { border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); color: var(--warm); background: color-mix(in srgb, var(--warm) 8%, transparent); }
-    .technical-profile dl { margin: 0; }
-    .technical-profile dl div { display: grid; grid-template-columns: 6.5rem 1fr; padding: .6rem 0; border-top: 1px solid var(--rule); }
-    .technical-profile dt { color: var(--muted); font: .65rem/1.6 var(--font-mono); }
-    .technical-profile dd { margin: 0; font-size: .83rem; }
+    .home-shell { width: min(calc(100% - 2rem), 1120px); margin-inline: auto; }
 
-    .install { border-top: 1px solid var(--rule); padding: 1.5rem 0 2rem; }
-    .install-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: .8rem; color: var(--muted); font: .68rem/1.4 var(--font-mono); letter-spacing: .08em; }
-    .copy-btn { min-height: 42px; padding: .4rem .9rem; border: 1px solid var(--control-rule); background: transparent; color: var(--muted); font: .68rem/1 var(--font-mono); letter-spacing: .1em; cursor: pointer; }
-    .copy-btn:hover { color: var(--ink); border-color: var(--cool); }
-    .copy-btn.is-copied { color: var(--cool); border-color: var(--cool); }
-    .install-pre { margin: 0; overflow-x: auto; border: 1px solid var(--rule); background: var(--surface); padding: 1rem 1.25rem; }
-    .install-pre code { font-size: clamp(1rem, 2vw, 1.45rem); white-space: nowrap; }
-    .install-pre code.is-typing::after { content: "▍"; margin-left: 1px; color: var(--cool); animation: caret-blink 1s steps(1) infinite; }
-    .install-note { margin: .8rem 0 0; color: var(--muted); font-size: .84rem; max-width: 84ch; }
-
-    .registry, .architecture, .quickstart { padding: 6rem 0; border-bottom: 1px solid var(--rule); }
-    .registry header, .architecture header, .quickstart header { display: grid; grid-template-columns: 1fr 3fr; align-items: baseline; }
-    .registry h2, .architecture h2, .quickstart h2 { margin: 0 0 2.3rem; max-width: 22ch; }
-    .registry-row { display: grid; grid-template-columns: repeat(3, 1fr); border-block: 1px solid var(--rule); }
-    .registry-row a { display: grid; grid-template-columns: auto 1fr; gap: .2rem 1rem; padding: 1.4rem 1.5rem; color: var(--ink); text-decoration: none; }
-    .registry-row a + a { border-left: 1px solid var(--rule); }
-    .registry-row a:hover { background: var(--surface-2); }
-    .registry-row strong { grid-row: 1 / 3; color: var(--cool); font: 1.1rem/1.5 var(--font-mono); }
-    .registry-row span { font-weight: 500; }
-    .registry-row small { color: var(--muted); font: .62rem/1.4 var(--font-mono); letter-spacing: .06em; }
-    .registry-note { color: var(--muted); font-size: .85rem; }
-    .architecture svg { width: 100%; padding: 1.5rem 0; border-block: 1px solid var(--rule); }
-    .diagram-box rect { fill: var(--surface); stroke: var(--rule); }
-    .diagram-rules, .diagram-link { fill: var(--cool); stroke: var(--cool); stroke-width: 1; }
-    .diagram-link { fill: none; stroke: var(--warm); stroke-dasharray: 3 5; }
-    .diagram-label { fill: var(--ink); font: 12px var(--font-mono); }
-    .architecture-copy { display: grid; grid-template-columns: 2fr 1fr; gap: 4rem; margin-top: 1.5rem; color: var(--muted); }
-    .architecture-copy p { max-width: 66ch; margin: 0; }
-    .status-strip { display: grid; grid-template-columns: repeat(3, 1fr) auto; gap: 2rem; align-items: end; padding: 2rem 0; }
-    .status-strip div { display: grid; gap: .3rem; }
-    .status-strip span { color: var(--muted); font: .62rem/1.4 var(--font-mono); }
-    .status-strip strong { font-size: .82rem; font-weight: 500; }
-    .status-strip a { font-size: .8rem; }
-    .quickstart { display: grid; grid-template-columns: 1fr 3fr; gap: 1.5rem; }
-    .quickstart header { display: block; }
-    .quickstart pre { grid-column: 2; overflow:auto; margin:0; padding:1.25rem; border:1px solid var(--rule); background:var(--surface); font:.84rem/1.65 var(--font-mono); }
-    .quickstart > div { grid-column:2; display:grid; grid-template-columns:2fr 1fr; gap:2rem; color:var(--muted); }
-    .quickstart > div p { margin:0; max-width:60ch; }
-
-    /* Motion: functional and content-anchored. The .has-motion class is only
-       added by the page script when the user has not requested reduced motion,
-       so without JavaScript or under reduced motion the page is fully static. */
-    .has-motion [data-reveal] { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
-    .has-motion [data-reveal].is-revealed { opacity: 1; transform: none; }
-    .has-motion .technical-profile .plane { opacity: 0; transform: translateY(10px); transition: opacity .55s ease, transform .55s ease; }
-    .has-motion .technical-profile.is-revealed .plane-y { opacity: 1; transform: none; transition-delay: .15s; }
-    .has-motion .technical-profile.is-revealed .plane-cb { opacity: 1; transform: none; transition-delay: .3s; }
-    .has-motion .technical-profile.is-revealed .plane-cr { opacity: 1; transform: none; transition-delay: .45s; }
-    .has-motion .diagram-link { animation: link-flow 2.8s linear infinite; }
-
-    @keyframes caret-blink { 50% { opacity: 0; } }
-    @keyframes link-flow { to { stroke-dashoffset: -64; } }
-
-    @media (max-width: 800px) {
-      .hero { padding-top: 3.5rem; }
-      .hero-top { grid-template-columns: 1fr; gap: 2.5rem; padding-bottom: 2.5rem; }
-      .technical-profile { width: 100%; }
-      .registry header, .architecture header, .quickstart header { display: block; }
-      .registry-row { grid-template-columns: 1fr; }
-      .registry-row a + a { border-left: 0; border-top: 1px solid var(--rule); }
-      .architecture-copy, .status-strip, .quickstart, .quickstart > div { grid-template-columns: 1fr; gap: 1.2rem; }
-      .quickstart pre, .quickstart > div { grid-column:1; }
-      .install-pre { overflow-x: auto; }
-      .install-pre code { font-size: .95rem; }
+    .hero {
+      max-width: 850px;
+      padding: clamp(5rem, 11vw, 9rem) 0 clamp(4rem, 8vw, 7rem);
     }
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(4rem, 11vw, 8.5rem);
+      line-height: .9;
+      letter-spacing: -.055em;
+    }
+    .hero-summary {
+      max-width: 700px;
+      margin: 1.8rem 0 0;
+      color: var(--ink);
+      font-size: clamp(1.35rem, 2.8vw, 2rem);
+      line-height: 1.35;
+    }
+    .hero-status {
+      max-width: 72ch;
+      margin: 1.25rem 0 0;
+      color: var(--muted);
+      font-size: .95rem;
+      line-height: 1.55;
+    }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: .75rem 1.4rem; align-items: center; margin-top: 2.2rem; }
+
+    .start,
+    .install,
+    .formats,
+    .streaming,
+    .project-state {
+      padding: clamp(3.5rem, 7vw, 5.5rem) 0;
+      border-top: 1px solid var(--rule);
+    }
+
+    .start > h2,
+    .section-copy h2 { margin: 0; font-size: clamp(1.6rem, 3vw, 2.2rem); }
+    .section-copy > p { max-width: 68ch; margin: .7rem 0 0; color: var(--muted); }
+    .section-copy > a { display: inline-block; margin-top: 1rem; }
+
+    .start-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 1.5rem;
+      border-block: 1px solid var(--rule);
+    }
+    .start-grid a {
+      display: grid;
+      gap: .55rem;
+      min-width: 0;
+      padding: 1.35rem 1.25rem;
+      color: var(--ink);
+      text-decoration: none;
+    }
+    .start-grid a + a { border-left: 1px solid var(--rule); }
+    .start-grid a:hover strong { color: var(--cool); text-decoration: underline; text-underline-offset: .18em; }
+    .start-grid strong { font-size: 1.05rem; font-weight: 500; }
+    .start-grid span { color: var(--muted); font-size: .9rem; line-height: 1.5; }
+
+    .install {
+      display: grid;
+      grid-template-columns: minmax(16rem, .8fr) minmax(0, 1.4fr);
+      gap: 1.5rem 4rem;
+      align-items: start;
+    }
+    .install-command { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .65rem; }
+    .install-command pre,
+    .project-state pre {
+      margin: 0;
+      overflow-x: auto;
+      padding: 1rem;
+      border: 1px solid var(--rule);
+      background: var(--surface);
+      font: .9rem/1.6 var(--font-mono);
+    }
+    .install-command code { white-space: nowrap; }
+    .copy-btn {
+      min-height: 44px;
+      padding: .45rem .9rem;
+      border: 1px solid var(--control-rule);
+      background: transparent;
+      color: var(--ink);
+      cursor: pointer;
+    }
+    .copy-btn:hover { border-color: var(--cool); }
+    .install-note { grid-column: 2; margin: -.6rem 0 0; color: var(--muted); font-size: .84rem; }
+
+    .formats,
+    .streaming,
+    .project-state {
+      display: grid;
+      grid-template-columns: minmax(16rem, .8fr) minmax(0, 1.4fr);
+      gap: 4rem;
+    }
+    .format-list { margin: 0; }
+    .format-list div { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: 1rem; padding: 1rem 0; border-top: 1px solid var(--rule); }
+    .format-list div:last-child { border-bottom: 1px solid var(--rule); }
+    .format-list dt { font: 500 1rem var(--font-mono); }
+    .format-list dd { margin: 0; color: var(--muted); }
+
+    .stream-flow { margin: 0; padding: 0; list-style: none; counter-reset: flow; }
+    .stream-flow li {
+      display: grid;
+      grid-template-columns: 2rem minmax(9rem, .65fr) minmax(0, 1fr);
+      gap: .8rem;
+      align-items: baseline;
+      padding: .85rem 0;
+      border-top: 1px solid var(--rule);
+    }
+    .stream-flow li:last-child { border-bottom: 1px solid var(--rule); }
+    .stream-flow li::before { counter-increment: flow; content: counter(flow); color: var(--muted); font: .78rem var(--font-mono); }
+    .stream-flow strong { font-weight: 500; }
+    .stream-flow span { color: var(--muted); }
+
+    .project-state pre { align-self: start; }
+
+    @media (max-width: 780px) {
+      .hero { padding-top: 4rem; }
+      .start-grid { grid-template-columns: 1fr; }
+      .start-grid a + a { border-top: 1px solid var(--rule); border-left: 0; }
+      .install,
+      .formats,
+      .streaming,
+      .project-state { grid-template-columns: 1fr; gap: 1.5rem; }
+      .install-note { grid-column: 1; margin-top: 0; }
+    }
+
     @media (max-width: 480px) {
+      .home-shell { width: min(calc(100% - 1.25rem), 1120px); }
+      .hero h1 { font-size: clamp(3.6rem, 21vw, 5.4rem); }
       .hero-actions { align-items: stretch; flex-direction: column; }
-      .registry, .architecture { padding: 4rem 0; }
-      .install-head { flex-direction: column; align-items: flex-start; gap: .6rem; }
+      .hero-actions a { width: 100%; justify-content: space-between; }
+      .install-command { grid-template-columns: 1fr; }
       .copy-btn { width: 100%; }
+      .format-list div { grid-template-columns: 1fr; gap: .35rem; }
+      .stream-flow li { grid-template-columns: 1.5rem minmax(0, 1fr); }
+      .stream-flow span { grid-column: 2; }
     }
   }
 </style>

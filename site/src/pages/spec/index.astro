@@ -6,11 +6,36 @@ const current = specs.filter((doc) => doc.type !== "historical");
 const history = specs.filter((doc) => doc.type === "historical");
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 ---
-<BaseLayout title="Draft specification" current="spec">
-  <div class="index-shell">
-    <header class="index-header"><p class="eyebrow">AUTHORITATIVE SOURCE · DRAFT GENERATION 1</p><h1>Avelune specification</h1><p class="index-summary">Start with the overview and baseline profile, then follow the shared entropy, video, audio, container, and conformance definitions. The checked-in AsciiDoc remains authoritative.</p><p class="index-status">Experimental and unfrozen; incompatible changes remain possible while Avelune is 0.x.</p></header>
-    <h2>Current draft</h2>
-    <ol class="document-list">{current.map((doc) => <li><a href={`${base}${doc.route}`}>{doc.title}</a><p>{doc.summary}</p><span>{doc.status || doc.type}</span></li>)}</ol>
-    {history.length > 0 && <><h2>Historical, non-normative material</h2><ol class="document-list">{history.map((doc) => <li><a href={`${base}${doc.route}`}>{doc.title}</a><p>{doc.summary}</p><span>historical</span></li>)}</ol></>}
+<BaseLayout title="Specification" current="spec" description="Avelune Draft Generation 1 format specification.">
+  <div class="index-shell spec-index">
+    <header class="index-header">
+      <h1>Specification</h1>
+      <p class="index-summary">Draft Generation 1 defines the current ALV1 video, ALA1 audio, AVL container, shared entropy coding, and conformance requirements.</p>
+      <p class="index-status">The draft is unstable while Avelune is 0.x; incompatible format changes are allowed.</p>
+    </header>
+
+    <section aria-labelledby="current-draft-title">
+      <h2 id="current-draft-title">Current draft</h2>
+      <ol class="document-list">
+        {current.map((doc) => <li><a href={`${base}${doc.route}`}>{doc.title}</a><p>{doc.summary}</p></li>)}
+      </ol>
+    </section>
+
+    {history.length > 0 && (
+      <section class="history" aria-labelledby="spec-history-title">
+        <h2 id="spec-history-title">Historical material</h2>
+        <p>Superseded experiments are kept for project history and are not normative.</p>
+        <ol class="document-list">
+          {history.map((doc) => <li><a href={`${base}${doc.route}`}>{doc.title}</a><p>{doc.summary}</p><span>Historical</span></li>)}
+        </ol>
+      </section>
+    )}
   </div>
 </BaseLayout>
+<style>@layer page {
+  .spec-index > section { margin-top:3.5rem; }
+  .spec-index > section > h2 { margin-bottom:.5rem; }
+  .spec-index .history > p { max-width:62ch; margin:.4rem 0 0; color:var(--muted); }
+  .spec-index section:not(.history) .document-list li { grid-template-columns:minmax(11rem,1fr) 2fr; }
+  @media(max-width:640px){.spec-index section:not(.history) .document-list li{grid-template-columns:1fr}}
+}</style>
