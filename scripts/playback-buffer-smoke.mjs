@@ -54,6 +54,14 @@ function frame(pts, id = 0) {
 }
 
 {
+  const q = new PlaybackBuffer();
+  q.reset(0.15);
+  q.pushAudio(packet({pts: 100_000}));
+  assert.equal(q.metrics().lateAudioPackets, 0, 'packet overlapping a seek target is expected input, not late delivery');
+  assert(q.metrics().audioFrontier > 0.15, 'seek-overlap packet must extend contiguous coverage after trimming');
+}
+
+{
   const q = new PlaybackBuffer({prebufferSeconds: 1});
   q.pushAudio(packet({pts: 0}));
   assert.equal(q.readyToStart({hasAudio: true}), false);
