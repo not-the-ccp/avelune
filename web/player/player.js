@@ -453,7 +453,7 @@ class PlayerController {
 
   async seekBy(delta) {
     if (!this.index) return;
-    await this.seek(Math.max(0, Math.min(this.duration, this.currentTime() + delta));
+    await this.seek(Math.max(0, Math.min(this.duration, this.currentTime() + delta)));
   }
 
   destroy() {
