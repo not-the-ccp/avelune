@@ -1,4 +1,5 @@
 const seconds = value => Number(value) / 1e6;
+const AUDIO_GAP_TOLERANCE = 0.002;
 
 export class PlaybackBuffer {
   constructor({maxAudioSeconds = 4, maxVideoSeconds = 4, prebufferSeconds = 0.35} = {}) {
@@ -16,7 +17,6 @@ export class PlaybackBuffer {
     this.audio = [];
     this.video = [];
     this.audioFrontier = this.mediaStart;
-    this.audioQueuedUntil = this.mediaStart;
     this.videoQueuedUntil = this.mediaStart;
     this.lateAudioPackets = 0;
     this.audioUnderruns = 0;
@@ -37,8 +37,7 @@ export class PlaybackBuffer {
     if (start + 1e-6 < this.audioFrontier) this.lateAudioPackets++;
     this.audio.push({packet, start, end});
     this.audio.sort((a, b) => a.start - b.start);
-    this.#recomputeAudioFrontier();
-    this.#trimAudio();
+    this.#advanceAudioFrontier();
     return true;
   }
 
@@ -48,7 +47,6 @@ export class PlaybackBuffer {
     this.video.push({frame, start});
     this.video.sort((a, b) => a.start - b.start);
     this.videoQueuedUntil = Math.max(this.videoQueuedUntil, start);
-    this.#trimVideo();
     return true;
   }
 
@@ -70,6 +68,12 @@ export class PlaybackBuffer {
     return true;
   }
 
+  atCapacity({hasAudio, hasVideo, at = this.mediaStart} = {}) {
+    if (hasAudio && this.bufferedAudioSeconds(at) >= this.maxAudioSeconds) return true;
+    if (hasVideo && this.bufferedVideoSeconds(at) >= this.maxVideoSeconds) return true;
+    return false;
+  }
+
   takeAudioThrough(until) {
     const out = [];
     while (this.audio.length && this.audio[0].start <= until) out.push(this.audio.shift());
@@ -83,7 +87,7 @@ export class PlaybackBuffer {
   }
 
   noteAudioPlaybackPosition(now) {
-    if (now > this.audioFrontier + 0.002 && !this.decodeFinished) {
+    if (now > this.audioFrontier + AUDIO_GAP_TOLERANCE && !this.decodeFinished) {
       if (this.lastUnderrunAt === null || now - this.lastUnderrunAt > 0.05) {
         this.audioUnderruns++;
         this.lastUnderrunAt = now;
@@ -102,29 +106,17 @@ export class PlaybackBuffer {
       lateAudioPackets: this.lateAudioPackets,
       audioUnderruns: this.audioUnderruns,
       audioFrontier: this.audioFrontier,
+      decodeFinished: this.decodeFinished,
     };
   }
 
-  #recomputeAudioFrontier() {
-    let frontier = this.mediaStart;
+  #advanceAudioFrontier() {
+    let frontier = this.audioFrontier;
     for (const item of this.audio) {
       if (item.end <= frontier) continue;
-      if (item.start > frontier + 0.002) break;
+      if (item.start > frontier + AUDIO_GAP_TOLERANCE) break;
       frontier = Math.max(frontier, item.end);
     }
     this.audioFrontier = frontier;
-    this.audioQueuedUntil = Math.max(this.audioQueuedUntil, frontier);
-  }
-
-  #trimAudio() {
-    const keepAfter = Math.max(this.mediaStart, this.audioFrontier - this.maxAudioSeconds);
-    while (this.audio.length && this.audio[0].end < keepAfter) this.audio.shift();
-  }
-
-  #trimVideo() {
-    if (!this.video.length) return;
-    const newest = this.video[this.video.length - 1].start;
-    const keepAfter = Math.max(this.mediaStart, newest - this.maxVideoSeconds);
-    while (this.video.length > 1 && this.video[1].start < keepAfter) this.video.shift();
   }
 }
