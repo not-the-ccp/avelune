@@ -75,6 +75,15 @@ function frame(pts, id = 0) {
 }
 
 {
+  const q = new PlaybackBuffer({maxAudioSeconds: 0.3});
+  q.pushAudio(packet({pts: 0}));
+  q.pushAudio(packet({pts: 1_000_000}));
+  assert.equal(q.bufferedAudioSeconds(0), 0.1, 'contiguous coverage must stop at a timestamp hole');
+  assert(q.decodedAudioAheadSeconds(0) > 1, 'decoded extent must include post-gap packets');
+  assert.equal(q.atCapacity({hasAudio: true, at: 0}), true, 'a gap must not disable memory backpressure');
+}
+
+{
   const q = new PlaybackBuffer({maxAudioSeconds: 0.2, maxVideoSeconds: 0.2});
   q.pushVideo(frame(0, 1));
   q.pushVideo(frame(250_000, 2));
@@ -88,6 +97,16 @@ function frame(pts, id = 0) {
   q.takeAudioThrough(1);
   q.markDecodeFinished();
   assert.equal(q.noteAudioPlaybackPosition(0.2), false, 'normal decoded audio end must not be treated as an underrun');
+}
+
+{
+  const q = new PlaybackBuffer();
+  q.pushAudio(packet({pts: 0}));
+  q.pushAudio(packet({pts: 250_000}));
+  q.takeAudioThrough(1);
+  q.markDecodeFinished();
+  assert.equal(q.noteAudioPlaybackPosition(0.15), true, 'finishing decode must not hide an internal timestamp gap');
+  assert.equal(q.metrics().audioUnderruns, 1);
 }
 
 console.log('playback-buffer smoke: ok');
