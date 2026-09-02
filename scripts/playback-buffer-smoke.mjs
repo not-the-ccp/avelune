@@ -52,4 +52,25 @@ function frame(pts, id = 0) {
   assert.equal(q.readyToStart({hasAudio: true}), true, 'short finished clips must not wait forever for the target prebuffer');
 }
 
+{
+  const q = new PlaybackBuffer({maxAudioSeconds: 0.25});
+  q.pushAudio(packet({pts: 0}));
+  q.pushAudio(packet({pts: 100_000}));
+  q.pushAudio(packet({pts: 200_000}));
+  assert.equal(q.atCapacity({hasAudio: true, at: 0}), true, 'producer must see high-water backpressure');
+  const scheduled = q.takeAudioThrough(0.15);
+  assert.equal(scheduled.length, 2, 'scheduler should consume due packets without changing decoded coverage');
+  assert(Math.abs(q.metrics(0.15).audioQueuedSeconds - 0.15) < 1e-6);
+  q.pushAudio(packet({pts: 300_000}));
+  assert(Math.abs(q.metrics().audioFrontier - 0.4) < 1e-6, 'consuming queued packets must not reset the monotonic decoded frontier');
+}
+
+{
+  const q = new PlaybackBuffer({maxAudioSeconds: 0.2, maxVideoSeconds: 0.2});
+  q.pushVideo(frame(0, 1));
+  q.pushVideo(frame(250_000, 2));
+  assert.equal(q.atCapacity({hasVideo: true, at: 0}), true, 'video decode-ahead also participates in backpressure');
+  assert.equal(q.atCapacity({hasVideo: true, at: 0.1}), false, 'advancing the playhead releases producer backpressure');
+}
+
 console.log('playback-buffer smoke: ok');
