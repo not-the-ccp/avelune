@@ -17,6 +17,7 @@ export class PlaybackBuffer {
     this.audio = [];
     this.video = [];
     this.audioFrontier = this.mediaStart;
+    this.audioDecodedUntil = this.mediaStart;
     this.videoQueuedUntil = this.mediaStart;
     this.lateAudioPackets = 0;
     this.audioUnderruns = 0;
@@ -37,6 +38,7 @@ export class PlaybackBuffer {
     if (start + 1e-6 < this.audioFrontier) this.lateAudioPackets++;
     this.audio.push({packet, start, end});
     this.audio.sort((a, b) => a.start - b.start);
+    this.audioDecodedUntil = Math.max(this.audioDecodedUntil, end);
     this.#advanceAudioFrontier();
     return true;
   }
@@ -58,6 +60,10 @@ export class PlaybackBuffer {
     return Math.max(0, this.audioFrontier - at);
   }
 
+  decodedAudioAheadSeconds(at = this.mediaStart) {
+    return Math.max(0, this.audioDecodedUntil - at);
+  }
+
   bufferedVideoSeconds(at = this.mediaStart) {
     return Math.max(0, this.videoQueuedUntil - at);
   }
@@ -70,7 +76,10 @@ export class PlaybackBuffer {
   }
 
   atCapacity({hasAudio, hasVideo, at = this.mediaStart} = {}) {
-    if (hasAudio && this.bufferedAudioSeconds(at) >= this.maxAudioSeconds) return true;
+    // Bound by the furthest decoded timestamp, not the contiguous frontier. If input has a gap,
+    // the frontier deliberately stops before it; using that for memory backpressure would allow
+    // arbitrarily much post-gap PCM to accumulate.
+    if (hasAudio && this.decodedAudioAheadSeconds(at) >= this.maxAudioSeconds) return true;
     if (hasVideo && this.bufferedVideoSeconds(at) >= this.maxVideoSeconds) return true;
     return false;
   }
@@ -88,26 +97,31 @@ export class PlaybackBuffer {
   }
 
   noteAudioPlaybackPosition(now) {
-    if (this.decodeFinished && this.audio.length === 0) return false;
-    if (now > this.audioFrontier + AUDIO_GAP_TOLERANCE) {
-      if (this.lastUnderrunAt === null || now - this.lastUnderrunAt > 0.05) {
-        this.audioUnderruns++;
-        this.lastUnderrunAt = now;
-      }
-      return true;
+    if (now <= this.audioFrontier + AUDIO_GAP_TOLERANCE) return false;
+    // Once all input is decoded, running beyond the actual end of a contiguous audio stream is
+    // normal: video may legitimately outlast audio. A decoded packet beyond the frontier means
+    // there is a real timestamp hole, which must remain observable even after decode finishes.
+    const contiguousNaturalEnd = this.decodeFinished
+      && this.audioFrontier + AUDIO_GAP_TOLERANCE >= this.audioDecodedUntil;
+    if (contiguousNaturalEnd) return false;
+    if (this.lastUnderrunAt === null || now - this.lastUnderrunAt > 0.05) {
+      this.audioUnderruns++;
+      this.lastUnderrunAt = now;
     }
-    return false;
+    return true;
   }
 
   metrics(at = this.mediaStart) {
     return {
       audioQueuedSeconds: this.bufferedAudioSeconds(at),
+      audioDecodedAheadSeconds: this.decodedAudioAheadSeconds(at),
       videoQueuedSeconds: this.bufferedVideoSeconds(at),
       audioPackets: this.audio.length,
       videoFrames: this.video.length,
       lateAudioPackets: this.lateAudioPackets,
       audioUnderruns: this.audioUnderruns,
       audioFrontier: this.audioFrontier,
+      audioDecodedUntil: this.audioDecodedUntil,
       decodeFinished: this.decodeFinished,
     };
   }
