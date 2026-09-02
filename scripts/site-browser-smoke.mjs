@@ -33,9 +33,6 @@ const server = http.createServer(async (request, response) => {
     if (first > last || last >= data.length) { response.writeHead(416).end(); return; }
     if (url.searchParams.get('jitter') === '1') {
       jitterRangeResponses++;
-      // Let the fixed header/front-index reads complete normally, then inject a repeatable
-      // transport stall into epoch-range delivery. Playback must consume its decode-ahead rather
-      // than making the audio timeline depend directly on this response latency.
       if (jitterRangeResponses > 2) await delay(180);
     }
     response.writeHead(206, {...headers, 'Content-Length':last-first+1, 'Content-Range':`bytes ${first}-${last}/${data.length}`});
@@ -47,12 +44,7 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'avelune-site-chrome-'));
 const groupedProcess = process.platform !== 'win32';
-// `--remote-debugging-port=0` makes Chromium publish its chosen ephemeral port in the profile;
-// a guessed fixed port is what made the first CI run fail the DevTools connect. A cold or
-// CPU-contended runner can take well over ten seconds to start the browser, so the poll window
-// below is generous and proven at the CI scale.
 const child = spawn(chromium, ['--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--no-first-run','--no-default-browser-check','--disable-extensions','--autoplay-policy=no-user-gesture-required','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'], {stdio:['ignore','ignore','pipe'],detached:groupedProcess});
-// Keep Chromium diagnostics so a failed startup reports the actual error instead of a bare timeout.
 let chromiumErrors = '';
 child.stderr.on('data', chunk => { chromiumErrors = (chromiumErrors + chunk).slice(-8192); });
 
@@ -61,7 +53,7 @@ function chromiumFailure(prefix) {
   const detail = chromiumErrors.trim() || 'no stderr captured';
   return exit === null ? Error(`${prefix}: ${detail}`) : Error(`${prefix} (Chromium exited with ${exit}): ${detail}`);
 }
-const startupWindowAttempts = 600; // 600 * 50ms = 30s, matching Puppeteer's browser-launch budget.
+const startupWindowAttempts = 600;
 async function devtoolsPort() {
   const portFile = path.join(profile, 'DevToolsActivePort');
   for (let attempt=0; attempt<startupWindowAttempts; attempt++) {
@@ -218,8 +210,6 @@ try {
   state = await waitForDemoState('PAUSED', 80, 25);
   if (state !== 'PAUSED') throw Error('replay pause cleanup failed');
 
-  // Exercise an explicit portable engine path rather than only whatever Auto selected. Set both
-  // controls before dispatching one change so the reload is a single generation.
   await evaluate(`(()=>{
     const wasm=document.querySelector('#wasm-artifact');
     const renderer=document.querySelector('#renderer-choice');
@@ -250,10 +240,9 @@ try {
   await call('Emulation.setEmulatedMedia',{media:'screen',features:[{name:'prefers-color-scheme',value:'dark'}]});
 
   await navigate('/search/');
-  // Filtering must actually remove unmatched rows from rendering, not only reflect the attribute.
   const filtered = await evaluate("(()=>{const input=document.querySelector('#site-search');input.value='avelune-no-such-term-7q9z';input.dispatchEvent(new Event('input'));const rows=[...document.querySelectorAll('#search-results>li')];const hidden=rows.filter(x=>x.hidden);return {total:rows.length,hidden:hidden.length,renderedHidden:hidden.every(x=>getComputedStyle(x).display==='none'}})()");
   if (!filtered.total || filtered.hidden !== filtered.total || !filtered.renderedHidden) throw Error(`site search filtering failed: ${JSON.stringify(filtered)}`);
-  const count = await evaluate("(()=>{const i=document.querySelector('#site-search');i.value='epoch';i.dispatchEvent(new Event('input'));return [...document.querySelectorAll('#search-results>li')].filter(x=>!x.hidden).length})()");
+  const count = await evaluate("(()=>{const i=document.querySelector('#site-search');i.value='epoch';i.dispatchEvent(new Event('input'));return Array.from(document.querySelectorAll('#search-results>li')).filter(x=>!x.hidden).length;})()");
   if (!count) throw Error('site search returned no epoch documents');
   console.log(JSON.stringify({
     pages:pageRoutes.length,
