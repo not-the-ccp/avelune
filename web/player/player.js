@@ -298,15 +298,24 @@ class PlayerController {
         : (performance.now() - wallStart) / 1000;
       return Math.min(this.duration, start + Math.max(0, elapsed));
     };
-    const waitForQueueSpace = async () => {
-      while (queue.atCapacity({hasAudio, hasVideo, at: mediaNow()})) {
+    const waitForQueueSpace = async kind => {
+      // Before the clock starts, allow the first independently-decodable epoch to establish a
+      // usable A/V prebuffer. Some decoder drains expose all audio packets before video; applying
+      // the steady-state audio high-water mark there could prevent the first video frame from ever
+      // reaching the queue. Once playback starts, backpressure is per stream so one full queue does
+      // not prevent the decoder from draining the other stream.
+      if (!clockStarted) return;
+      const capacity = kind === 'audio'
+        ? {hasAudio: true, hasVideo: false, at: mediaNow()}
+        : {hasAudio: false, hasVideo: true, at: mediaNow()};
+      while (queue.atCapacity(capacity)) {
         if (controller.signal.aborted) throw controller.signal.reason;
+        capacity.at = mediaNow();
         await sleep(PLAYBACK_POLL_MS);
       }
     };
 
     let producerError = null;
-    let producerDone = false;
     const firstEpoch = Math.max(0, this.index.epochs.findLastIndex(epoch => seconds(epoch.pts) <= start));
     const producer = (async () => {
       try {
@@ -320,12 +329,12 @@ class PlayerController {
             onEvent: event => this.epochEvent(event),
             onAudio: async packet => {
               if (packet.streamId !== this.audioStreamId) return;
-              await waitForQueueSpace();
+              await waitForQueueSpace('audio');
               queue.pushAudio(packet);
             },
             onVideo: async frame => {
               if (frame.streamId !== this.videoStreamId) return;
-              await waitForQueueSpace();
+              await waitForQueueSpace('video');
               queue.pushVideo(frame);
             },
           });
@@ -333,7 +342,6 @@ class PlayerController {
       } catch (error) {
         producerError = error;
       } finally {
-        producerDone = true;
         queue.markDecodeFinished();
       }
     })();
