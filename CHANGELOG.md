@@ -25,6 +25,8 @@ may be incompatible until a stable major line is explicitly declared.
 - Added deterministic playback-buffer and PCM-timeline tests plus Chromium regressions that inject
   delayed HTTP ranges while exercising playback, pause/resume, seek, replay, and an explicit
   scalar-WASM/Canvas2D presentation path.
+- Added a synthetic q1 A/V browser-encoder matrix that validates exact decoded audio length and
+  canonical index timing at 1, 2, 4, and 8 second epoch durations without an FFmpeg dependency.
 - Added live browser playback diagnostics for audio output mode, queued and decoded-ahead audio,
   queued video, late PCM, and underrun counts.
 
