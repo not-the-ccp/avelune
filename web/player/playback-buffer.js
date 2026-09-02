@@ -35,7 +35,10 @@ export class PlaybackBuffer {
     const duration = frames / packet.rate;
     const end = start + duration;
     if (end <= this.mediaStart) return false;
-    if (start + 1e-6 < this.audioFrontier) this.lateAudioPackets++;
+    // A seek normally begins inside the first decoded packet. Its PTS is before mediaStart by
+    // construction and the scheduler trims the prefix, so it is not late delivery. Count only a
+    // packet that begins on the active timeline but arrives behind already-contiguous coverage.
+    if (start >= this.mediaStart && start + 1e-6 < this.audioFrontier) this.lateAudioPackets++;
     this.audio.push({packet, start, end});
     this.audio.sort((a, b) => a.start - b.start);
     this.audioDecodedUntil = Math.max(this.audioDecodedUntil, end);
@@ -76,9 +79,6 @@ export class PlaybackBuffer {
   }
 
   atCapacity({hasAudio, hasVideo, at = this.mediaStart} = {}) {
-    // Bound by the furthest decoded timestamp, not the contiguous frontier. If input has a gap,
-    // the frontier deliberately stops before it; using that for memory backpressure would allow
-    // arbitrarily much post-gap PCM to accumulate.
     if (hasAudio && this.decodedAudioAheadSeconds(at) >= this.maxAudioSeconds) return true;
     if (hasVideo && this.bufferedVideoSeconds(at) >= this.maxVideoSeconds) return true;
     return false;
@@ -97,18 +97,15 @@ export class PlaybackBuffer {
   }
 
   noteAudioPlaybackPosition(now) {
-    if (now <= this.audioFrontier + AUDIO_GAP_TOLERANCE) return false;
-    // Once all input is decoded, running beyond the actual end of a contiguous audio stream is
-    // normal: video may legitimately outlast audio. A decoded packet beyond the frontier means
-    // there is a real timestamp hole, which must remain observable even after decode finishes.
-    const contiguousNaturalEnd = this.decodeFinished
-      && this.audioFrontier + AUDIO_GAP_TOLERANCE >= this.audioDecodedUntil;
-    if (contiguousNaturalEnd) return false;
-    if (this.lastUnderrunAt === null || now - this.lastUnderrunAt > 0.05) {
-      this.audioUnderruns++;
-      this.lastUnderrunAt = now;
+    if (this.decodeFinished && this.audioFrontier >= this.audioDecodedUntil - AUDIO_GAP_TOLERANCE && now >= this.audioDecodedUntil - AUDIO_GAP_TOLERANCE) return false;
+    if (now > this.audioFrontier + AUDIO_GAP_TOLERANCE) {
+      if (this.lastUnderrunAt === null || now - this.lastUnderrunAt > 0.05) {
+        this.audioUnderruns++;
+        this.lastUnderrunAt = now;
+      }
+      return true;
     }
-    return true;
+    return false;
   }
 
   metrics(at = this.mediaStart) {
