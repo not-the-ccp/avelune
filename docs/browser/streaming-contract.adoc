@@ -1,16 +1,17 @@
 = Browser streaming contract
 :page-type: architecture
 :page-status: current
-:summary: The canonical WASM ABI, exact byte-range contract, cancellation generations, and bounded presentation model.
+:summary: The canonical WASM ABI, exact byte-range contract, cancellation generations, and bounded buffer-driven presentation model.
 :nav-order: 40
 
 The browser API is incremental and container-aware. Rust/WASM owns Avelune parsing and codec
-semantics; JavaScript owns byte transport, cancellation, clocks, audio scheduling, and presentation.
+semantics; JavaScript owns byte transport, cancellation, playback queues, clocks, audio output, and
+presentation.
 
 [#browser-wasm-surface]
 == Canonical WASM surface
 
-The important operations are conceptually:
+The important decoder/video-encoder operations are conceptually:
 
 [source,text]
 ----
@@ -39,11 +40,10 @@ CRC, stream routing, or reference-state semantics independently.
 `decoder_finish_input` is required at an indexed-range boundary. Transport EOF by itself does not
 prove that a parser ended on a complete packet.
 
-The video encoder surface is intentionally narrower than the decoder. It accepts complete planar
-8-bit 4:2:0 frames, uses fixed-duration epochs, and returns a video-only Draft Generation 1
-container. The demo's Y4M encoder lab is a validation/usefulness feature, not a claim that browsers
-can natively demux arbitrary MP4/WebM inputs. A general upload workflow should only be added with a
-reliable media-ingest layer; FFmpeg-WASM is not pulled in merely to make the demo appear complete.
+The browser integration also exposes canonical A/V encoder wrappers used by the media-import path.
+They accept complete decoded YUV 4:2:0 frames and interleaved PCM and preserve the same epoch/container
+semantics as the native canonical implementation. Foreign-container demux/decode remains outside the
+Avelune codec and is handled by the browser media-ingest layer.
 
 [#browser-artifacts]
 == Scalar and SIMD128 artifacts
@@ -69,25 +69,69 @@ Local `Blob`/`File` playback uses `Blob.slice()` in bounded chunks and exercises
 path without uploading the file.
 
 [#browser-generations]
-== Decode generations and seeking
+== Decode and playback generations
 
 Starting a load or epoch decode creates a new decoder generation and invalidates the previous one.
 This check is intrinsic to the loader, in addition to `AbortSignal` transport cancellation. A stale
 source that ignores cancellation is therefore stopped before its next bytes can enter the reset WASM
 decoder.
 
-An epoch transaction is:
+Each play/resume/seek/replay operation also owns a distinct JavaScript playback buffer. Cancelling an
+older operation can finish its producer later, but that producer can only mark its own queue complete;
+it cannot make a newer seek/replay generation appear decoded or ready.
+
+An epoch decode transaction is:
 
 . reset the canonical session for the expected indexed epoch ID;
 . stream arbitrary byte fragments into the decoder;
-. drain decoded outputs with presentation backpressure;
+. drain decoded outputs into the active playback queues, waiting only for bounded high-water
+  backpressure rather than presentation timestamps;
 . explicitly finalize input;
 . accept success only if the parser/session is complete and semantically valid.
 
 [#browser-presentation]
 == Presentation and buffering
 
-Decoded callbacks are awaited, so JavaScript does not need to collect an entire epoch before
-presentation. WebAudio scheduling is bounded and cancelled on pause/seek/reload. Canvas2D and WebGPU
-are presentation implementations only; they do not change codec semantics. WebGPU textures and
-pipelines are reused while dimensions remain unchanged.
+Decode throughput and presentation timing are deliberately separate. The producer decodes consecutive
+indexed epochs ahead into bounded audio/video queues. It may pause when a queue reaches its decoded
+high-water mark, but decoded callbacks never sleep until a frame's wall-clock presentation time.
+This preserves cross-epoch decode cushion under ordinary HTTP/WASM jitter.
+
+For A/V content, audio is the master playback clock. Playback waits for a decoded prebuffer before
+starting. PCM is then submitted ahead of the clock at its exact media timestamp. When the browser can
+create an `AudioContext` at the stream sample rate and supports `AudioWorklet`, Avelune uses one
+continuous worklet PCM timeline keyed to absolute WebAudio frames. Timestamp gaps remain gaps; the
+worklet does not concatenate packets merely because they arrived next to each other.
+
+When the requested sample rate cannot be used by the context, or `AudioWorklet` is unavailable, the
+fallback schedules `AudioBufferSourceNode` buffers at the same exact timeline positions and lets
+WebAudio perform the rate conversion. The fallback must not clamp a missed start time to
+`currentTime`. A packet or worklet chunk that reaches the output after its presentation deadline is
+an explicit underrun/fault, not silently shortened media.
+
+Video presentation independently consumes the newest decoded frame due at the audio clock (or the
+wall clock for video-only media). A slow renderer can therefore drop obsolete due frames without
+stalling decoder progress or moving the audio timeline.
+
+Pause, seek, replay, reload, and playback errors cancel pending decode/output work and start with new
+queue/clock state. The demo inspector exposes the selected audio-output mode, contiguous queued audio,
+furthest decoded-audio extent, queued video, decoder-late packets, worklet-late frames, and underrun
+count so starvation is observable rather than inferred from audible glitches.
+
+Canvas2D and WebGPU are presentation implementations only; they do not change codec semantics.
+WebGPU textures and pipelines are reused while dimensions remain unchanged.
+
+[#browser-validation]
+== Playback validation
+
+The regular browser/WASM gate includes:
+
+* delayed HTTP Range delivery across indexed epochs;
+* pause/resume, seek while playing, completion, and replay;
+* explicit scalar-WASM/Canvas2D playback in addition to automatic artifact/renderer selection;
+* exact q1 A/V encode/decode matrices with 1, 2, 4, and 8 second epoch durations;
+* explicit zero-underrun and zero-late-output assertions for the jittered playback path.
+
+GPU-backed WebGPU presentation and long-duration perceptual listening remain environment-specific
+validation work; a headless `--disable-gpu` Chromium run must not be treated as evidence for WebGPU
+runtime support or subjective audio quality.
