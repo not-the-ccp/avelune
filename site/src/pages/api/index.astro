@@ -2,11 +2,24 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 ---
-<BaseLayout title="Rust API reference" current="api">
+<BaseLayout title="Rust API" current="api" description="Rust API reference for the Avelune codec and container implementation.">
   <div class="index-shell api-index">
-    <header class="index-header"><p class="eyebrow">CANONICAL IMPLEMENTATION · RUST</p><h1>Rust API reference</h1><p class="index-summary">Native rustdoc documents the canonical <code>avelune</code> facade. It is an experimental software API, not the normative format definition.</p></header>
-    <section aria-labelledby="api-start"><h2 id="api-start">Start with the facade</h2><p>The facade exposes audio, video, container, session, and threading modules through one application-facing crate. The independent conformance oracle is deliberately not an alternative runtime API.</p><a class="button-link" href={`${base}/api/rust/avelune/`}>Open native rustdoc</a></section>
-    <nav class="api-links" aria-label="Related documentation"><a href={`${base}/docs/cli/`}><strong>CLI guide</strong><span>Encode, inspect, verify, and decode files.</span></a><a href={`${base}/spec/`}><strong>Format specification</strong><span>Read the authoritative decoded semantics.</span></a><a href={`${base}/docs/development/reference-oracle/`}><strong>Conformance boundary</strong><span>Understand why the oracle remains independent.</span></a></nav>
+    <header class="index-header">
+      <h1>Rust API</h1>
+      <p class="index-summary">Generated rustdoc for the application-facing <code>avelune</code> crate. The software API is experimental while Avelune is 0.x.</p>
+    </header>
+
+    <section aria-labelledby="api-start">
+      <h2 id="api-start">Library reference</h2>
+      <p>The crate exposes audio, video, container, session, and threading APIs used by the CLI and other native applications.</p>
+      <a class="button-link" href={`${base}/api/rust/avelune/`}>Open rustdoc</a>
+    </section>
+
+    <nav class="api-links" aria-label="Related documentation">
+      <a href={`${base}/docs/cli/`}><strong>CLI guide</strong><span>Encode, inspect, verify, and decode files.</span></a>
+      <a href={`${base}/docs/browser/streaming-contract/`}><strong>Browser integration</strong><span>WASM decoding, media import, and indexed playback.</span></a>
+      <a href={`${base}/spec/`}><strong>Format specification</strong><span>Normative Draft Generation 1 bitstream and container definitions.</span></a>
+    </nav>
   </div>
 </BaseLayout>
 <style>@layer page {

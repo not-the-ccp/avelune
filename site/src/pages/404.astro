@@ -3,6 +3,16 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 ---
 <BaseLayout title="Page not found">
-  <div class="index-shell"><header class="index-header"><p class="eyebrow">HTTP 404 · RANGE NOT FOUND</p><h1>That address is outside the index.</h1><p class="index-summary">The requested page does not exist, or its route changed while this draft was unfrozen.</p></header><nav class="error-paths" aria-label="Continue browsing"><a class="button-link" href={`${base}/docs/`}>Open documentation</a><a href={`${base}/spec/`}>Read the specification</a><a href={`${base}/search/`}>Search the site</a></nav></div>
+  <div class="index-shell">
+    <header class="index-header">
+      <h1>Page not found</h1>
+      <p class="index-summary">There is no page at this address.</p>
+    </header>
+    <nav class="error-paths" aria-label="Continue browsing">
+      <a class="button-link" href={`${base}/docs/`}>Documentation</a>
+      <a href={`${base}/spec/`}>Specification</a>
+      <a href={`${base}/search/`}>Search</a>
+    </nav>
+  </div>
 </BaseLayout>
 <style>@layer page {.error-paths{display:flex;flex-wrap:wrap;gap:1rem 1.5rem;align-items:center;margin-top:2rem}@media(max-width:480px){.error-paths{align-items:stretch;flex-direction:column}}}</style>
