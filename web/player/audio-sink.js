@@ -1,6 +1,29 @@
 const seconds = value => Number(value) / 1e6;
 const DEADLINE_EPSILON = 0.005;
 
+function ensurePlaybackDiagnostics() {
+  if (typeof document === 'undefined' || document.getElementById('playback-audio-output')) return;
+  const inspector = document.querySelector('.inspector');
+  if (!inspector) return;
+
+  // Playback continuity is a runtime concern, so keep these rows owned by the playback module
+  // instead of coupling player.js to one particular Astro demo layout. This also lets older/custom
+  // demo shells gain the diagnostics when they upgrade the player modules.
+  const section = document.createElement('section');
+  section.className = 'playback-continuity';
+  section.innerHTML = `
+    <h2>Continuity</h2>
+    <dl>
+      <div><dt>Audio output</dt><dd id="playback-audio-output">—</dd></div>
+      <div><dt>Audio queued</dt><dd id="playback-audio-buffer">—</dd></div>
+      <div><dt>Audio decode-ahead</dt><dd id="playback-audio-decode">—</dd></div>
+      <div><dt>Video queued</dt><dd id="playback-video-buffer">—</dd></div>
+      <div><dt>Late audio</dt><dd id="playback-audio-late">0</dd></div>
+      <div><dt>Audio underruns</dt><dd id="playback-audio-underruns">0</dd></div>
+    </dl>`;
+  inspector.append(section);
+}
+
 export class AudioUnderrunError extends Error {
   constructor(message) {
     super(message);
@@ -10,6 +33,7 @@ export class AudioUnderrunError extends Error {
 
 export class AudioSink {
   constructor() {
+    ensurePlaybackDiagnostics();
     this.context = null;
     this.gain = null;
     this.volume = 1;
