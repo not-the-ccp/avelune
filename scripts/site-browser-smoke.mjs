@@ -15,8 +15,10 @@ const pageRoutes = walk(root).filter(file => file.endsWith('.html') && !file.inc
   return `/${relative.replace(/index\.html$/, '')}`;
 });
 
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const mime = new Map([['.html','text/html; charset=utf-8'],['.css','text/css'],['.js','text/javascript'],['.wasm','application/wasm'],['.avl','application/octet-stream'],['.svg','image/svg+xml'],['.woff2','font/woff2']]);
-const server = http.createServer((request, response) => {
+let jitterRangeResponses = 0;
+const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, 'http://localhost');
   if (!url.pathname.startsWith('/avelune/')) { response.writeHead(404).end(); return; }
   let relative = decodeURIComponent(url.pathname.slice('/avelune/'.length));
@@ -29,6 +31,13 @@ const server = http.createServer((request, response) => {
   if (range) {
     const first = Number(range[1]), last = Number(range[2]);
     if (first > last || last >= data.length) { response.writeHead(416).end(); return; }
+    if (url.searchParams.get('jitter') === '1') {
+      jitterRangeResponses++;
+      // Let the fixed header/front-index reads complete normally, then inject a repeatable
+      // transport stall into epoch-range delivery. Playback must consume its decode-ahead rather
+      // than making the audio timeline depend directly on this response latency.
+      if (jitterRangeResponses > 2) await delay(180);
+    }
     response.writeHead(206, {...headers, 'Content-Length':last-first+1, 'Content-Range':`bytes ${first}-${last}/${data.length}`});
     response.end(data.subarray(first, last + 1)); return;
   }
@@ -42,12 +51,11 @@ const groupedProcess = process.platform !== 'win32';
 // a guessed fixed port is what made the first CI run fail the DevTools connect. A cold or
 // CPU-contended runner can take well over ten seconds to start the browser, so the poll window
 // below is generous and proven at the CI scale.
-const child = spawn(chromium, ['--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--no-first-run','--no-default-browser-check','--disable-extensions','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'], {stdio:['ignore','ignore','pipe'],detached:groupedProcess});
+const child = spawn(chromium, ['--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--no-first-run','--no-default-browser-check','--disable-extensions','--autoplay-policy=no-user-gesture-required','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'], {stdio:['ignore','ignore','pipe'],detached:groupedProcess});
 // Keep Chromium diagnostics so a failed startup reports the actual error instead of a bare timeout.
 let chromiumErrors = '';
 child.stderr.on('data', chunk => { chromiumErrors = (chromiumErrors + chunk).slice(-8192); });
 
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 function chromiumFailure(prefix) {
   const exit = child.exitCode ?? child.signalCode ?? null;
   const detail = chromiumErrors.trim() || 'no stderr captured';
@@ -127,11 +135,29 @@ try {
     return {missing:false,overlaps,outside:rects.some(r=>r.left<bounds.left-1||r.right>bounds.right+1),tooNarrow:rects.some(r=>r.width<120||r.controlWidth<100)};
   })()`);
   if (mediaLayout.missing || mediaLayout.overlaps || mediaLayout.outside || mediaLayout.tooNarrow) throw Error(`demo media-control layout is unusable at 1280px: ${JSON.stringify(mediaLayout)}`);
-  await evaluate("document.querySelector('#load-sample').click()");
+  await evaluate("(()=>{const option=document.querySelector('#sample').selectedOptions[0];option.value=option.value.split('?')[0]+'?jitter=1';document.querySelector('#load-sample').click()})()");
   let state;
   for (let attempt=0; attempt<300; attempt++) { state=await evaluate("document.querySelector('#state-label')?.textContent"); if (state === 'READY' || state === 'ERROR') break; await delay(50); }
   if (state !== 'READY') throw Error(`bundled demo did not become ready: ${await evaluate("document.querySelector('#state-detail')?.textContent")}`);
   if (await evaluate("document.querySelector('#play').disabled")) throw Error('play control remained disabled after sample load');
+
+  await evaluate("document.querySelector('#play').click()");
+  for (let attempt=0; attempt<300; attempt++) {
+    state = await evaluate("document.querySelector('#state-label')?.textContent");
+    if (state === 'PLAYING' || state === 'ERROR') break;
+    await delay(25);
+  }
+  if (state !== 'PLAYING') throw Error(`buffered demo did not start playback: ${await evaluate("document.querySelector('#state-detail')?.textContent")}`);
+  for (let attempt=0; attempt<500; attempt++) {
+    state = await evaluate("document.querySelector('#state-label')?.textContent");
+    if (state === 'ENDED' || state === 'ERROR') break;
+    await delay(25);
+  }
+  const playback = await evaluate("({state:document.querySelector('#state-label')?.textContent,detail:document.querySelector('#state-detail')?.textContent,frames:Number(document.querySelector('#metric-frames')?.textContent||0),log:document.querySelector('#event-log')?.textContent||''})");
+  if (playback.state !== 'ENDED' || playback.frames <= 0 || !/0 audio underruns/.test(playback.detail) || /playback error:/i.test(playback.log)) {
+    throw Error(`buffer-driven demo playback failed under range jitter: ${JSON.stringify(playback)}`);
+  }
+  if (jitterRangeResponses < 3) throw Error(`playback jitter regression did not exercise delayed epoch ranges (${jitterRangeResponses} range responses)`);
 
   await call('Emulation.setDeviceMetricsOverride',{width:320,height:800,deviceScaleFactor:1,mobile:true});
   await call('Emulation.setEmulatedMedia',{media:'screen',features:[{name:'prefers-color-scheme',value:'light'}]});
@@ -152,7 +178,7 @@ try {
   if (!filtered.total || filtered.hidden !== filtered.total || !filtered.renderedHidden) throw Error(`site search filtering failed: ${JSON.stringify(filtered)}`);
   const count = await evaluate("(()=>{const i=document.querySelector('#site-search');i.value='epoch';i.dispatchEvent(new Event('input'));return [...document.querySelectorAll('#search-results>li')].filter(x=>!x.hidden).length})()");
   if (!count) throw Error('site search returned no epoch documents');
-  console.log(JSON.stringify({pages:pageRoutes.length,widths:[1280,320],keyboard:'skip-link',demo:'ready',mobilePublication:'reflowed',themes:'light/dark/print',searchResults:count}));
+  console.log(JSON.stringify({pages:pageRoutes.length,widths:[1280,320],keyboard:'skip-link',demo:'buffered-jitter-playback',jitterRanges:jitterRangeResponses,mobilePublication:'reflowed',themes:'light/dark/print',searchResults:count}));
 } finally {
   ws?.close();
   const exited = new Promise(resolve => child.once('exit', resolve));
