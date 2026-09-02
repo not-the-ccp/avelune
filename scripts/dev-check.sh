@@ -24,6 +24,7 @@ node --check web/player/audio-worklet.js
 node --check web/player/avelune-loader.js
 node --check web/player/renderers.js
 node --check scripts/browser-loader-smoke.mjs
+node --check scripts/browser-epoch-matrix-smoke.mjs
 node --check scripts/playback-buffer-smoke.mjs
 node --check scripts/audio-timeline-smoke.mjs
 node --check scripts/wasm-smoke.mjs
@@ -59,6 +60,7 @@ if [[ -n $WASM_LIBDIR && -d $WASM_LIBDIR ]]; then
   node scripts/wasm-encoder-smoke.mjs web/player/avelune-scalar.wasm
   node scripts/wasm-encoder-smoke.mjs web/player/avelune-simd128.wasm
   node scripts/browser-loader-smoke.mjs
+  node scripts/browser-epoch-matrix-smoke.mjs web/player/avelune-scalar.wasm
   if [[ -f node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.js ]]; then node scripts/browser-media-import-smoke.mjs; else echo 'SKIP: @ffmpeg/core is not installed for media-import smoke'; fi
 else
   echo 'SKIP: wasm32-unknown-unknown stdlib is not installed'
