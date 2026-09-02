@@ -113,6 +113,29 @@ async function waitForDemoState(expected, attempts = 300, interval = 25) {
   }
   return state;
 }
+async function playbackFacts() {
+  return evaluate(`({
+    state:document.querySelector('#state-label')?.textContent,
+    detail:document.querySelector('#state-detail')?.textContent,
+    frames:Number(document.querySelector('#metric-frames')?.textContent||0),
+    wasm:document.querySelector('#wasm-name')?.textContent,
+    renderer:document.querySelector('#format-renderer')?.textContent,
+    audioOutput:document.querySelector('#playback-audio-output')?.textContent,
+    audioQueued:document.querySelector('#playback-audio-buffer')?.textContent,
+    audioDecodeAhead:document.querySelector('#playback-audio-decode')?.textContent,
+    videoQueued:document.querySelector('#playback-video-buffer')?.textContent,
+    lateAudio:document.querySelector('#playback-audio-late')?.textContent,
+    underruns:document.querySelector('#playback-audio-underruns')?.textContent,
+    log:document.querySelector('#event-log')?.textContent||''
+  })`);
+}
+function assertCleanPlayback(facts, label) {
+  if (facts.state !== 'ENDED' || facts.frames <= 0 || !/0 audio underruns/.test(facts.detail) || facts.underruns !== '0' || /playback error:/i.test(facts.log)) {
+    throw Error(`${label} playback failed: ${JSON.stringify(facts)}`);
+  }
+  if (!facts.audioOutput || facts.audioOutput === '—') throw Error(`${label} did not expose an audio output mode`);
+  if (!/^0 packets · 0 worklet frames$/.test(facts.lateAudio ?? '')) throw Error(`${label} reported late audio: ${facts.lateAudio}`);
+}
 async function auditPages(width, height) {
   await call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<600});
   for (const route of pageRoutes) {
@@ -153,6 +176,8 @@ try {
   await evaluate("document.querySelector('#play').click()");
   state = await waitForDemoState('PLAYING');
   if (state !== 'PLAYING') throw Error(`buffered demo did not start playback: ${await evaluate("document.querySelector('#state-detail')?.textContent")}`);
+  const primaryStart = await playbackFacts();
+  if (!primaryStart.audioOutput || primaryStart.audioOutput === '—') throw Error(`live playback metrics were not populated: ${JSON.stringify(primaryStart)}`);
   for (let attempt=0; attempt<120; attempt++) {
     const t = Number(await evaluate("document.querySelector('#seek')?.value"));
     if (t > 0.25) break;
@@ -180,10 +205,8 @@ try {
   if (afterSeek < seekTarget - 0.1) throw Error(`seek restarted before requested media time: ${afterSeek}`);
 
   state = await waitForDemoState('ENDED', 500, 25);
-  const playback = await evaluate("({state:document.querySelector('#state-label')?.textContent,detail:document.querySelector('#state-detail')?.textContent,frames:Number(document.querySelector('#metric-frames')?.textContent||0),log:document.querySelector('#event-log')?.textContent||''})");
-  if (state !== 'ENDED' || playback.frames <= 0 || !/0 audio underruns/.test(playback.detail) || /playback error:/i.test(playback.log)) {
-    throw Error(`buffer-driven demo playback failed under range jitter/interactions: ${JSON.stringify(playback)}`);
-  }
+  const primaryPlayback = await playbackFacts();
+  assertCleanPlayback(primaryPlayback, 'auto-engine jitter/interaction');
   if (jitterRangeResponses < 3) throw Error(`playback jitter regression did not exercise delayed epoch ranges (${jitterRangeResponses} range responses)`);
 
   await evaluate("document.querySelector('#play').click()");
@@ -194,6 +217,24 @@ try {
   await evaluate("document.querySelector('#play').click()");
   state = await waitForDemoState('PAUSED', 80, 25);
   if (state !== 'PAUSED') throw Error('replay pause cleanup failed');
+
+  // Exercise an explicit portable engine path rather than only whatever Auto selected. Set both
+  // controls before dispatching one change so the reload is a single generation.
+  await evaluate(`(()=>{
+    const wasm=document.querySelector('#wasm-artifact');
+    const renderer=document.querySelector('#renderer-choice');
+    wasm.value='scalar';
+    renderer.value='canvas';
+    wasm.dispatchEvent(new Event('change',{bubbles:true}));
+  })()`);
+  state = await waitForDemoState('READY', 300, 50);
+  if (state !== 'READY') throw Error(`scalar/Canvas reload failed: ${await evaluate("document.querySelector('#state-detail')?.textContent")}`);
+  const scalarReady = await playbackFacts();
+  if (scalarReady.wasm !== 'scalar' || scalarReady.renderer !== 'Canvas2D') throw Error(`explicit scalar/Canvas selection was not honored: ${JSON.stringify(scalarReady)}`);
+  await evaluate("document.querySelector('#play').click()");
+  state = await waitForDemoState('ENDED', 600, 25);
+  const scalarPlayback = await playbackFacts();
+  assertCleanPlayback(scalarPlayback, 'scalar/Canvas jitter');
 
   await call('Emulation.setDeviceMetricsOverride',{width:320,height:800,deviceScaleFactor:1,mobile:true});
   await call('Emulation.setEmulatedMedia',{media:'screen',features:[{name:'prefers-color-scheme',value:'light'}]});
@@ -210,11 +251,24 @@ try {
 
   await navigate('/search/');
   // Filtering must actually remove unmatched rows from rendering, not only reflect the attribute.
-  const filtered = await evaluate("(()=>{const input=document.querySelector('#site-search');input.value='avelune-no-such-term-7q9z';input.dispatchEvent(new Event('input'));const rows=[...document.querySelectorAll('#search-results>li')];const hidden=rows.filter(x=>x.hidden);return {total:rows.length,hidden:hidden.length,renderedHidden:hidden.every(x=>getComputedStyle(x).display==='none')}})()");
+  const filtered = await evaluate("(()=>{const input=document.querySelector('#site-search');input.value='avelune-no-such-term-7q9z';input.dispatchEvent(new Event('input'));const rows=[...document.querySelectorAll('#search-results>li')];const hidden=rows.filter(x=>x.hidden);return {total:rows.length,hidden:hidden.length,renderedHidden:hidden.every(x=>getComputedStyle(x).display==='none'}})()");
   if (!filtered.total || filtered.hidden !== filtered.total || !filtered.renderedHidden) throw Error(`site search filtering failed: ${JSON.stringify(filtered)}`);
   const count = await evaluate("(()=>{const i=document.querySelector('#site-search');i.value='epoch';i.dispatchEvent(new Event('input'));return [...document.querySelectorAll('#search-results>li')].filter(x=>!x.hidden).length})()");
   if (!count) throw Error('site search returned no epoch documents');
-  console.log(JSON.stringify({pages:pageRoutes.length,widths:[1280,320],keyboard:'skip-link',demo:'buffered-jitter-pause-seek-replay',jitterRanges:jitterRangeResponses,mobilePublication:'reflowed',themes:'light/dark/print',searchResults:count}));
+  console.log(JSON.stringify({
+    pages:pageRoutes.length,
+    widths:[1280,320],
+    keyboard:'skip-link',
+    demo:'buffered-jitter-pause-seek-replay+scalar-canvas',
+    jitterRanges:jitterRangeResponses,
+    primaryWasm:primaryPlayback.wasm,
+    primaryRenderer:primaryPlayback.renderer,
+    primaryAudioOutput:primaryPlayback.audioOutput,
+    scalarCanvas:'passed',
+    mobilePublication:'reflowed',
+    themes:'light/dark/print',
+    searchResults:count,
+  }));
 } finally {
   ws?.close();
   const exited = new Promise(resolve => child.once('exit', resolve));
