@@ -1,78 +1,185 @@
 = Avelune web style
 :page-type: development-guide
 :page-status: current
-:summary: The implemented visual language and QA rules for Avelune’s public website, technical publication pages, and browser demo.
+:summary: Editorial, visual, interaction, accessibility, and review principles for Avelune's public website.
 :nav-order: 90
 
-[#style-system]
-== One system, two modes
+[#style-purpose]
+== Purpose
 
-The site uses a dark technical-grid mode for the landing page and browser instrument, and a calm technical-publication mode for documentation and specifications. Both share the same header, IBM Plex typography, spacing, thin rules, square geometry, focus behavior, and restrained Y′/Cb/Cr-inspired accents.
+The website exists to help someone understand, try, use, evaluate, or contribute to Avelune. It is
+not a record of the conversations, reviews, and implementation steps that produced it.
 
-The visual identity comes from technical structure: alignment, format boundaries, media planes, byte ranges, and factual metadata. It does not use decorative imagery, glass, glow, shadow, ambient gradients, or generic card grids.
+Design and copy should be judged in the context where a visitor encounters them. A technically true
+sentence or visually polished component can still be wrong when it does not help the reader at that
+point on the page.
 
-[#style-color]
-== Palette and semantic color
+[#style-writing]
+== Writing
 
-Dark pages begin with near-black `#111211`; publication pages use paper `#f3f1ea`. Text is near-neutral rather than pure black or white. Cool cyan-blue is reserved for links, focus, selection, addressing, and data paths. Restrained warm red is used for unfrozen/draft state and secondary technical distinctions. A light luma neutral represents Y′ where media-plane meaning is useful.
+Write every public surface for a cold reader who knows none of the project's prior discussion.
+Conversation history is evidence for making decisions, not source text to paraphrase into the site.
 
-Color reinforces labels, rules, type, and shape. It never carries state alone. Add separate error, warning, or success treatment only when the interface actually needs those meanings.
+Before rewriting weak prose, ask whether it should exist. Deleting an unnecessary explanation is
+better than making it sound smoother.
 
-[#style-type]
-== Typography
+Watch for language that assumes an unstated previous state or objection, including words such as
+`still`, `remain`, `now`, `larger`, `actually`, `not hidden`, and similar constructions. These words
+are not forbidden; they are review signals when the local page does not supply the comparison or
+antecedent.
 
-IBM Plex Sans serves prose, headings, navigation, and controls. IBM Plex Mono serves identifiers, byte/stream details, timings, dimensions, compact status labels, and code. Fonts are bundled by Astro and do not depend on a CDN.
+Use the language appropriate to the artifact:
 
-Prose is 16px with a generous line height and a maximum reading measure of roughly 74 characters. Publication titles are about 38–42px; the responsive homepage title tops out at 72px. Do not turn ordinary technical prose into monospace.
+* product and landing-page copy explains user-visible purpose and capability;
+* UI labels name the object, value, or action;
+* help text explains a choice the user needs to make;
+* ordinary documentation teaches a task or architecture;
+* normative specification text remains precise and formal;
+* code comments explain non-obvious constraints, invariants, compatibility requirements, or reasons,
+  rather than narrating visible code or defending an aesthetic choice.
 
-[#style-layout]
-== Spacing, header, and layout
+Do not use claims such as `known facts only`, `real controls`, or `actually selected` to certify that
+an interface is trustworthy. Make the behavior accurate and let diagnostics show concrete facts when
+the user asks for them.
 
-The main landing shell is at most 1220px. The 56px opaque header aligns its wordmark, generation state, and navigation to that shell. Current navigation uses type color and a thin rule, never a pill or filled tab.
+[#style-information-hierarchy]
+== Information hierarchy
 
-Publication pages use a left collection navigation, centered reading column, and right on-page outline. The right outline disappears first; on narrow screens, both collection navigation and the on-page outline remain available as native disclosure controls above the document. Current and historical specification material occupy separate navigation groups. Sticky regions leave anchor and focus targets unobscured.
+Give each page one primary job. Put the information and controls required for that job before
+secondary architecture, provenance, diagnostics, or project-history material.
 
-Spacing should reveal hierarchy without wrapping every group in a surface. A bordered rectangle represents a real technical object such as a plane map, byte structure, source listing, video viewport, control, or inspector group.
+Do not expose internal content-model labels, test terminology, implementation boundaries, or release
+incident history merely because those facts are available. Examples include `repository-native
+Markdown`, `development-guide`, regression-fixture history, one CI runner's graphics failure, or a
+conformance-oracle distinction on a page where the reader only needs an API entry point.
 
-[#style-landing]
-== Landing page technical grid
+Historical material remains available but must be clearly separated from current guidance.
 
-The first viewport keeps the seven/five-column relationship: factual project identity and primary paths on the left, real format metadata and a proportional Y′/Cb/Cr plane map on the right. Below the identity row, the primary install command occupies its own full-width row: a large monospace command that fetches the published `install.sh` (a source build, since Avelune has no prebuilt release artifacts), with a copy control and a factual note linking to the script in the repository. The command must remain a real, working command, not a fake terminal with invented output. The registry is one structural row for ALV1, ALA1, and AVL, not three promotional cards. The architecture diagram uses lines, boundaries, and labels to explain indexed playback, with slow data-flow dashes moving along its fetch path.
+[#style-visual-system]
+== Visual system
 
-The homepage must remain purpose-built. It is not generated from `README.md`, and it must not acquire a slogan, decorative hero art, fake terminal, unsupported performance claims, or maturity percentages.
+Avelune uses IBM Plex Sans for prose and interface text and IBM Plex Mono for code, identifiers, byte
+ranges, compact measurements, and other genuinely data-like values. Fonts are bundled with the site.
+Monospace is not a generic marker for `technical` content.
+
+The existing neutral palette and restrained cool/warm accents are the default visual foundation.
+Color never carries state alone. Focus, selection, links, errors, warnings, and status must remain
+understandable without relying only on hue.
+
+Thin rules and bordered regions are useful when they mark a real structure: a table, source listing,
+video viewport, form control, diagnostic group, or format diagram. Do not segment every section with
+rules merely to make the page look technical.
+
+Small metadata text should remain comfortably readable. Avoid accumulating 9–10px uppercase
+monospace labels across an interface. A category kicker is useful only when it adds information that
+the adjacent heading does not already provide.
+
+Do not preserve a particular grid, hero illustration, card count, or component choreography as a
+brand rule. Page structure follows the information hierarchy.
+
+[#style-motion]
+== Motion
+
+Motion communicates state, position, progress, or direct interaction. It is not decoration for an
+otherwise static fact.
+
+Do not type a known command character by character, animate data-flow dashes indefinitely, or reveal
+ordinary sections on scroll only to make the site feel active. When motion is useful, respect
+`prefers-reduced-motion` and provide the same information without animation.
+
+[#style-homepage]
+== Homepage
+
+The homepage should answer, in order appropriate to the design:
+
+* what Avelune is;
+* its current maturity;
+* what someone can do with it now;
+* where to try it, install it, read the documentation, or inspect the specification;
+* the small number of architectural facts that materially distinguish it.
+
+Do not make 4:2:0 plane geometry, generation-state labels, registry identifiers, implementation
+metadata, or installation theatrics more prominent than the project itself unless the page has a
+specific communicative reason.
+
+Technical diagrams are welcome when they teach an Avelune-specific idea. Decorative codec imagery
+is not a substitute for explanation.
+
+[#style-demo]
+== Browser demo
+
+The demo's primary job is to let a visitor play Avelune media and evaluate a conversion. Keep the
+player, ordinary-media input, important encoding choices, result, and download path easy to find.
+
+Conversion defaults should preserve source characteristics unless the user explicitly chooses a
+transformation. Settings that affect quality, encoder effort, geometry, frame rate, audio, and seek
+structure must be distinguishable from one another.
+
+Codec execution choices such as scalar versus SIMD128 and presentation choices such as Canvas2D
+versus WebGPU are separate concepts. Their selected/active values may remain visible without making a
+large decoder-debugging inspector the dominant page element.
+
+Detailed range counts, epoch IDs, front-index sizes, event logs, FFmpeg output, OPFS behavior, and
+similar information belongs in diagnostics or architecture documentation. A privacy statement such
+as `your media stays in this browser` is useful in the primary interface; WORKERFS device plumbing is
+not.
+
+Representative showcase media, synthetic stress material, and tiny deterministic regression vectors
+are different categories. Label them honestly and do not present a synthetic diagnostic scene as
+representative gameplay or 3D footage.
 
 [#style-publication]
 == Documentation and specification
 
-Publication headings, metadata, source provenance, code, tables, admonitions, and navigation use the shared rules in `content.css`. Normative pages identify their draft status in text. Historical pages use an explicit historical/non-normative label and a double warm rule so the distinction survives without color.
+Documentation favors a calm reading layout with a clear current document, collection navigation, and
+on-page outline. Mobile layouts must not force the reader through an expanded catalog before reaching
+the document they opened.
 
-Tables scroll horizontally rather than breaking the viewport. Code listings use a nearly square ruled surface. Admonitions use horizontal rules and a textual type label rather than a rounded callout card. Publication pages include collection breadcrumbs, authoritative-source provenance, and previous/next document links. Specification print output removes site navigation and preserves readable source content.
+Normative pages identify their draft status and source provenance. Ordinary guides need not expose
+internal `page-type=current` metadata or use normative-sounding `authoritative` language unless that
+information helps the reader.
 
-[#style-demo]
-== Browser instrument
-
-The demo uses the dark mode. Its sequence is viewport, controls, then a compact inspector grouped by format, container, and fetch/playback state. Only show facts the player actually knows. Controls have visible labels and keyboard focus; load and error state remain textual as well as colored. Presentation must not change codec, range-fetch, or rendering semantics.
+Tables may scroll horizontally where necessary. Code listings, admonitions, source links, stable
+anchors, current/historical distinction, and print output should remain functional and readable.
 
 [#style-responsive]
-== Responsive behavior and motion
+== Responsive behavior
 
-Layouts should become simpler, not merely smaller. The landing hero stacks, registry boundaries become horizontal, publication sidebars collapse in priority order, code and tables scroll, and the demo places its viewport before controls and inspection. Long identifiers must wrap or scroll without widening the page.
+Layouts become simpler as space decreases. Controls wrap into readable rows or columns rather than
+shrinking labels until they collide. Long identifiers wrap or scroll without widening the page.
+Navigation must make off-screen choices discoverable rather than relying on a hidden horizontal
+scrollbar.
 
-There is no ambient motion. The landing page’s motion is functional and content-anchored: one-shot reveals when sections first enter the viewport, the install command typed once on first view, the plane map assembled in Y′/Cb/Cr order, and the continuous dash flow along the architecture diagram’s fetch path. Motion is subtle (under 600 ms for one-shot effects, small offsets, palette-restrained), is added only when the user has not requested reduced motion, and degrades to a fully static page without JavaScript.
+Review intermediate widths around actual breakpoints, not only a wide desktop and one narrow phone.
+High browser zoom is part of responsive behavior.
 
 [#style-accessibility]
 == Accessibility
 
-Target WCAG 2.2 AA. Preserve semantic landmarks and heading order, a skip link, keyboard operation, strong visible focus, non-obscured anchors, text and non-text contrast,  reflow at narrow widths and zoom, and adequate control targets. Use accessible names and descriptions for diagrams. Never communicate status by hue alone.
+Target WCAG 2.2 AA. Preserve semantic landmarks and heading order, a skip link, keyboard operation,
+visible focus, non-obscured anchors, appropriate text and non-text contrast, reflow at narrow widths
+and zoom, accessible names, and adequate control targets.
 
-[#style-components]
-== Representative components
+Error, loading, conversion, and playback states are communicated in text as well as visually. Respect
+system reduced-motion preferences.
 
-Primary links may use a thin rectangular outline and arrow. Secondary paths remain ordinary underlined text. Document indexes are ruled rows with title, factual summary, and type/status metadata. Technical profile and inspector groups may use borders because they represent actual data structures. Site search is a dedicated, restrained publication page over documentation, specification, and project document titles, summaries, and body text; it does not index navigation chrome, demo controls, or rustdoc internals.
+[#style-review]
+== Review
 
-Before adding a local component variant, check whether the shared token, layout, content, or component primitive is missing. Fix the shared system when the same problem appears in multiple places.
+Review a page as though it were opened directly from a search result with no project history. For
+each visible block ask:
 
-[#style-qa]
-== Visual QA checklist
+. What reader need does this serve here?
+. Would deletion make the page clearer?
+. Does any wording depend on an earlier conversation or revision?
+. Is implementation detail appearing before the user needs it?
+. Does the visual weight match the importance of the information?
+. At a narrow viewport or high zoom, does the primary content still come first?
 
-At wide desktop, laptop, and narrow/mobile widths, inspect the first viewport, grid alignment, typography, header density, accent restraint, reading measure, side navigation, outline collapse, long headings and identifiers, code and table overflow, anchors, keyboard focus, historical/normative distinction, provenance links, demo controls and states, and `/avelune` base paths. Check system-light and system-dark publication rendering and specification print output. Fix repeated defects in shared CSS before adding local overrides.
+Automated checks should verify structural/accessibility invariants and rendered layout. Editorial
+heuristics may flag suspicious back-reference wording, repeated metadata labels, or unusually long UI
+help text for review, but must not become a blacklist of `AI words`.
+
+Run `npm run check:content`, the site build, link/semantic checks, and browser smoke for affected
+changes. For meaningful visual work, inspect rendered screenshots at desktop, intermediate, mobile,
+and zoomed layouts in addition to CI geometry checks.
