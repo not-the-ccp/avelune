@@ -5,18 +5,31 @@ import path from 'node:path';
 import {spawn} from 'node:child_process';
 
 const root = path.resolve(process.argv[2] ?? 'dist/site');
-const chromium = [process.env.CHROMIUM, '/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'].find(candidate => candidate && fs.existsSync(candidate));
-if (!chromium) { console.log('SKIP: Chromium is unavailable for rendered site smoke'); process.exit(0); }
+const chromium = [process.env.CHROMIUM, '/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome']
+  .find(candidate => candidate && fs.existsSync(candidate));
+if (!chromium) {
+  console.log('SKIP: Chromium is unavailable for rendered site smoke');
+  process.exit(0);
+}
 if (!fs.existsSync(path.join(root, 'demo', 'demo.avl'))) throw Error('build the complete site before running the browser smoke');
-function walk(directory) { return fs.readdirSync(directory,{withFileTypes:true}).flatMap(entry => entry.isDirectory() ? walk(path.join(directory,entry.name)) : [path.join(directory,entry.name)]); }
-const pageRoutes = walk(root).filter(file => file.endsWith('.html') && !file.includes(`${path.sep}api${path.sep}rust${path.sep}`)).map(file => {
-  const relative = path.relative(root,file).replaceAll(path.sep,'/');
-  if (relative === 'index.html') return '/';
-  return `/${relative.replace(/index\.html$/, '')}`;
-});
+
+function walk(directory) {
+  return fs.readdirSync(directory, {withFileTypes: true})
+    .flatMap(entry => entry.isDirectory() ? walk(path.join(directory, entry.name)) : [path.join(directory, entry.name)]);
+}
+const pageRoutes = walk(root)
+  .filter(file => file.endsWith('.html') && !file.includes(`${path.sep}api${path.sep}rust${path.sep}`))
+  .map(file => {
+    const relative = path.relative(root, file).replaceAll(path.sep, '/');
+    if (relative === 'index.html') return '/';
+    return `/${relative.replace(/index\.html$/, '')}`;
+  });
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const mime = new Map([['.html','text/html; charset=utf-8'],['.css','text/css'],['.js','text/javascript'],['.wasm','application/wasm'],['.avl','application/octet-stream'],['.svg','image/svg+xml'],['.woff2','font/woff2']]);
+const mime = new Map([
+  ['.html', 'text/html; charset=utf-8'], ['.css', 'text/css'], ['.js', 'text/javascript'],
+  ['.wasm', 'application/wasm'], ['.avl', 'application/octet-stream'], ['.svg', 'image/svg+xml'], ['.woff2', 'font/woff2'],
+]);
 let jitterRangeResponses = 0;
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, 'http://localhost');
@@ -24,27 +37,40 @@ const server = http.createServer(async (request, response) => {
   let relative = decodeURIComponent(url.pathname.slice('/avelune/'.length));
   if (!relative || relative.endsWith('/')) relative += 'index.html';
   const target = path.resolve(root, relative);
-  if (!target.startsWith(`${root}${path.sep}`) || !fs.existsSync(target) || !fs.statSync(target).isFile()) { response.writeHead(404).end(); return; }
+  if (!target.startsWith(`${root}${path.sep}`) || !fs.existsSync(target) || !fs.statSync(target).isFile()) {
+    response.writeHead(404).end(); return;
+  }
   const data = fs.readFileSync(target);
   const range = /^bytes=(\d+)-(\d+)$/.exec(request.headers.range ?? '');
-  const headers = {'Content-Type': mime.get(path.extname(target)) ?? 'application/octet-stream', 'Accept-Ranges':'bytes'};
-  if (range) {
-    const first = Number(range[1]), last = Number(range[2]);
-    if (first > last || last >= data.length) { response.writeHead(416).end(); return; }
-    if (url.searchParams.get('jitter') === '1') {
-      jitterRangeResponses++;
-      if (jitterRangeResponses > 2) await delay(180);
-    }
-    response.writeHead(206, {...headers, 'Content-Length':last-first+1, 'Content-Range':`bytes ${first}-${last}/${data.length}`});
-    response.end(data.subarray(first, last + 1)); return;
+  const headers = {'Content-Type': mime.get(path.extname(target)) ?? 'application/octet-stream', 'Accept-Ranges': 'bytes'};
+  if (!range) {
+    response.writeHead(200, {...headers, 'Content-Length': data.length});
+    response.end(data);
+    return;
   }
-  response.writeHead(200, {...headers, 'Content-Length':data.length}); response.end(data);
+  const first = Number(range[1]), last = Number(range[2]);
+  if (first > last || last >= data.length) { response.writeHead(416).end(); return; }
+  if (url.searchParams.get('jitter') === '1') {
+    jitterRangeResponses++;
+    if (jitterRangeResponses > 2) await delay(180);
+  }
+  response.writeHead(206, {
+    ...headers,
+    'Content-Length': last - first + 1,
+    'Content-Range': `bytes ${first}-${last}/${data.length}`,
+  });
+  response.end(data.subarray(first, last + 1));
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
+
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'avelune-site-chrome-'));
 const groupedProcess = process.platform !== 'win32';
-const child = spawn(chromium, ['--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--no-first-run','--no-default-browser-check','--disable-extensions','--autoplay-policy=no-user-gesture-required','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'], {stdio:['ignore','ignore','pipe'],detached:groupedProcess});
+const child = spawn(chromium, [
+  '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run',
+  '--no-default-browser-check', '--disable-extensions', '--autoplay-policy=no-user-gesture-required',
+  '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank',
+], {stdio: ['ignore', 'ignore', 'pipe'], detached: groupedProcess});
 let chromiumErrors = '';
 child.stderr.on('data', chunk => { chromiumErrors = (chromiumErrors + chunk).slice(-8192); });
 
@@ -53,10 +79,10 @@ function chromiumFailure(prefix) {
   const detail = chromiumErrors.trim() || 'no stderr captured';
   return exit === null ? Error(`${prefix}: ${detail}`) : Error(`${prefix} (Chromium exited with ${exit}): ${detail}`);
 }
-const startupWindowAttempts = 600;
+
 async function devtoolsPort() {
   const portFile = path.join(profile, 'DevToolsActivePort');
-  for (let attempt=0; attempt<startupWindowAttempts; attempt++) {
+  for (let attempt = 0; attempt < 600; attempt++) {
     if (child.exitCode !== null || child.signalCode !== null) break;
     try {
       const port = Number(fs.readFileSync(portFile, 'utf8').split('\n', 1)[0]);
@@ -66,11 +92,16 @@ async function devtoolsPort() {
   }
   throw chromiumFailure(`Chromium did not publish a DevTools port in ${portFile} within 30s`);
 }
+
 async function pageTarget() {
   const debugPort = await devtoolsPort();
-  for (let attempt=0; attempt<startupWindowAttempts; attempt++) {
+  for (let attempt = 0; attempt < 600; attempt++) {
     if (child.exitCode !== null || child.signalCode !== null) break;
-    try { const pages = await (await fetch(`http://127.0.0.1:${debugPort}/json/list`)).json(); const page = pages.find(item => item.type === 'page'); if (page) return page; } catch {}
+    try {
+      const pages = await (await fetch(`http://127.0.0.1:${debugPort}/json/list`)).json();
+      const page = pages.find(item => item.type === 'page');
+      if (page) return page;
+    } catch {}
     await delay(50);
   }
   throw chromiumFailure(`Chromium DevTools target unavailable on port ${debugPort} within 30s`);
@@ -81,24 +112,38 @@ const pending = new Map();
 let sequence = 0;
 async function connect() {
   ws = new WebSocket((await pageTarget()).webSocketDebuggerUrl);
-  await new Promise((resolve, reject) => { ws.onopen=resolve; ws.onerror=reject; });
-  ws.onmessage = event => { const message=JSON.parse(event.data); const resolve=pending.get(message.id); if (resolve) { pending.delete(message.id); resolve(message); } };
+  await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
+  ws.onmessage = event => {
+    const message = JSON.parse(event.data);
+    const resolve = pending.get(message.id);
+    if (resolve) { pending.delete(message.id); resolve(message); }
+  };
 }
-const call = (method, params={}) => new Promise(resolve => { const id=++sequence; pending.set(id,resolve); ws.send(JSON.stringify({id,method,params})); });
+const call = (method, params = {}) => new Promise(resolve => {
+  const id = ++sequence;
+  pending.set(id, resolve);
+  ws.send(JSON.stringify({id, method, params}));
+});
 async function evaluate(expression) {
-  const reply = await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});
-  if (reply.result?.exceptionDetails) throw Error(reply.result.exceptionDetails.exception?.description ?? reply.result.exceptionDetails.text);
+  const reply = await call('Runtime.evaluate', {expression, awaitPromise: true, returnByValue: true});
+  if (reply.result?.exceptionDetails) {
+    const detail = reply.result.exceptionDetails.exception?.description ?? reply.result.exceptionDetails.text;
+    throw Error(`Runtime.evaluate failed for ${JSON.stringify(expression)}: ${detail}`);
+  }
   return reply.result?.result?.value;
 }
 async function navigate(route) {
-  await call('Page.navigate',{url:`${origin}/avelune${route}`});
-  for (let attempt=0; attempt<200; attempt++) { if (await evaluate('document.readyState') === 'complete') return; await delay(50); }
+  await call('Page.navigate', {url: `${origin}/avelune${route}`});
+  for (let attempt = 0; attempt < 200; attempt++) {
+    if (await evaluate('document.readyState') === 'complete') return;
+    await delay(50);
+  }
   throw Error(`navigation timeout: ${route}`);
 }
 async function waitForDemoState(expected, attempts = 300, interval = 25) {
   const wanted = new Set(Array.isArray(expected) ? expected : [expected]);
   let state;
-  for (let attempt=0; attempt<attempts; attempt++) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     state = await evaluate("document.querySelector('#state-label')?.textContent");
     if (wanted.has(state) || state === 'ERROR') return state;
     await delay(interval);
@@ -113,9 +158,6 @@ async function playbackFacts() {
     wasm:document.querySelector('#wasm-name')?.textContent,
     renderer:document.querySelector('#format-renderer')?.textContent,
     audioOutput:document.querySelector('#playback-audio-output')?.textContent,
-    audioQueued:document.querySelector('#playback-audio-buffer')?.textContent,
-    audioDecodeAhead:document.querySelector('#playback-audio-decode')?.textContent,
-    videoQueued:document.querySelector('#playback-video-buffer')?.textContent,
     lateAudio:document.querySelector('#playback-audio-late')?.textContent,
     underruns:document.querySelector('#playback-audio-underruns')?.textContent,
     log:document.querySelector('#event-log')?.textContent||''
@@ -129,24 +171,28 @@ function assertCleanPlayback(facts, label) {
   if (!/^0 packets · 0 worklet frames$/.test(facts.lateAudio ?? '')) throw Error(`${label} reported late audio: ${facts.lateAudio}`);
 }
 async function auditPages(width, height) {
-  await call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<600});
+  await call('Emulation.setDeviceMetricsOverride', {width, height, deviceScaleFactor: 1, mobile: width < 600});
   for (const route of pageRoutes) {
     await navigate(route);
     const result = await evaluate("({h1:document.querySelectorAll('h1').length,overflow:document.documentElement.scrollWidth>innerWidth})");
     if (result.h1 !== 1 || result.overflow) throw Error(`${width}px page audit failed for ${route}: ${JSON.stringify(result)}`);
     const tree = await call('Accessibility.getFullAXTree');
-    const unnamed = tree.result.nodes.filter(node => ['button','link','textbox','combobox','slider'].includes(node.role?.value) && !node.name?.value?.trim());
+    const unnamed = tree.result.nodes.filter(node => ['button', 'link', 'textbox', 'combobox', 'slider'].includes(node.role?.value) && !node.name?.value?.trim());
     if (unnamed.length) throw Error(`${width}px accessibility-name audit failed for ${route}: ${unnamed.map(node => node.role.value).join(', ')}`);
   }
 }
 
 try {
-  await connect(); await call('Page.enable'); await call('Runtime.enable'); await call('Accessibility.enable');
+  await connect();
+  await call('Page.enable');
+  await call('Runtime.enable');
+  await call('Accessibility.enable');
+
   await navigate('/');
-  await call('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab'});
-  await call('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab'});
+  await call('Input.dispatchKeyEvent', {type: 'keyDown', key: 'Tab', code: 'Tab'});
+  await call('Input.dispatchKeyEvent', {type: 'keyUp', key: 'Tab', code: 'Tab'});
   if (!(await evaluate("document.activeElement?.classList.contains('skip-link')"))) throw Error('skip link is not the first keyboard focus target');
-  await auditPages(1280,900);
+  await auditPages(1280, 900);
 
   await navigate('/demo/');
   const mediaLayout = await evaluate(`(()=>{
@@ -160,6 +206,7 @@ try {
     return {missing:false,overlaps,outside:rects.some(r=>r.left<bounds.left-1||r.right>bounds.right+1),tooNarrow:rects.some(r=>r.width<120||r.controlWidth<100)};
   })()`);
   if (mediaLayout.missing || mediaLayout.overlaps || mediaLayout.outside || mediaLayout.tooNarrow) throw Error(`demo media-control layout is unusable at 1280px: ${JSON.stringify(mediaLayout)}`);
+
   await evaluate("(()=>{const option=document.querySelector('#sample').selectedOptions[0];option.value=option.value.split('?')[0]+'?jitter=1';document.querySelector('#load-sample').click()})()");
   let state = await waitForDemoState('READY', 300, 50);
   if (state !== 'READY') throw Error(`bundled demo did not become ready: ${await evaluate("document.querySelector('#state-detail')?.textContent")}`);
@@ -170,7 +217,7 @@ try {
   if (state !== 'PLAYING') throw Error(`buffered demo did not start playback: ${await evaluate("document.querySelector('#state-detail')?.textContent")}`);
   const primaryStart = await playbackFacts();
   if (!primaryStart.audioOutput || primaryStart.audioOutput === '—') throw Error(`live playback metrics were not populated: ${JSON.stringify(primaryStart)}`);
-  for (let attempt=0; attempt<120; attempt++) {
+  for (let attempt = 0; attempt < 120; attempt++) {
     const t = Number(await evaluate("document.querySelector('#seek')?.value"));
     if (t > 0.25) break;
     if (attempt === 119) throw Error(`playback clock did not advance before pause (time=${t})`);
@@ -204,19 +251,14 @@ try {
   await evaluate("document.querySelector('#play').click()");
   state = await waitForDemoState('PLAYING', 300, 25);
   if (state !== 'PLAYING') throw Error(`replay did not restart from ended state: ${await evaluate("document.querySelector('#state-detail')?.textContent")}`);
-  const replayAt = Number(await evaluate("document.querySelector('#seek')?.value"));
-  if (replayAt > 0.25) throw Error(`replay did not restart near the beginning: ${replayAt}`);
+  if (Number(await evaluate("document.querySelector('#seek')?.value")) > 0.25) throw Error('replay did not restart near the beginning');
   await evaluate("document.querySelector('#play').click()");
   state = await waitForDemoState('PAUSED', 80, 25);
   if (state !== 'PAUSED') throw Error('replay pause cleanup failed');
 
-  await evaluate(`(()=>{
-    const wasm=document.querySelector('#wasm-artifact');
-    const renderer=document.querySelector('#renderer-choice');
-    wasm.value='scalar';
-    renderer.value='canvas';
-    wasm.dispatchEvent(new Event('change',{bubbles:true}));
-  })()`);
+  await evaluate("document.querySelector('#wasm-artifact').value='scalar'");
+  await evaluate("document.querySelector('#renderer-choice').value='canvas'");
+  await evaluate("document.querySelector('#wasm-artifact').dispatchEvent(new Event('change',{bubbles:true}))");
   state = await waitForDemoState('READY', 300, 50);
   if (state !== 'READY') throw Error(`scalar/Canvas reload failed: ${await evaluate("document.querySelector('#state-detail')?.textContent")}`);
   const scalarReady = await playbackFacts();
@@ -226,37 +268,42 @@ try {
   const scalarPlayback = await playbackFacts();
   assertCleanPlayback(scalarPlayback, 'scalar/Canvas jitter');
 
-  await call('Emulation.setDeviceMetricsOverride',{width:320,height:800,deviceScaleFactor:1,mobile:true});
-  await call('Emulation.setEmulatedMedia',{media:'screen',features:[{name:'prefers-color-scheme',value:'light'}]});
+  await call('Emulation.setDeviceMetricsOverride', {width: 320, height: 800, deviceScaleFactor: 1, mobile: true});
+  await call('Emulation.setEmulatedMedia', {media: 'screen', features: [{name: 'prefers-color-scheme', value: 'light'}]});
   await navigate('/spec/video/alv1/');
   const mobile = await evaluate("({overflow:document.documentElement.scrollWidth>innerWidth,toc:getComputedStyle(document.querySelector('.mobile-toc')).display,nav:!!document.querySelector('.section-nav details')})");
   if (mobile.overflow || mobile.toc === 'none' || !mobile.nav) throw Error(`mobile publication navigation/reflow failed: ${JSON.stringify(mobile)}`);
   if (await evaluate("getComputedStyle(document.body).backgroundColor") !== 'rgb(243, 241, 234)') throw Error('publication light palette was not applied');
-  await call('Emulation.setEmulatedMedia',{media:'screen',features:[{name:'prefers-color-scheme',value:'dark'}]});
-  await auditPages(320,800);
+  await call('Emulation.setEmulatedMedia', {media: 'screen', features: [{name: 'prefers-color-scheme', value: 'dark'}]});
+  await auditPages(320, 800);
   if (await evaluate("getComputedStyle(document.body).backgroundColor") !== 'rgb(20, 21, 19)') throw Error('publication dark palette was not applied');
-  await call('Emulation.setEmulatedMedia',{media:'print'});
+  await call('Emulation.setEmulatedMedia', {media: 'print'});
   if (await evaluate("getComputedStyle(document.querySelector('.site-header')).display") !== 'none') throw Error('publication chrome remains visible in print');
-  await call('Emulation.setEmulatedMedia',{media:'screen',features:[{name:'prefers-color-scheme',value:'dark'}]});
+  await call('Emulation.setEmulatedMedia', {media: 'screen', features: [{name: 'prefers-color-scheme', value: 'dark'}]});
 
   await navigate('/search/');
-  const filtered = await evaluate("(()=>{const input=document.querySelector('#site-search');input.value='avelune-no-such-term-7q9z';input.dispatchEvent(new Event('input'));const rows=[...document.querySelectorAll('#search-results>li')];const hidden=rows.filter(x=>x.hidden);return {total:rows.length,hidden:hidden.length,renderedHidden:hidden.every(x=>getComputedStyle(x).display==='none'}})()");
+  await evaluate("document.querySelector('#site-search').value='avelune-no-such-term-7q9z'");
+  await evaluate("document.querySelector('#site-search').dispatchEvent(new Event('input'))");
+  const filtered = await evaluate("({total:document.querySelectorAll('#search-results>li').length,hidden:document.querySelectorAll('#search-results>li[hidden]').length,renderedHidden:[...document.querySelectorAll('#search-results>li[hidden]')].every(x=>getComputedStyle(x).display==='none')})");
   if (!filtered.total || filtered.hidden !== filtered.total || !filtered.renderedHidden) throw Error(`site search filtering failed: ${JSON.stringify(filtered)}`);
-  const count = await evaluate("(()=>{const i=document.querySelector('#site-search');i.value='epoch';i.dispatchEvent(new Event('input'));return Array.from(document.querySelectorAll('#search-results>li')).filter(x=>!x.hidden).length;})()");
+  await evaluate("document.querySelector('#site-search').value='epoch'");
+  await evaluate("document.querySelector('#site-search').dispatchEvent(new Event('input'))");
+  const count = await evaluate("document.querySelectorAll('#search-results>li:not([hidden])').length");
   if (!count) throw Error('site search returned no epoch documents');
+
   console.log(JSON.stringify({
-    pages:pageRoutes.length,
-    widths:[1280,320],
-    keyboard:'skip-link',
-    demo:'buffered-jitter-pause-seek-replay+scalar-canvas',
-    jitterRanges:jitterRangeResponses,
-    primaryWasm:primaryPlayback.wasm,
-    primaryRenderer:primaryPlayback.renderer,
-    primaryAudioOutput:primaryPlayback.audioOutput,
-    scalarCanvas:'passed',
-    mobilePublication:'reflowed',
-    themes:'light/dark/print',
-    searchResults:count,
+    pages: pageRoutes.length,
+    widths: [1280, 320],
+    keyboard: 'skip-link',
+    demo: 'buffered-jitter-pause-seek-replay+scalar-canvas',
+    jitterRanges: jitterRangeResponses,
+    primaryWasm: primaryPlayback.wasm,
+    primaryRenderer: primaryPlayback.renderer,
+    primaryAudioOutput: primaryPlayback.audioOutput,
+    scalarCanvas: 'passed',
+    mobilePublication: 'reflowed',
+    themes: 'light/dark/print',
+    searchResults: count,
   }));
 } finally {
   ws?.close();
@@ -264,8 +311,8 @@ try {
   if (groupedProcess) process.kill(-child.pid, 'SIGTERM'); else child.kill('SIGTERM');
   await Promise.race([exited, delay(2000)]);
   await new Promise(resolve => server.close(resolve));
-  for (let attempt=0; attempt<10; attempt++) {
-    try { fs.rmSync(profile,{recursive:true,force:true,maxRetries:2,retryDelay:100}); break; }
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try { fs.rmSync(profile, {recursive: true, force: true, maxRetries: 2, retryDelay: 100}); break; }
     catch (error) { if (attempt === 9) throw error; await delay(200); }
   }
 }
