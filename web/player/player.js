@@ -36,6 +36,30 @@ function streamFormat(stream) {
     : `#${stream.id} · ${codec} · ${stream.param0} Hz · ${stream.param1} ch`;
 }
 
+function ensurePlaybackInspectorMetrics() {
+  const list = $('playback-time')?.closest('dl');
+  if (!list) return;
+  const rows = [
+    ['Audio output', 'playback-audio-output', '—'],
+    ['Audio queued', 'playback-audio-buffer', '—'],
+    ['Audio decode-ahead', 'playback-audio-decode', '—'],
+    ['Video queued', 'playback-video-buffer', '—'],
+    ['Late audio', 'playback-audio-late', '0'],
+    ['Underruns', 'playback-audio-underruns', '0'],
+  ];
+  for (const [label, id, initial] of rows) {
+    if ($(id)) continue;
+    const row = document.createElement('div');
+    const term = document.createElement('dt');
+    const value = document.createElement('dd');
+    term.textContent = label;
+    value.id = id;
+    value.textContent = initial;
+    row.append(term, value);
+    list.append(row);
+  }
+}
+
 class EventLog {
   constructor(node, limit = 160) { this.node = node; this.limit = limit; this.lines = []; }
   clear() { this.lines = []; this.#render(); }
@@ -54,6 +78,7 @@ class EventLog {
 
 class PlayerController {
   constructor() {
+    ensurePlaybackInspectorMetrics();
     this.decoder = null;
     this.source = null;
     this.index = null;
@@ -428,7 +453,7 @@ class PlayerController {
 
   async seekBy(delta) {
     if (!this.index) return;
-    await this.seek(Math.max(0, Math.min(this.duration, this.currentTime() + delta)));
+    await this.seek(Math.max(0, Math.min(this.duration, this.currentTime() + delta));
   }
 
   destroy() {
