@@ -103,6 +103,16 @@ async function navigate(route) {
   for (let attempt=0; attempt<200; attempt++) { if (await evaluate('document.readyState') === 'complete') return; await delay(50); }
   throw Error(`navigation timeout: ${route}`);
 }
+async function waitForDemoState(expected, attempts = 300, interval = 25) {
+  const wanted = new Set(Array.isArray(expected) ? expected : [expected]);
+  let state;
+  for (let attempt=0; attempt<attempts; attempt++) {
+    state = await evaluate("document.querySelector('#state-label')?.textContent");
+    if (wanted.has(state) || state === 'ERROR') return state;
+    await delay(interval);
+  }
+  return state;
+}
 async function auditPages(width, height) {
   await call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<600});
   for (const route of pageRoutes) {
@@ -136,28 +146,54 @@ try {
   })()`);
   if (mediaLayout.missing || mediaLayout.overlaps || mediaLayout.outside || mediaLayout.tooNarrow) throw Error(`demo media-control layout is unusable at 1280px: ${JSON.stringify(mediaLayout)}`);
   await evaluate("(()=>{const option=document.querySelector('#sample').selectedOptions[0];option.value=option.value.split('?')[0]+'?jitter=1';document.querySelector('#load-sample').click()})()");
-  let state;
-  for (let attempt=0; attempt<300; attempt++) { state=await evaluate("document.querySelector('#state-label')?.textContent"); if (state === 'READY' || state === 'ERROR') break; await delay(50); }
+  let state = await waitForDemoState('READY', 300, 50);
   if (state !== 'READY') throw Error(`bundled demo did not become ready: ${await evaluate("document.querySelector('#state-detail')?.textContent")}`);
   if (await evaluate("document.querySelector('#play').disabled")) throw Error('play control remained disabled after sample load');
 
   await evaluate("document.querySelector('#play').click()");
-  for (let attempt=0; attempt<300; attempt++) {
-    state = await evaluate("document.querySelector('#state-label')?.textContent");
-    if (state === 'PLAYING' || state === 'ERROR') break;
-    await delay(25);
-  }
+  state = await waitForDemoState('PLAYING');
   if (state !== 'PLAYING') throw Error(`buffered demo did not start playback: ${await evaluate("document.querySelector('#state-detail')?.textContent")}`);
-  for (let attempt=0; attempt<500; attempt++) {
-    state = await evaluate("document.querySelector('#state-label')?.textContent");
-    if (state === 'ENDED' || state === 'ERROR') break;
+  for (let attempt=0; attempt<120; attempt++) {
+    const t = Number(await evaluate("document.querySelector('#seek')?.value"));
+    if (t > 0.25) break;
+    if (attempt === 119) throw Error(`playback clock did not advance before pause (time=${t})`);
     await delay(25);
   }
+
+  await evaluate("document.querySelector('#play').click()");
+  state = await waitForDemoState('PAUSED', 80, 25);
+  if (state !== 'PAUSED') throw Error(`pause did not settle cleanly: ${await evaluate("document.querySelector('#state-detail')?.textContent")}`);
+  const pausedAt = Number(await evaluate("document.querySelector('#seek')?.value"));
+  await delay(120);
+  const pausedLater = Number(await evaluate("document.querySelector('#seek')?.value"));
+  if (!(pausedAt > 0.2) || Math.abs(pausedLater - pausedAt) > 0.02) throw Error(`paused clock moved unexpectedly: ${pausedAt} -> ${pausedLater}`);
+
+  await evaluate("document.querySelector('#play').click()");
+  state = await waitForDemoState('PLAYING');
+  if (state !== 'PLAYING') throw Error(`resume did not return to playback: ${await evaluate("document.querySelector('#state-detail')?.textContent")}`);
+
+  const seekTarget = 1.35;
+  await evaluate(`(()=>{const seek=document.querySelector('#seek');seek.value='${seekTarget}';seek.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  state = await waitForDemoState('PLAYING', 300, 25);
+  if (state !== 'PLAYING') throw Error(`seek while playing did not restart cleanly: ${await evaluate("document.querySelector('#state-detail')?.textContent")}`);
+  const afterSeek = Number(await evaluate("document.querySelector('#seek')?.value"));
+  if (afterSeek < seekTarget - 0.1) throw Error(`seek restarted before requested media time: ${afterSeek}`);
+
+  state = await waitForDemoState('ENDED', 500, 25);
   const playback = await evaluate("({state:document.querySelector('#state-label')?.textContent,detail:document.querySelector('#state-detail')?.textContent,frames:Number(document.querySelector('#metric-frames')?.textContent||0),log:document.querySelector('#event-log')?.textContent||''})");
-  if (playback.state !== 'ENDED' || playback.frames <= 0 || !/0 audio underruns/.test(playback.detail) || /playback error:/i.test(playback.log)) {
-    throw Error(`buffer-driven demo playback failed under range jitter: ${JSON.stringify(playback)}`);
+  if (state !== 'ENDED' || playback.frames <= 0 || !/0 audio underruns/.test(playback.detail) || /playback error:/i.test(playback.log)) {
+    throw Error(`buffer-driven demo playback failed under range jitter/interactions: ${JSON.stringify(playback)}`);
   }
   if (jitterRangeResponses < 3) throw Error(`playback jitter regression did not exercise delayed epoch ranges (${jitterRangeResponses} range responses)`);
+
+  await evaluate("document.querySelector('#play').click()");
+  state = await waitForDemoState('PLAYING', 300, 25);
+  if (state !== 'PLAYING') throw Error(`replay did not restart from ended state: ${await evaluate("document.querySelector('#state-detail')?.textContent")}`);
+  const replayAt = Number(await evaluate("document.querySelector('#seek')?.value"));
+  if (replayAt > 0.25) throw Error(`replay did not restart near the beginning: ${replayAt}`);
+  await evaluate("document.querySelector('#play').click()");
+  state = await waitForDemoState('PAUSED', 80, 25);
+  if (state !== 'PAUSED') throw Error('replay pause cleanup failed');
 
   await call('Emulation.setDeviceMetricsOverride',{width:320,height:800,deviceScaleFactor:1,mobile:true});
   await call('Emulation.setEmulatedMedia',{media:'screen',features:[{name:'prefers-color-scheme',value:'light'}]});
@@ -178,7 +214,7 @@ try {
   if (!filtered.total || filtered.hidden !== filtered.total || !filtered.renderedHidden) throw Error(`site search filtering failed: ${JSON.stringify(filtered)}`);
   const count = await evaluate("(()=>{const i=document.querySelector('#site-search');i.value='epoch';i.dispatchEvent(new Event('input'));return [...document.querySelectorAll('#search-results>li')].filter(x=>!x.hidden).length})()");
   if (!count) throw Error('site search returned no epoch documents');
-  console.log(JSON.stringify({pages:pageRoutes.length,widths:[1280,320],keyboard:'skip-link',demo:'buffered-jitter-playback',jitterRanges:jitterRangeResponses,mobilePublication:'reflowed',themes:'light/dark/print',searchResults:count}));
+  console.log(JSON.stringify({pages:pageRoutes.length,widths:[1280,320],keyboard:'skip-link',demo:'buffered-jitter-pause-seek-replay',jitterRanges:jitterRangeResponses,mobilePublication:'reflowed',themes:'light/dark/print',searchResults:count}));
 } finally {
   ws?.close();
   const exited = new Promise(resolve => child.once('exit', resolve));
