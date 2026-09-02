@@ -38,6 +38,15 @@ function frame(pts, id = 0) {
 }
 
 {
+  const q = new PlaybackBuffer({prebufferSeconds: 0.2});
+  q.pushVideo(frame(0, 1));
+  q.pushVideo(frame(100_000, 2));
+  assert.equal(q.readyToStart({hasVideo: true}), false, 'video-only playback should not start from a single instant of decoded video');
+  q.pushVideo(frame(250_000, 3));
+  assert.equal(q.readyToStart({hasVideo: true}), true, 'video-only playback should start after its decode-ahead target');
+}
+
+{
   const q = new PlaybackBuffer();
   q.pushAudio(packet({pts: 100_000}));
   q.pushAudio(packet({pts: 0}));
@@ -71,6 +80,14 @@ function frame(pts, id = 0) {
   q.pushVideo(frame(250_000, 2));
   assert.equal(q.atCapacity({hasVideo: true, at: 0}), true, 'video decode-ahead also participates in backpressure');
   assert.equal(q.atCapacity({hasVideo: true, at: 0.1}), false, 'advancing the playhead releases producer backpressure');
+}
+
+{
+  const q = new PlaybackBuffer();
+  q.pushAudio(packet({pts: 0}));
+  q.takeAudioThrough(1);
+  q.markDecodeFinished();
+  assert.equal(q.noteAudioPlaybackPosition(0.2), false, 'normal decoded audio end must not be treated as an underrun');
 }
 
 console.log('playback-buffer smoke: ok');
