@@ -115,6 +115,9 @@ export class PlaybackBuffer {
       videoQueuedSeconds: this.bufferedVideoSeconds(at),
       audioPackets: this.audio.length,
       videoFrames: this.video.length,
+      // This is decoder delivery behind already-contiguous media time. Worklet lateness is tracked
+      // separately in audio-sink.js because only the output clock can say whether PCM was actually
+      // delivered after its presentation deadline.
       lateAudioPackets: this.lateAudioPackets,
       audioUnderruns: this.audioUnderruns,
       audioFrontier: this.audioFrontier,
