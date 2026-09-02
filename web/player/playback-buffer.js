@@ -64,6 +64,7 @@ export class PlaybackBuffer {
 
   readyToStart({hasAudio, hasVideo, at = this.mediaStart} = {}) {
     if (hasAudio && this.bufferedAudioSeconds(at) < this.prebufferSeconds && !this.decodeFinished) return false;
+    if (hasVideo && !hasAudio && this.bufferedVideoSeconds(at) < this.prebufferSeconds && !this.decodeFinished) return false;
     if (hasVideo && !this.video.length && !this.decodeFinished) return false;
     return true;
   }
@@ -87,7 +88,7 @@ export class PlaybackBuffer {
   }
 
   noteAudioPlaybackPosition(now) {
-    if (now > this.audioFrontier + AUDIO_GAP_TOLERANCE && !this.decodeFinished) {
+    if (now > this.audioFrontier + AUDIO_GAP_TOLERANCE) {
       if (this.lastUnderrunAt === null || now - this.lastUnderrunAt > 0.05) {
         this.audioUnderruns++;
         this.lastUnderrunAt = now;
