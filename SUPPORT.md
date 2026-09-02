@@ -3,6 +3,16 @@
 Avelune is a research/POC project. Bug reports and reproducible test cases are useful; production SLA,
 compatibility guarantees, and real-time performance are not currently offered.
 
+## Where to report
+
+Use the [GitHub issue chooser](https://github.com/not-the-ccp/avelune/issues/new/choose) for bugs,
+reproducible media problems, feature requests, and project questions. Search existing issues first when
+possible so results and workarounds stay in one place.
+
+Do not report a suspected vulnerability as a public issue. Follow [`SECURITY.md`](SECURITY.md) instead.
+
+## What to include
+
 When reporting a media problem, include:
 
 - `avelune --version`;
